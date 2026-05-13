@@ -1,0 +1,46 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /artifacts/{appId}/public/data/packs/{packId} {
+      allow read: if isGoogleUser();
+      allow create: if isGoogleUser()
+        && request.resource.data.ownerId == request.auth.uid;
+      allow update: if isGoogleUser()
+        && resource.data.ownerId == request.auth.uid
+        && request.resource.data.ownerId == request.auth.uid;
+      allow delete: if isGoogleUser()
+        && resource.data.ownerId == request.auth.uid;
+    }
+
+    match /artifacts/{appId}/public/data/rooms/{roomCode} {
+      allow read: if isGoogleUser();
+      allow create: if isGoogleUser()
+        && request.resource.data.hostId == request.auth.uid;
+      allow update: if isGoogleUser()
+        && (
+          roomParticipantOrHost(resource.data, request.auth.uid)
+          || canJoinLobby(resource.data, request.resource.data, request.auth.uid)
+        );
+      allow delete: if false;
+    }
+
+    function roomParticipantOrHost(room, uid) {
+      return room.hostId == uid || uid in room.players;
+    }
+
+    function canJoinLobby(before, after, uid) {
+      return before.status == 'lobby'
+        && after.status == before.status
+        && !(uid in before.players)
+        && uid in after.players
+        && after.players[uid].isHost == false
+        && after.diff(before).changedKeys().hasOnly(['players']);
+    }
+
+    function isGoogleUser() {
+      return request.auth != null
+        && request.auth.token.firebase.sign_in_provider == 'google.com';
+    }
+  }
+}
