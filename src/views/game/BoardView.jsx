@@ -1,4 +1,5 @@
 import { createHistoryItem, handleEndGame, handlePickQuestion } from '../../actions/gameActions';
+import HoldToConfirmButton from '../../components/HoldToConfirmButton';
 import { useLanguage } from '../../useLanguage';
 
 export default function BoardView({ room, roomRef, user, isHost }) {
@@ -24,12 +25,12 @@ export default function BoardView({ room, roomRef, user, isHost }) {
                     {isHost ? t('hostAwaitingSelection') : isMyTurn ? t('yourTurnPickQuestion') : t('waitingForPick')}
                 </h2>
                 {isHost && (
-                    <button
-                        onClick={handleHostEndGame}
-                        className="bg-red-600/20 text-red-400 hover:bg-red-600 hover:text-white px-4 py-2 rounded font-bold border border-red-500/30 transition-colors text-sm"
+                    <HoldToConfirmButton
+                        onConfirm={handleHostEndGame}
+                        className="rounded border border-red-500/30 bg-red-600/20 px-4 py-2 text-sm font-bold text-red-400 transition-colors hover:text-white"
                     >
                         {t('endGameEarly')}
-                    </button>
+                    </HoldToConfirmButton>
                 )}
             </div>
 

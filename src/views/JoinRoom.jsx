@@ -8,7 +8,7 @@ import { useLanguage } from '../useLanguage';
 export default function JoinRoom({ initialCode = '', setView, user, setCurrentRoomCode, setError, onCodeConsumed }) {
     const { t } = useLanguage();
     const [code, setCode] = useState(initialCode);
-    const [playerName, setPlayerName] = useState('');
+    const [playerName, setPlayerName] = useState(() => (user.displayName || user.email?.split('@')[0] || '').substring(0, 18));
     const [isJoining, setIsJoining] = useState(false);
 
     const handleJoin = async (e) => {
@@ -48,7 +48,7 @@ export default function JoinRoom({ initialCode = '', setView, user, setCurrentRo
 
             // Add player to room
             await updateDoc(roomRef, {
-                [`players.${user.uid}`]: { name: playerName.substring(0, 15), score: 0, isHost: false, avatar: playerAvatar }
+                [`players.${user.uid}`]: { name: playerName.substring(0, 18), score: 0, isHost: false, avatar: playerAvatar }
             });
 
             setCurrentRoomCode(code.trim().toUpperCase());
@@ -89,7 +89,7 @@ export default function JoinRoom({ initialCode = '', setView, user, setCurrentRo
                                 value={playerName}
                                 onChange={(e) => setPlayerName(e.target.value)}
                                 placeholder={t('enterNickname')}
-                                maxLength={15}
+                                maxLength={18}
                                 className="w-full bg-slate-900 border border-slate-600 rounded-lg p-3 text-white outline-none focus:border-blue-500"
                             />
                         </div>

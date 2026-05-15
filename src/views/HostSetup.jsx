@@ -92,7 +92,7 @@ export default function HostSetup({ setView, user, setCurrentRoomCode, onCreateP
                     type="text"
                     value={hostName}
                     onChange={(e) => setHostName(e.target.value)}
-                    maxLength={15}
+                    maxLength={18}
                     className="w-full bg-slate-900 border border-slate-600 rounded-lg p-3 text-white outline-none"
                 />
             </div>

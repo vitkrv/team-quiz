@@ -3,6 +3,7 @@ import { arrayUnion, updateDoc } from 'firebase/firestore';
 import { Check, X } from 'lucide-react';
 import { useLanguage } from '../../useLanguage';
 import { createHistoryItem } from '../../actions/gameActions';
+import HoldToConfirmButton from '../../components/HoldToConfirmButton';
 
 export default function ActiveQuestionView({ room, roomRef, user, isHost }) {
     const { t } = useLanguage();
@@ -251,12 +252,14 @@ export default function ActiveQuestionView({ room, roomRef, user, isHost }) {
                     )}
 
                     {isHost && (
-                        <button
-                            onClick={handleSkip}
-                            className="mt-8 text-slate-400 hover:text-white border border-slate-600 hover:bg-slate-700 px-6 py-2 rounded-lg font-bold transition-colors"
+                        <HoldToConfirmButton
+                            onConfirm={handleSkip}
+                            durationMs={2000}
+                            fillClassName="bg-slate-700"
+                            className="mt-8 rounded-lg border border-slate-600 bg-transparent px-6 py-2 font-bold text-slate-400 transition-colors hover:text-white"
                         >
                             {t('skipRevealAnswer')}
-                        </button>
+                        </HoldToConfirmButton>
                     )}
                 </div>
             )}
