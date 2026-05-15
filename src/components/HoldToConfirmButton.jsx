@@ -73,7 +73,7 @@ export default function HoldToConfirmButton({
         >
             <span
                 className={`absolute inset-y-0 left-0 transition-[width] duration-75 ${fillClassName}`}
-                style={{ width: `${progress * 100}%` }}
+                style={{ width: `${Math.min(1, progress / 0.9) * 100}%` }}
                 aria-hidden="true"
             />
             <span className="pointer-events-none absolute inset-0 z-10" aria-hidden="true">
