@@ -25,6 +25,20 @@ service cloud.firestore {
       allow delete: if false;
     }
 
+    match /artifacts/{appId}/users/{userId} {
+      allow read: if isGoogleUser()
+        && request.auth.uid == userId;
+      allow create: if isGoogleUser()
+        && request.auth.uid == userId
+        && request.resource.data.keys().hasOnly(['language', 'updatedAt'])
+        && request.resource.data.language in ['en', 'uk'];
+      allow update: if isGoogleUser()
+        && request.auth.uid == userId
+        && request.resource.data.diff(resource.data).changedKeys().hasOnly(['language', 'updatedAt'])
+        && request.resource.data.language in ['en', 'uk'];
+      allow delete: if false;
+    }
+
     function roomParticipantOrHost(room, uid) {
       return room.hostId == uid || uid in room.players;
     }

@@ -1,9 +1,11 @@
 import { useEffect, useState } from 'react';
 import { GoogleAuthProvider, onAuthStateChanged, signInWithPopup, signOut } from 'firebase/auth';
-import { doc, onSnapshot } from 'firebase/firestore';
+import { doc, onSnapshot, setDoc } from 'firebase/firestore';
 import { X } from 'lucide-react';
 import FirebaseSetupMissing from './components/FirebaseSetupMissing';
 import { appId, auth, db, hasFirebaseConfig } from './firebase';
+import LanguageProvider from './LanguageProvider';
+import { normalizeLanguage, translate } from './i18n';
 import { getAuthErrorMessage } from './utils/errors';
 import Login from './views/Login';
 import MainMenu from './views/MainMenu';
@@ -14,13 +16,43 @@ import JoinRoom from './views/JoinRoom';
 import GameRoom from './views/game/GameRoom';
 
 const LAST_ROOM_CODE_KEY = 'qa-showdown:lastRoomCode';
+const LANGUAGE_CACHE_KEY = 'qa-showdown:language';
 const getRoomCodeFromUrl = () => new URLSearchParams(window.location.search).get('room')?.trim().toUpperCase() || '';
+const getGameCodeFromUrl = () => new URLSearchParams(window.location.search).get('game')?.trim().toUpperCase() || '';
+const replaceUrl = (url) => {
+    window.history.replaceState({}, '', `${url.pathname}${url.search}${url.hash}`);
+};
+const clearRoomCodeFromUrl = () => {
+    const url = new URL(window.location.href);
+    if (!url.searchParams.has('room')) return;
+
+    url.searchParams.delete('room');
+    replaceUrl(url);
+};
+const setGameCodeInUrl = (roomCode) => {
+    const url = new URL(window.location.href);
+    if (url.searchParams.get('game') === roomCode) return;
+
+    url.searchParams.delete('room');
+    url.searchParams.set('game', roomCode);
+    replaceUrl(url);
+};
+const clearGameCodeFromUrl = () => {
+    const url = new URL(window.location.href);
+    if (!url.searchParams.has('game')) return;
+
+    url.searchParams.delete('game');
+    replaceUrl(url);
+};
 
 export default function App() {
     const [user, setUser] = useState(null);
     const [authReady, setAuthReady] = useState(false);
+    const [language, setLanguage] = useState(() => normalizeLanguage(localStorage.getItem(LANGUAGE_CACHE_KEY)));
     const [view, setView] = useState('menu'); // menu, createPack, managePacks, hostSetup, joinRoom, room
     const [joinRoomCode, setJoinRoomCode] = useState(() => getRoomCodeFromUrl());
+    const [gameRoomCode, setGameRoomCode] = useState(() => getGameCodeFromUrl());
+    const [latestActiveRoomCode, setLatestActiveRoomCode] = useState(() => localStorage.getItem(LAST_ROOM_CODE_KEY));
     const [currentRoomCode, setCurrentRoomCode] = useState(null);
     const [roomData, setRoomData] = useState(null);
     const [editingPack, setEditingPack] = useState(null);
@@ -35,10 +67,10 @@ export default function App() {
             if (u && !isGoogleUser) {
                 signOut(auth).catch((err) => {
                     console.error("Sign out error:", err);
-                    setError(getAuthErrorMessage(err));
+                    setError(getAuthErrorMessage(err, language));
                 });
                 setUser(null);
-                setError('Please sign in with Google to use Q&A Showdown.');
+                setError(translate(language, 'authGoogleRequired'));
             } else {
                 setUser(u);
             }
@@ -46,7 +78,44 @@ export default function App() {
             setAuthReady(true);
         });
         return () => unsubscribe();
-    }, []);
+    }, [language]);
+
+    useEffect(() => {
+        if (!hasFirebaseConfig || !user) {
+            setLanguage(normalizeLanguage(localStorage.getItem(LANGUAGE_CACHE_KEY)));
+            return undefined;
+        }
+
+        const userRef = doc(db, 'artifacts', appId, 'users', user.uid);
+        const unsubscribe = onSnapshot(userRef, (snapshot) => {
+            const nextLanguage = normalizeLanguage(snapshot.data()?.language);
+            setLanguage(nextLanguage);
+            localStorage.setItem(LANGUAGE_CACHE_KEY, nextLanguage);
+        }, (err) => {
+            console.error("Language preference sync error:", err);
+        });
+
+        return () => unsubscribe();
+    }, [user]);
+
+    const handleLanguageChange = async (nextLanguage) => {
+        const normalizedLanguage = normalizeLanguage(nextLanguage);
+        setLanguage(normalizedLanguage);
+        localStorage.setItem(LANGUAGE_CACHE_KEY, normalizedLanguage);
+
+        if (!user) return;
+
+        try {
+            await setDoc(
+                doc(db, 'artifacts', appId, 'users', user.uid),
+                { language: normalizedLanguage, updatedAt: Date.now() },
+                { merge: true }
+            );
+        } catch (err) {
+            console.error("Language preference save error:", err);
+            setError(translate(normalizedLanguage, 'languageSaveFailed'));
+        }
+    };
 
     const handleGoogleSignIn = async () => {
         try {
@@ -56,7 +125,7 @@ export default function App() {
             await signInWithPopup(auth, provider);
         } catch (err) {
             console.error("Auth Error:", err);
-            setError(getAuthErrorMessage(err));
+            setError(getAuthErrorMessage(err, language));
         }
     };
 
@@ -66,20 +135,24 @@ export default function App() {
             handleSetCurrentRoomCode(null);
             setRoomData(null);
             setEditingPack(null);
+            setLatestActiveRoomCode(null);
+            localStorage.removeItem(LAST_ROOM_CODE_KEY);
+            clearGameCodeFromUrl();
             setView('menu');
         } catch (err) {
             console.error("Sign out error:", err);
-            setError(getAuthErrorMessage(err));
+            setError(getAuthErrorMessage(err, language));
         }
     };
 
-    const handleSetCurrentRoomCode = (roomCode) => {
+    const handleSetCurrentRoomCode = (roomCode, { remember = true } = {}) => {
         setCurrentRoomCode(roomCode);
 
-        if (roomCode) {
+        if (roomCode && remember) {
             localStorage.setItem(LAST_ROOM_CODE_KEY, roomCode);
+            setLatestActiveRoomCode(roomCode);
         } else {
-            localStorage.removeItem(LAST_ROOM_CODE_KEY);
+            setLatestActiveRoomCode(localStorage.getItem(LAST_ROOM_CODE_KEY));
         }
     };
 
@@ -94,18 +167,55 @@ export default function App() {
     };
 
     const handleReturnToRoom = () => {
-        const lastRoomCode = localStorage.getItem(LAST_ROOM_CODE_KEY);
+        const lastRoomCode = latestActiveRoomCode;
         if (!lastRoomCode) return;
 
         handleSetCurrentRoomCode(lastRoomCode);
         setView('room');
     };
 
+    const handleLeaveGamePage = () => {
+        handleSetCurrentRoomCode(null, { remember: false });
+        setRoomData(null);
+        clearGameCodeFromUrl();
+        setView('menu');
+    };
+
+    const handleJoinRoomCodeConsumed = () => {
+        setJoinRoomCode('');
+        clearRoomCodeFromUrl();
+    };
+
+    useEffect(() => {
+        if (!user || !gameRoomCode) return;
+
+        handleSetCurrentRoomCode(gameRoomCode);
+        setView('room');
+        setGameRoomCode('');
+    }, [gameRoomCode, user]);
+
     useEffect(() => {
         if (!user || !joinRoomCode) return;
 
         setView('joinRoom');
     }, [joinRoomCode, user]);
+
+    useEffect(() => {
+        if (!hasFirebaseConfig || !user || !latestActiveRoomCode || currentRoomCode === latestActiveRoomCode) return undefined;
+
+        const roomRef = doc(db, 'artifacts', appId, 'public', 'data', 'rooms', latestActiveRoomCode);
+        const unsubscribe = onSnapshot(roomRef, (snapshot) => {
+            const room = snapshot.data();
+            if (!snapshot.exists() || room.status === 'finished' || !room.players?.[user.uid]) {
+                localStorage.removeItem(LAST_ROOM_CODE_KEY);
+                setLatestActiveRoomCode(null);
+            }
+        }, (err) => {
+            console.error("Latest room sync error:", err);
+        });
+
+        return () => unsubscribe();
+    }, [currentRoomCode, latestActiveRoomCode, user]);
 
     // --- 2. Room Listener ---
     useEffect(() => {
@@ -114,19 +224,48 @@ export default function App() {
         const roomRef = doc(db, 'artifacts', appId, 'public', 'data', 'rooms', currentRoomCode);
         const unsubscribe = onSnapshot(roomRef, (snapshot) => {
             if (snapshot.exists()) {
-                setRoomData(snapshot.data());
+                const room = snapshot.data();
+                if (!room.players?.[user.uid]) {
+                    setError(translate(language, 'notGameParticipant'));
+                    handleSetCurrentRoomCode(null, { remember: false });
+                    setRoomData(null);
+                    localStorage.removeItem(LAST_ROOM_CODE_KEY);
+                    setLatestActiveRoomCode(null);
+                    clearGameCodeFromUrl();
+                    setView('menu');
+                    return;
+                }
+
+                setRoomData(room);
+
+                if (room.status === 'finished') {
+                    localStorage.removeItem(LAST_ROOM_CODE_KEY);
+                    setLatestActiveRoomCode(null);
+                    clearGameCodeFromUrl();
+                    return;
+                }
+
+                localStorage.setItem(LAST_ROOM_CODE_KEY, currentRoomCode);
+                setLatestActiveRoomCode(currentRoomCode);
+                if (view === 'room') {
+                    setGameCodeInUrl(currentRoomCode);
+                }
             } else {
-                setError("Room was closed or does not exist.");
-                handleSetCurrentRoomCode(null);
+                setError(translate(language, 'roomClosed'));
+                handleSetCurrentRoomCode(null, { remember: false });
+                localStorage.removeItem(LAST_ROOM_CODE_KEY);
+                setLatestActiveRoomCode(null);
+                setRoomData(null);
+                clearGameCodeFromUrl();
                 setView('menu');
             }
         }, (err) => {
             console.error("Room sync error:", err);
-            setError("Lost connection to the game room.");
+            setError(translate(language, 'roomSyncLost'));
         });
 
         return () => unsubscribe();
-    }, [user, currentRoomCode]);
+    }, [user, currentRoomCode, language, view]);
 
     if (!hasFirebaseConfig) {
         return <FirebaseSetupMissing />;
@@ -135,6 +274,7 @@ export default function App() {
     if (!authReady) {
         return (
             <div className="min-h-screen bg-slate-900 flex items-center justify-center text-white">
+                <div className="sr-only">{translate(language, 'authLoading')}</div>
                 <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500"></div>
             </div>
         );
@@ -142,17 +282,20 @@ export default function App() {
 
     if (!user) {
         return (
-            <Login
-                error={error}
-                pendingRoomCode={joinRoomCode}
-                onDismissError={() => setError('')}
-                onSignIn={handleGoogleSignIn}
-            />
+            <LanguageProvider language={language} setLanguage={handleLanguageChange}>
+                <Login
+                    error={error}
+                    pendingRoomCode={joinRoomCode}
+                    onDismissError={() => setError('')}
+                    onSignIn={handleGoogleSignIn}
+                />
+            </LanguageProvider>
         );
     }
 
     // --- Main Navigation ---
     return (
+        <LanguageProvider language={language} setLanguage={handleLanguageChange}>
         <div className="min-h-screen bg-slate-900 text-slate-100 font-sans selection:bg-blue-500/30">
             {error && (
                 <div className="fixed top-4 left-1/2 transform -translate-x-1/2 bg-red-500 text-white px-6 py-3 rounded-lg shadow-xl z-50 flex items-center gap-2">
@@ -165,7 +308,7 @@ export default function App() {
                 <MainMenu
                     setView={setView}
                     user={user}
-                    lastRoomCode={localStorage.getItem(LAST_ROOM_CODE_KEY)}
+                    lastRoomCode={latestActiveRoomCode}
                     onCreatePack={handleCreatePack}
                     onReturnToRoom={handleReturnToRoom}
                     onSignOut={handleSignOut}
@@ -211,7 +354,7 @@ export default function App() {
                     user={user}
                     setCurrentRoomCode={handleSetCurrentRoomCode}
                     setError={setError}
-                    onCodeConsumed={() => setJoinRoomCode('')}
+                    onCodeConsumed={handleJoinRoomCodeConsumed}
                 />
             )}
 
@@ -220,10 +363,10 @@ export default function App() {
                     room={roomData}
                     roomCode={currentRoomCode}
                     user={user}
-                    setView={setView}
-                    setCurrentRoomCode={handleSetCurrentRoomCode}
+                    onLeaveRoom={handleLeaveGamePage}
                 />
             )}
         </div>
+        </LanguageProvider>
     );
 }

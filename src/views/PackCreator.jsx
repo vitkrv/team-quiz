@@ -2,20 +2,22 @@ import { useState } from 'react';
 import { addDoc, collection, doc, updateDoc } from 'firebase/firestore';
 import { ArrowLeft, Check, Plus, Trash2, X } from 'lucide-react';
 import { appId, db } from '../firebase';
+import { useLanguage } from '../useLanguage';
 import { generateId } from '../utils/ids';
 import { getFirestoreErrorMessage } from '../utils/errors';
 
-const createDefaultCategories = () => [
-    { id: generateId(), name: 'General Knowledge', questions: [
+const createDefaultCategories = (t) => [
+    { id: generateId(), name: t('defaultCategory'), questions: [
             { id: generateId(), points: 100, text: '', answer: '' },
             { id: generateId(), points: 200, text: '', answer: '' }
         ]}
 ];
 
 export default function PackCreator({ pack, setView, user, setError, onSaved }) {
+    const { language, t } = useLanguage();
     const isEditMode = Boolean(pack?.id);
     const [packName, setPackName] = useState(pack?.name || '');
-    const [categories, setCategories] = useState(pack?.categories || createDefaultCategories());
+    const [categories, setCategories] = useState(pack?.categories || createDefaultCategories(t));
     const [isSaving, setIsSaving] = useState(false);
 
     const handleBack = () => {
@@ -23,7 +25,7 @@ export default function PackCreator({ pack, setView, user, setError, onSaved }) 
     };
 
     const addCategory = () => {
-        setCategories([...categories, { id: generateId(), name: 'New Category', questions: [{ id: generateId(), points: 100, text: '', answer: '' }] }]);
+        setCategories([...categories, { id: generateId(), name: t('newCategory'), questions: [{ id: generateId(), points: 100, text: '', answer: '' }] }]);
     };
 
     const removeCategory = (catId) => {
@@ -66,7 +68,7 @@ export default function PackCreator({ pack, setView, user, setError, onSaved }) 
     };
 
     const handleSave = async () => {
-        if (!packName.trim()) return alert("Please enter a pack name.");
+        if (!packName.trim()) return alert(t('pleaseEnterPackName'));
         setIsSaving(true);
         try {
             const packData = {
@@ -90,7 +92,7 @@ export default function PackCreator({ pack, setView, user, setError, onSaved }) 
             onSaved();
         } catch (err) {
             console.error("Save error:", err);
-            setError(getFirestoreErrorMessage(err, isEditMode ? 'Update pack' : 'Save pack'));
+            setError(getFirestoreErrorMessage(err, isEditMode ? t('updatePackAction') : t('savePackAction'), language));
         }
         setIsSaving(false);
     };
@@ -101,23 +103,23 @@ export default function PackCreator({ pack, setView, user, setError, onSaved }) 
                 <button onClick={handleBack} className="p-2 mr-4 hover:bg-slate-800 rounded-full transition-colors">
                     <ArrowLeft size={24} />
                 </button>
-                <h2 className="text-3xl font-bold flex-1">{isEditMode ? 'Edit Question Pack' : 'Create Question Pack'}</h2>
+                <h2 className="text-3xl font-bold flex-1">{isEditMode ? t('editQuestionPack') : t('createQuestionPack')}</h2>
                 <button
                     onClick={handleSave}
                     disabled={isSaving}
                     className="bg-green-600 hover:bg-green-500 disabled:opacity-50 text-white px-6 py-2 rounded-lg font-bold flex items-center gap-2"
                 >
-                    <Check size={20} /> {isSaving ? 'Saving...' : isEditMode ? 'Update Pack' : 'Save Pack'}
+                    <Check size={20} /> {isSaving ? t('saving') : isEditMode ? t('updatePack') : t('savePack')}
                 </button>
             </div>
 
             <div className="bg-slate-800 p-6 rounded-xl border border-slate-700 mb-8">
-                <label className="block text-sm font-medium text-slate-400 mb-2">Pack Name</label>
+                <label className="block text-sm font-medium text-slate-400 mb-2">{t('packName')}</label>
                 <input
                     type="text"
                     value={packName}
                     onChange={(e) => setPackName(e.target.value)}
-                    placeholder="e.g. History Trivia Night"
+                    placeholder={t('packNamePlaceholder')}
                     className="w-full bg-slate-900 border border-slate-600 rounded-lg p-3 text-white focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none"
                 />
             </div>
@@ -127,7 +129,7 @@ export default function PackCreator({ pack, setView, user, setError, onSaved }) 
                     <div key={cat.id} className="bg-slate-800/50 p-6 rounded-xl border border-slate-700/50">
                         <div className="flex items-center gap-4 mb-6">
                             <div className="flex-1">
-                                <label className="block text-xs font-medium text-slate-500 mb-1">Category {catIdx + 1}</label>
+                                <label className="block text-xs font-medium text-slate-500 mb-1">{t('categoryNumber', { number: catIdx + 1 })}</label>
                                 <input
                                     type="text"
                                     value={cat.name}
@@ -144,7 +146,7 @@ export default function PackCreator({ pack, setView, user, setError, onSaved }) 
                             {cat.questions.map((q) => (
                                 <div key={q.id} className="bg-slate-900 p-4 rounded-lg flex gap-4">
                                     <div className="w-24">
-                                        <label className="block text-xs text-slate-500 mb-1">Points</label>
+                                        <label className="block text-xs text-slate-500 mb-1">{t('points')}</label>
                                         <input
                                             type="number"
                                             value={q.points}
@@ -154,22 +156,22 @@ export default function PackCreator({ pack, setView, user, setError, onSaved }) 
                                     </div>
                                     <div className="flex-1 space-y-3">
                                         <div>
-                                            <label className="block text-xs text-slate-500 mb-1">Question</label>
+                                            <label className="block text-xs text-slate-500 mb-1">{t('question')}</label>
                                             <input
                                                 type="text"
                                                 value={q.text}
                                                 onChange={(e) => updateQuestion(cat.id, q.id, 'text', e.target.value)}
-                                                placeholder="Enter question text..."
+                                                placeholder={t('questionPlaceholder')}
                                                 className="w-full bg-slate-800 border border-slate-700 rounded p-2 text-white outline-none"
                                             />
                                         </div>
                                         <div>
-                                            <label className="block text-xs text-slate-500 mb-1">Answer</label>
+                                            <label className="block text-xs text-slate-500 mb-1">{t('answer')}</label>
                                             <input
                                                 type="text"
                                                 value={q.answer}
                                                 onChange={(e) => updateQuestion(cat.id, q.id, 'answer', e.target.value)}
-                                                placeholder="Enter hidden answer..."
+                                                placeholder={t('answerPlaceholder')}
                                                 className="w-full bg-slate-800 border border-slate-700 rounded p-2 text-green-400 outline-none"
                                             />
                                         </div>
@@ -183,7 +185,7 @@ export default function PackCreator({ pack, setView, user, setError, onSaved }) 
                                 onClick={() => addQuestion(cat.id)}
                                 className="text-sm text-blue-400 hover:text-blue-300 flex items-center gap-1 py-2"
                             >
-                                <Plus size={16} /> Add Question
+                                <Plus size={16} /> {t('addQuestion')}
                             </button>
                         </div>
                     </div>
@@ -193,7 +195,7 @@ export default function PackCreator({ pack, setView, user, setError, onSaved }) 
                     onClick={addCategory}
                     className="w-full border-2 border-dashed border-slate-700 hover:border-slate-500 text-slate-400 hover:text-slate-300 p-6 rounded-xl flex items-center justify-center gap-2 font-bold transition-colors"
                 >
-                    <Plus size={24} /> Add Category
+                    <Plus size={24} /> {t('addCategory')}
                 </button>
             </div>
         </div>

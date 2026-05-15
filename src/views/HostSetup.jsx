@@ -3,12 +3,14 @@ import { collection, doc, getDocs, setDoc } from 'firebase/firestore';
 import { ArrowLeft, Play } from 'lucide-react';
 import { ANIMAL_AVATARS } from '../constants';
 import { appId, db } from '../firebase';
+import { useLanguage } from '../useLanguage';
 import { generateRoomCode } from '../utils/ids';
 
 export default function HostSetup({ setView, user, setCurrentRoomCode, onCreatePack }) {
+    const { t } = useLanguage();
     const [packs, setPacks] = useState([]);
     const [loading, setLoading] = useState(true);
-    const [hostName, setHostName] = useState('Host');
+    const [hostName, setHostName] = useState(() => t('hostLabel'));
 
     useEffect(() => {
         const fetchPacks = async () => {
@@ -61,7 +63,7 @@ export default function HostSetup({ setView, user, setCurrentRoomCode, onCreateP
             setView('room');
         } catch (err) {
             console.error("Error creating room", err);
-            alert("Failed to create room.");
+            alert(t('failedToCreateRoom'));
         }
     };
 
@@ -71,11 +73,11 @@ export default function HostSetup({ setView, user, setCurrentRoomCode, onCreateP
                 <button onClick={() => setView('menu')} className="p-2 mr-4 hover:bg-slate-800 rounded-full transition-colors">
                     <ArrowLeft size={24} />
                 </button>
-                <h2 className="text-3xl font-bold">Host a Game</h2>
+                <h2 className="text-3xl font-bold">{t('hostGame')}</h2>
             </div>
 
             <div className="bg-slate-800 p-6 rounded-xl border border-slate-700 mb-8">
-                <label className="block text-sm font-medium text-slate-400 mb-2">Your Host Name</label>
+                <label className="block text-sm font-medium text-slate-400 mb-2">{t('yourHostName')}</label>
                 <input
                     type="text"
                     value={hostName}
@@ -85,18 +87,18 @@ export default function HostSetup({ setView, user, setCurrentRoomCode, onCreateP
                 />
             </div>
 
-            <h3 className="text-xl font-bold mb-4 text-slate-300">Select a Question Pack</h3>
+            <h3 className="text-xl font-bold mb-4 text-slate-300">{t('selectQuestionPack')}</h3>
 
             {loading ? (
-                <div className="text-center p-8 text-slate-500 animate-pulse">Loading packs...</div>
+                <div className="text-center p-8 text-slate-500 animate-pulse">{t('loadingPacks')}</div>
             ) : packs.length === 0 ? (
                 <div className="text-center p-12 border-2 border-dashed border-slate-700 rounded-xl">
-                    <p className="text-slate-400 mb-4">No public question packs are available yet.</p>
+                    <p className="text-slate-400 mb-4">{t('noPublicPacks')}</p>
                     <button
                         onClick={onCreatePack}
                         className="bg-blue-600 hover:bg-blue-500 text-white px-6 py-2 rounded-lg font-bold"
                     >
-                        Create One Now
+                        {t('createOneNow')}
                     </button>
                 </div>
             ) : (
@@ -105,16 +107,19 @@ export default function HostSetup({ setView, user, setCurrentRoomCode, onCreateP
                         <div key={pack.id} className="bg-slate-800 border border-slate-600 p-5 rounded-xl hover:border-purple-500 transition-colors flex flex-col">
                             <h4 className="font-bold text-lg mb-1">{pack.name}</h4>
                             <p className="text-sm text-slate-400 mb-2">
-                                {pack.categories?.length || 0} Categories · {pack.categories?.reduce((acc, c) => acc + (c.questions?.length || 0), 0)} Questions
+                                {t('packStats', {
+                                    categories: pack.categories?.length || 0,
+                                    questions: pack.categories?.reduce((acc, c) => acc + (c.questions?.length || 0), 0)
+                                })}
                             </p>
                             <p className="text-xs text-slate-500 mb-4">
-                                By {pack.ownerEmail || 'Unknown author'}
+                                {t('byAuthor', { author: pack.ownerEmail || t('unknownAuthor') })}
                             </p>
                             <button
                                 onClick={() => handleStartRoom(pack)}
                                 className="mt-auto bg-purple-600 hover:bg-purple-500 w-full py-2 rounded-lg font-bold flex items-center justify-center gap-2"
                             >
-                                <Play size={18} /> Start Room
+                                <Play size={18} /> {t('startRoom')}
                             </button>
                         </div>
                     ))}

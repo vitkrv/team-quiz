@@ -1,6 +1,8 @@
 import { handleEndGame, handlePickQuestion } from '../../actions/gameActions';
+import { useLanguage } from '../../useLanguage';
 
 export default function BoardView({ room, roomRef, user, isHost }) {
+    const { t } = useLanguage();
     const isMyTurn = room.currentTurn === user.uid;
     const categories = room.pack.categories;
 
@@ -11,27 +13,27 @@ export default function BoardView({ room, roomRef, user, isHost }) {
         <div className="flex-1 flex flex-col h-full">
             <div className="flex justify-between items-center mb-6">
                 <h2 className="text-2xl font-black text-slate-300">
-                    {isHost ? "Host: Awaiting selection" : isMyTurn ? "Your Turn! Pick a question." : "Waiting for pick..."}
+                    {isHost ? t('hostAwaitingSelection') : isMyTurn ? t('yourTurnPickQuestion') : t('waitingForPick')}
                 </h2>
                 {isHost && (
                     <button
                         onClick={() => handleEndGame(roomRef)}
                         className="bg-red-600/20 text-red-400 hover:bg-red-600 hover:text-white px-4 py-2 rounded font-bold border border-red-500/30 transition-colors text-sm"
                     >
-                        End Game Early
+                        {t('endGameEarly')}
                     </button>
                 )}
             </div>
 
             {allDone ? (
                 <div className="flex-1 flex flex-col items-center justify-center">
-                    <h2 className="text-4xl font-bold text-white mb-6">Board is empty!</h2>
+                    <h2 className="text-4xl font-bold text-white mb-6">{t('boardEmpty')}</h2>
                     {isHost && (
                         <button
                             onClick={() => handleEndGame(roomRef)}
                             className="bg-purple-600 hover:bg-purple-500 text-white px-8 py-4 rounded-xl font-black text-2xl shadow-lg shadow-purple-600/30 transition-transform transform hover:scale-105"
                         >
-                            Show Final Results
+                            {t('showFinalResults')}
                         </button>
                     )}
                 </div>

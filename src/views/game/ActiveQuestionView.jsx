@@ -1,8 +1,10 @@
 import { useEffect, useState } from 'react';
 import { arrayUnion, updateDoc } from 'firebase/firestore';
 import { Check, X } from 'lucide-react';
+import { useLanguage } from '../../useLanguage';
 
 export default function ActiveQuestionView({ room, roomRef, user, isHost }) {
+    const { t } = useLanguage();
     const [timeLeft, setTimeLeft] = useState(10);
 
     // Find the active question data
@@ -100,7 +102,7 @@ export default function ActiveQuestionView({ room, roomRef, user, isHost }) {
 
             <div className="absolute top-0 w-full flex justify-between text-slate-400 font-bold uppercase tracking-widest text-sm">
                 <span>{activeCatName}</span>
-                <span className="text-yellow-500">{activeQ.points} PTS</span>
+                <span className="text-yellow-500">{t('pointsShort', { points: activeQ.points })}</span>
             </div>
 
             <div className="w-full bg-blue-900 border-4 border-blue-600 rounded-3xl p-10 md:p-16 shadow-2xl shadow-blue-900/50 mb-12 mt-10">
@@ -112,7 +114,7 @@ export default function ActiveQuestionView({ room, roomRef, user, isHost }) {
             {(isHost || isAnswerRevealed) && (
                 <div className="bg-slate-800 border border-slate-700 p-6 rounded-xl w-full max-w-2xl mb-8">
                     <p className="text-sm text-slate-400 uppercase tracking-widest font-bold mb-2">
-                        {isAnswerRevealed ? 'Correct Answer' : 'Hidden Answer'}
+                        {isAnswerRevealed ? t('correctAnswer') : t('hiddenAnswer')}
                     </p>
                     <p className="text-2xl font-black text-green-400">{activeQ.answer}</p>
                 </div>
@@ -122,7 +124,7 @@ export default function ActiveQuestionView({ room, roomRef, user, isHost }) {
                 <div className="flex flex-col items-center gap-4">
                     {!isHost && (
                         <div className="text-slate-400 font-bold text-lg">
-                            Waiting for host to continue...
+                            {t('waitingForHostContinue')}
                         </div>
                     )}
                     {isHost && (
@@ -130,7 +132,7 @@ export default function ActiveQuestionView({ room, roomRef, user, isHost }) {
                             onClick={handleContinue}
                             className="bg-blue-600 hover:bg-blue-500 text-white px-8 py-4 rounded-xl font-bold text-xl shadow-lg shadow-blue-900 transition-colors"
                         >
-                            Continue
+                            {t('continue')}
                         </button>
                     )}
                 </div>
@@ -141,7 +143,7 @@ export default function ActiveQuestionView({ room, roomRef, user, isHost }) {
                 <div className="flex flex-col items-center animate-in zoom-in duration-200">
                     <div className="text-xl text-slate-300 mb-4 flex items-center gap-2">
                         <span className="text-3xl">{buzzedPlayerAvatar}</span>
-                        <span className="font-black text-2xl text-yellow-400">{buzzedPlayerName}</span> is answering!
+                        <span className="font-black text-2xl text-yellow-400">{buzzedPlayerName}</span> {t('playerIsAnswering', { playerName: '' }).trim()}
                     </div>
 
                     <div className="relative w-32 h-32 mb-8">
@@ -159,17 +161,17 @@ export default function ActiveQuestionView({ room, roomRef, user, isHost }) {
                     {isHost && (
                         <div className="flex gap-4">
                             <button onClick={() => handleJudge(true)} className="bg-green-600 hover:bg-green-500 text-white px-8 py-4 rounded-xl font-bold text-xl flex items-center gap-2 shadow-lg shadow-green-900">
-                                <Check size={28}/> Correct
+                                <Check size={28}/> {t('correct')}
                             </button>
                             <button onClick={() => handleJudge(false)} className="bg-red-600 hover:bg-red-500 text-white px-8 py-4 rounded-xl font-bold text-xl flex items-center gap-2 shadow-lg shadow-red-900">
-                                <X size={28}/> Incorrect
+                                <X size={28}/> {t('incorrect')}
                             </button>
                         </div>
                     )}
 
                     {didIBuzz && !isHost && (
                         <div className="text-2xl font-bold text-blue-400 animate-pulse mt-4">
-                            Speak your answer loudly!
+                            {t('speakAnswer')}
                         </div>
                     )}
                 </div>
@@ -179,18 +181,18 @@ export default function ActiveQuestionView({ room, roomRef, user, isHost }) {
             {!hasBuzzed && !isAnswerRevealed && (
                 <div className="flex flex-col items-center w-full max-w-md">
                     {isHost ? (
-                        <div className="text-slate-400 mb-6">Waiting for players to buzz...</div>
+                        <div className="text-slate-400 mb-6">{t('waitingForBuzz')}</div>
                     ) : (
                         canIBuzz ? (
                             <button
                                 onClick={handleBuzzIn}
                                 className="w-48 h-48 rounded-full bg-red-600 hover:bg-red-500 border-8 border-red-800 text-white font-black text-4xl shadow-[0_10px_0_0_#7f1d1d,inset_0_10px_20px_rgba(255,255,255,0.3)] active:shadow-[0_0px_0_0_#7f1d1d,inset_0_10px_20px_rgba(255,255,255,0.3)] active:translate-y-[10px] transition-all"
                             >
-                                BUZZ
+                                {t('buzz')}
                             </button>
                         ) : (
                             <div className="text-slate-500 font-bold text-xl p-8 border-2 border-dashed border-slate-700 rounded-xl w-full">
-                                {amIIncorrect ? "You answered incorrectly." : "Waiting..."}
+                                {amIIncorrect ? t('answeredIncorrectly') : t('waiting')}
                             </div>
                         )
                     )}
@@ -200,7 +202,7 @@ export default function ActiveQuestionView({ room, roomRef, user, isHost }) {
                             onClick={handleSkip}
                             className="mt-8 text-slate-400 hover:text-white border border-slate-600 hover:bg-slate-700 px-6 py-2 rounded-lg font-bold transition-colors"
                         >
-                            Skip / Reveal Answer
+                            {t('skipRevealAnswer')}
                         </button>
                     )}
                 </div>

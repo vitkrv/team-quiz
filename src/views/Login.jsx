@@ -1,6 +1,9 @@
 import { LogIn, X } from 'lucide-react';
+import { useLanguage } from '../useLanguage';
 
 export default function Login({ error, pendingRoomCode, onDismissError, onSignIn }) {
+    const { t } = useLanguage();
+
     return (
         <div className="min-h-screen bg-slate-900 text-slate-100 flex items-center justify-center p-6">
             {error && (
@@ -16,14 +19,14 @@ export default function Login({ error, pendingRoomCode, onDismissError, onSignIn
                 </h1>
                 <p className="text-slate-400 mb-8">
                     {pendingRoomCode
-                        ? `Sign in with Google to join room ${pendingRoomCode}.`
-                        : 'Sign in with Google to create packs, host rooms, and join games.'}
+                        ? t('loginPendingRoom', { roomCode: pendingRoomCode })
+                        : t('loginDescription')}
                 </p>
                 <button
                     onClick={onSignIn}
                     className="w-full bg-blue-600 hover:bg-blue-500 text-white py-4 rounded-xl font-bold text-lg transition-all transform hover:scale-[1.02] active:scale-95 shadow-lg shadow-blue-500/20 flex items-center justify-center gap-2"
                 >
-                    <LogIn size={20} /> Sign in with Google
+                    <LogIn size={20} /> {t('signInWithGoogle')}
                 </button>
             </div>
         </div>

@@ -1,22 +1,28 @@
-export const getAuthErrorMessage = (err) => {
+import { DEFAULT_LANGUAGE, translate } from '../i18n';
+
+export const getAuthErrorMessage = (err, language = DEFAULT_LANGUAGE) => {
     if (err?.code === 'auth/configuration-not-found') {
-        return 'Firebase Auth is not configured for this project. Enable Google sign-in in Firebase Console, then restart the dev server.';
+        return translate(language, 'authConfigMissing');
     }
 
     if (err?.code === 'auth/invalid-api-key' || err?.code === 'auth/api-key-not-valid') {
-        return 'Firebase API key is invalid. Check the VITE_FIREBASE_* values in .env.local, then restart the dev server.';
+        return translate(language, 'authInvalidApiKey');
     }
 
     if (err?.code === 'auth/popup-closed-by-user') {
-        return 'Google sign-in was closed before it finished.';
+        return translate(language, 'authPopupClosed');
     }
 
-    return err?.message ? `Failed to authenticate: ${err.message}` : 'Failed to authenticate.';
+    return err?.message
+        ? translate(language, 'authFailedWithMessage', { message: err.message })
+        : translate(language, 'authFailed');
 };
-export const getFirestoreErrorMessage = (err, action) => {
+export const getFirestoreErrorMessage = (err, action, language = DEFAULT_LANGUAGE) => {
     if (err?.code === 'permission-denied') {
-        return `${action} failed: Firestore denied the write. Deploy the rules from firestore.rules to the Firebase project in .env.local.`;
+        return translate(language, 'firestorePermissionDenied', { action });
     }
 
-    return err?.message ? `${action} failed: ${err.message}` : `${action} failed.`;
+    return err?.message
+        ? translate(language, 'actionFailedWithMessage', { action, message: err.message })
+        : translate(language, 'actionFailed', { action });
 };

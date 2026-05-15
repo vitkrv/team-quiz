@@ -2,9 +2,11 @@ import { useEffect, useState } from 'react';
 import { collection, deleteDoc, doc, getDocs, query, where } from 'firebase/firestore';
 import { ArrowLeft, Edit3, Plus, Trash2 } from 'lucide-react';
 import { appId, db } from '../firebase';
+import { useLanguage } from '../useLanguage';
 import { getFirestoreErrorMessage } from '../utils/errors';
 
 export default function PackManager({ setView, user, setError, onCreatePack, onEditPack }) {
+    const { language, t } = useLanguage();
     const [packs, setPacks] = useState([]);
     const [loading, setLoading] = useState(true);
     const [deletingPackId, setDeletingPackId] = useState(null);
@@ -19,19 +21,19 @@ export default function PackManager({ setView, user, setError, onCreatePack, onE
                 setPacks(loadedPacks.sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0)));
             } catch (err) {
                 console.error("Error fetching owned packs", err);
-                setError(getFirestoreErrorMessage(err, 'Load packs'));
+                setError(getFirestoreErrorMessage(err, t('loadPacksAction'), language));
             }
             setLoading(false);
         };
 
         fetchPacks();
-    }, [setError, user.uid]);
+    }, [language, setError, t, user.uid]);
 
     const handleDeletePack = async (pack) => {
-        const firstConfirmed = window.confirm(`Delete "${pack.name}"? This cannot be undone.`);
+        const firstConfirmed = window.confirm(t('deletePackConfirm', { packName: pack.name }));
         if (!firstConfirmed) return;
 
-        const secondConfirmed = window.confirm(`Confirm permanent deletion of "${pack.name}". Existing rooms that copied this pack will not be changed.`);
+        const secondConfirmed = window.confirm(t('deletePackFinalConfirm', { packName: pack.name }));
         if (!secondConfirmed) return;
 
         setDeletingPackId(pack.id);
@@ -40,7 +42,7 @@ export default function PackManager({ setView, user, setError, onCreatePack, onE
             setPacks(packs.filter((item) => item.id !== pack.id));
         } catch (err) {
             console.error("Delete pack error:", err);
-            setError(getFirestoreErrorMessage(err, 'Delete pack'));
+            setError(getFirestoreErrorMessage(err, t('deletePackAction'), language));
         }
         setDeletingPackId(null);
     };
@@ -51,25 +53,25 @@ export default function PackManager({ setView, user, setError, onCreatePack, onE
                 <button onClick={() => setView('menu')} className="p-2 mr-4 hover:bg-slate-800 rounded-full transition-colors">
                     <ArrowLeft size={24} />
                 </button>
-                <h2 className="text-3xl font-bold flex-1">My Question Packs</h2>
+                <h2 className="text-3xl font-bold flex-1">{t('myQuestionPacks')}</h2>
                 <button
                     onClick={onCreatePack}
                     className="bg-blue-600 hover:bg-blue-500 text-white px-5 py-2 rounded-lg font-bold flex items-center gap-2"
                 >
-                    <Plus size={18} /> New Pack
+                    <Plus size={18} /> {t('newPack')}
                 </button>
             </div>
 
             {loading ? (
-                <div className="text-center p-8 text-slate-500 animate-pulse">Loading packs...</div>
+                <div className="text-center p-8 text-slate-500 animate-pulse">{t('loadingPacks')}</div>
             ) : packs.length === 0 ? (
                 <div className="text-center p-12 border-2 border-dashed border-slate-700 rounded-xl">
-                    <p className="text-slate-400 mb-4">You have not created any question packs yet.</p>
+                    <p className="text-slate-400 mb-4">{t('noOwnedPacks')}</p>
                     <button
                         onClick={onCreatePack}
                         className="bg-blue-600 hover:bg-blue-500 text-white px-6 py-2 rounded-lg font-bold"
                     >
-                        Create One Now
+                        {t('createOneNow')}
                     </button>
                 </div>
             ) : (
@@ -78,23 +80,26 @@ export default function PackManager({ setView, user, setError, onCreatePack, onE
                         <div key={pack.id} className="bg-slate-800 border border-slate-600 p-5 rounded-xl flex flex-col">
                             <h4 className="font-bold text-lg mb-1">{pack.name}</h4>
                             <p className="text-sm text-slate-400 mb-2">
-                                {pack.categories?.length || 0} Categories · {pack.categories?.reduce((acc, c) => acc + (c.questions?.length || 0), 0)} Questions
+                                {t('packStats', {
+                                    categories: pack.categories?.length || 0,
+                                    questions: pack.categories?.reduce((acc, c) => acc + (c.questions?.length || 0), 0)
+                                })}
                             </p>
                             <p className="text-xs text-slate-500 mb-5">
-                                Public pack · Only you can edit or delete it
+                                {t('publicPackOwnerOnly')}
                             </p>
                             <div className="mt-auto flex gap-2">
                                 <button
                                     onClick={() => onEditPack(pack)}
                                     className="flex-1 bg-purple-600 hover:bg-purple-500 text-white py-2 rounded-lg font-bold flex items-center justify-center gap-2"
                                 >
-                                    <Edit3 size={18} /> Edit
+                                    <Edit3 size={18} /> {t('edit')}
                                 </button>
                                 <button
                                     onClick={() => handleDeletePack(pack)}
                                     disabled={deletingPackId === pack.id}
                                     className="bg-red-600/20 text-red-300 hover:bg-red-600 hover:text-white disabled:opacity-50 px-4 py-2 rounded-lg font-bold border border-red-500/30 transition-colors"
-                                    title="Delete pack"
+                                    title={t('deletePackTitle')}
                                 >
                                     <Trash2 size={18} />
                                 </button>
