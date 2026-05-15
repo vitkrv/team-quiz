@@ -1,13 +1,21 @@
-import { handleEndGame, handlePickQuestion } from '../../actions/gameActions';
+import { createHistoryItem, handleEndGame, handlePickQuestion } from '../../actions/gameActions';
 import { useLanguage } from '../../useLanguage';
 
 export default function BoardView({ room, roomRef, user, isHost }) {
     const { t } = useLanguage();
     const isMyTurn = room.currentTurn === user.uid;
     const categories = room.pack.categories;
+    const actorName = room.players[user.uid]?.name || user.displayName || t('playerFallback');
 
     // Check if all questions are done
     const allDone = Object.values(room.questionStates).every(state => state === 'done');
+    const handleHostEndGame = () => handleEndGame(roomRef, createHistoryItem({
+        type: 'game_finished',
+        actorId: user.uid,
+        actorName,
+        message: t('historyGameEnded', { actorName }),
+        details: { actorName }
+    }));
 
     return (
         <div className="flex-1 flex flex-col h-full">
@@ -17,7 +25,7 @@ export default function BoardView({ room, roomRef, user, isHost }) {
                 </h2>
                 {isHost && (
                     <button
-                        onClick={() => handleEndGame(roomRef)}
+                        onClick={handleHostEndGame}
                         className="bg-red-600/20 text-red-400 hover:bg-red-600 hover:text-white px-4 py-2 rounded font-bold border border-red-500/30 transition-colors text-sm"
                     >
                         {t('endGameEarly')}
@@ -30,7 +38,7 @@ export default function BoardView({ room, roomRef, user, isHost }) {
                     <h2 className="text-4xl font-bold text-white mb-6">{t('boardEmpty')}</h2>
                     {isHost && (
                         <button
-                            onClick={() => handleEndGame(roomRef)}
+                            onClick={handleHostEndGame}
                             className="bg-purple-600 hover:bg-purple-500 text-white px-8 py-4 rounded-xl font-black text-2xl shadow-lg shadow-purple-600/30 transition-transform transform hover:scale-105"
                         >
                             {t('showFinalResults')}
@@ -57,11 +65,27 @@ export default function BoardView({ room, roomRef, user, isHost }) {
                                 const isAvailable = state === 'available';
                                 const canPick = isAvailable && (isMyTurn || isHost); // Host can force pick
 
+                                const pickerName = room.players[user.uid]?.name || actorName;
+
                                 return (
                                     <button
                                         key={q.id}
                                         disabled={!canPick}
-                                        onClick={() => handlePickQuestion(roomRef, q.id)}
+                                        onClick={() => handlePickQuestion(roomRef, q.id, createHistoryItem({
+                                            type: 'question_picked',
+                                            actorId: user.uid,
+                                            actorName: pickerName,
+                                            message: t('historyQuestionPicked', {
+                                                actorName: pickerName,
+                                                categoryName: cat.name,
+                                                points: q.points
+                                            }),
+                                            details: {
+                                                actorName: pickerName,
+                                                categoryName: cat.name,
+                                                points: q.points
+                                            }
+                                        }))}
                                         className={`
                       flex-1 rounded-lg flex items-center justify-center text-2xl md:text-4xl font-black font-mono transition-all
                       ${isAvailable

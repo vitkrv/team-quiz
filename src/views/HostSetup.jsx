@@ -5,6 +5,7 @@ import { ANIMAL_AVATARS } from '../constants';
 import { appId, db } from '../firebase';
 import { useLanguage } from '../useLanguage';
 import { generateRoomCode } from '../utils/ids';
+import { createHistoryItem } from '../actions/gameActions';
 
 export default function HostSetup({ setView, user, setCurrentRoomCode, onCreatePack }) {
     const { t } = useLanguage();
@@ -54,7 +55,16 @@ export default function HostSetup({ setView, user, setCurrentRoomCode, onCreateP
             answerRevealed: false,
             buzzedPlayerId: null,
             buzzTimestamp: null,
-            incorrectBuzzedIds: []
+            incorrectBuzzedIds: [],
+            history: [
+                createHistoryItem({
+                    type: 'room_created',
+                    actorId: user.uid,
+                    actorName: hostName,
+                    message: t('historyRoomCreated', { hostName }),
+                    details: { hostName }
+                })
+            ]
         };
 
         try {

@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { arrayUnion, updateDoc } from 'firebase/firestore';
 import { Check, X } from 'lucide-react';
 import { useLanguage } from '../../useLanguage';
+import { createHistoryItem } from '../../actions/gameActions';
 
 export default function ActiveQuestionView({ room, roomRef, user, isHost }) {
     const { t } = useLanguage();
@@ -44,12 +45,20 @@ export default function ActiveQuestionView({ room, roomRef, user, isHost }) {
     const buzzedPlayerName = buzzedPlayer ? buzzedPlayer.name : '';
     const buzzedPlayerAvatar = buzzedPlayer ? buzzedPlayer.avatar : '';
     const isAnswerRevealed = Boolean(room.answerRevealed);
+    const actorName = room.players[user.uid]?.name || user.displayName || t('playerFallback');
 
     const handleBuzzIn = async () => {
         if (!canIBuzz) return;
         await updateDoc(roomRef, {
             buzzedPlayerId: user.uid,
-            buzzTimestamp: Date.now()
+            buzzTimestamp: Date.now(),
+            history: arrayUnion(createHistoryItem({
+                type: 'player_buzzed',
+                actorId: user.uid,
+                actorName,
+                message: t('historyPlayerBuzzed', { actorName }),
+                details: { actorName }
+            }))
         });
     };
 
@@ -64,14 +73,38 @@ export default function ActiveQuestionView({ room, roomRef, user, isHost }) {
                 [`players.${pId}.score`]: currentScore + activeQ.points,
                 answerRevealed: true,
                 currentTurn: pId,
-                [`questionStates.${activeQ.id}`]: 'done'
+                [`questionStates.${activeQ.id}`]: 'done',
+                history: arrayUnion(createHistoryItem({
+                    type: 'answer_correct',
+                    actorId: user.uid,
+                    actorName,
+                    message: t('historyAnswerCorrect', {
+                        playerName: room.players[pId]?.name || t('playerFallback'),
+                        points: activeQ.points
+                    }),
+                    details: {
+                        playerName: room.players[pId]?.name || t('playerFallback'),
+                        points: activeQ.points
+                    }
+                }))
             });
         } else {
             // Mark incorrect, reset buzz
             await updateDoc(roomRef, {
                 buzzedPlayerId: null,
                 buzzTimestamp: null,
-                incorrectBuzzedIds: arrayUnion(room.buzzedPlayerId)
+                incorrectBuzzedIds: arrayUnion(room.buzzedPlayerId),
+                history: arrayUnion(createHistoryItem({
+                    type: 'answer_incorrect',
+                    actorId: user.uid,
+                    actorName,
+                    message: t('historyAnswerIncorrect', {
+                        playerName: buzzedPlayerName || t('playerFallback')
+                    }),
+                    details: {
+                        playerName: buzzedPlayerName || t('playerFallback')
+                    }
+                }))
             });
         }
     };
@@ -82,7 +115,20 @@ export default function ActiveQuestionView({ room, roomRef, user, isHost }) {
             answerRevealed: true,
             buzzedPlayerId: null,
             buzzTimestamp: null,
-            [`questionStates.${activeQ.id}`]: 'done'
+            [`questionStates.${activeQ.id}`]: 'done',
+            history: arrayUnion(createHistoryItem({
+                type: 'question_skipped',
+                actorId: user.uid,
+                actorName,
+                message: t('historyQuestionSkipped', {
+                    categoryName: activeCatName,
+                    points: activeQ.points
+                }),
+                details: {
+                    categoryName: activeCatName,
+                    points: activeQ.points
+                }
+            }))
         });
     };
 
@@ -93,7 +139,14 @@ export default function ActiveQuestionView({ room, roomRef, user, isHost }) {
             answerRevealed: false,
             buzzedPlayerId: null,
             buzzTimestamp: null,
-            incorrectBuzzedIds: []
+            incorrectBuzzedIds: [],
+            history: arrayUnion(createHistoryItem({
+                type: 'board_resumed',
+                actorId: user.uid,
+                actorName,
+                message: t('historyBoardResumed', { actorName }),
+                details: { actorName }
+            }))
         });
     };
 

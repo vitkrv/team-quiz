@@ -1,12 +1,197 @@
 import { useState } from 'react';
-import { doc, updateDoc } from 'firebase/firestore';
-import { ArrowLeft, Check, Copy, Link, Play, PlusCircle, MinusCircle, Users } from 'lucide-react';
+import { arrayUnion, doc, updateDoc } from 'firebase/firestore';
+import { ArrowLeft, Check, Copy, Link, Play, PlusCircle, MinusCircle, Users, SlidersHorizontal, ScrollText, X } from 'lucide-react';
 import { appId, db } from '../../firebase';
 import { useLanguage } from '../../useLanguage';
-import { adjustScore } from '../../actions/gameActions';
+import { adjustScore, createHistoryItem } from '../../actions/gameActions';
 import ActiveQuestionView from './ActiveQuestionView';
 import BoardView from './BoardView';
 import ResultsView from './ResultsView';
+
+const getPlayerEntries = (players) => Object.entries(players).filter(([, player]) => !player.isHost);
+
+function ScoreEditorModal({ players, roomRef, host, onClose, t }) {
+    const playerEntries = getPlayerEntries(players);
+    const [scores, setScores] = useState(() => Object.fromEntries(
+        playerEntries.map(([playerId, player]) => [playerId, String(player.score || 0)])
+    ));
+    const [isSaving, setIsSaving] = useState(false);
+
+    const handleSave = async () => {
+        const update = {};
+        const historyItems = [];
+
+        playerEntries.forEach(([playerId, player]) => {
+            const nextScore = Number.parseInt(scores[playerId], 10);
+            const normalizedScore = Number.isNaN(nextScore) ? 0 : nextScore;
+            const previousScore = player.score || 0;
+
+            if (normalizedScore !== previousScore) {
+                update[`players.${playerId}.score`] = normalizedScore;
+                historyItems.push(createHistoryItem({
+                    type: 'score_set',
+                    actorId: host.id,
+                    actorName: host.name,
+                    message: t('historyScoreSet', {
+                        actorName: host.name,
+                        playerName: player.name,
+                        previousScore,
+                        nextScore: normalizedScore
+                    }),
+                    details: {
+                        actorName: host.name,
+                        playerName: player.name,
+                        previousScore,
+                        nextScore: normalizedScore,
+                        delta: normalizedScore - previousScore
+                    }
+                }));
+            }
+        });
+
+        if (historyItems.length === 0) {
+            onClose();
+            return;
+        }
+
+        setIsSaving(true);
+        await updateDoc(roomRef, {
+            ...update,
+            history: arrayUnion(...historyItems)
+        });
+        setIsSaving(false);
+        onClose();
+    };
+
+    return (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-6">
+            <div className="w-full max-w-lg rounded-xl border border-slate-700 bg-slate-900 shadow-2xl">
+                <div className="flex items-center justify-between border-b border-slate-800 p-5">
+                    <h2 className="text-xl font-bold text-white">{t('advancedScoreEditor')}</h2>
+                    <button onClick={onClose} className="text-slate-500 hover:text-white">
+                        <X size={22} />
+                    </button>
+                </div>
+                <div className="max-h-[60vh] space-y-3 overflow-y-auto p-5">
+                    {playerEntries.length === 0 ? (
+                        <div className="rounded-lg border border-dashed border-slate-700 p-8 text-center text-slate-500">
+                            {t('noPlayersForScoreEditor')}
+                        </div>
+                    ) : (
+                        playerEntries.map(([playerId, player]) => (
+                            <label key={playerId} className="flex items-center justify-between gap-4 rounded-lg border border-slate-800 bg-slate-950 p-4">
+                                <span className="flex min-w-0 items-center gap-3">
+                                    <span className="text-2xl">{player.avatar}</span>
+                                    <span className="truncate font-bold text-slate-100">{player.name}</span>
+                                </span>
+                                <input
+                                    type="number"
+                                    value={scores[playerId] ?? '0'}
+                                    onChange={(event) => setScores({ ...scores, [playerId]: event.target.value })}
+                                    className="w-28 rounded-lg border border-slate-700 bg-slate-900 p-2 text-right font-mono text-yellow-400 outline-none focus:border-blue-500"
+                                />
+                            </label>
+                        ))
+                    )}
+                </div>
+                <div className="flex justify-end gap-3 border-t border-slate-800 p-5">
+                    <button onClick={onClose} className="rounded-lg border border-slate-700 px-4 py-2 font-bold text-slate-300 hover:bg-slate-800">
+                        {t('cancel')}
+                    </button>
+                    <button
+                        onClick={handleSave}
+                        disabled={isSaving || playerEntries.length === 0}
+                        className="rounded-lg bg-blue-600 px-5 py-2 font-bold text-white hover:bg-blue-500 disabled:bg-slate-700 disabled:text-slate-500"
+                    >
+                        {isSaving ? t('saving') : t('saveScores')}
+                    </button>
+                </div>
+            </div>
+        </div>
+    );
+}
+
+const PlayerName = ({ children }) => (
+    <span className="font-black text-yellow-400">{children}</span>
+);
+
+const PointValue = ({ value, showSign = false }) => {
+    const numericValue = Number(value) || 0;
+    const color = numericValue >= 0 ? 'text-green-400' : 'text-red-400';
+    const displayValue = showSign && numericValue > 0 ? `+${numericValue}` : numericValue;
+
+    return <span className={`font-black ${color}`}>{displayValue}</span>;
+};
+
+const renderHistoryMessage = (item, t) => {
+    const details = item.details || {};
+    const fallbackName = item.actorName || t('hostLabel');
+
+    switch (item.type) {
+        case 'room_created':
+            return <><PlayerName>{details.hostName || fallbackName}</PlayerName> created room</>;
+        case 'game_started':
+            return <><PlayerName>{details.actorName || fallbackName}</PlayerName> started game. First: <PlayerName>{details.playerName || t('playerFallback')}</PlayerName></>;
+        case 'game_finished':
+            return <><PlayerName>{details.actorName || fallbackName}</PlayerName> ended game</>;
+        case 'question_picked':
+            return <><PlayerName>{details.actorName || fallbackName}</PlayerName> picked &quot;{details.categoryName || t('question')}&quot; for <PointValue value={details.points} /></>;
+        case 'player_buzzed':
+            return <><PlayerName>{details.actorName || fallbackName}</PlayerName> buzzed</>;
+        case 'answer_correct':
+            return <><PlayerName>{details.playerName || t('playerFallback')}</PlayerName> correct, <PointValue value={details.points} showSign /></>;
+        case 'answer_incorrect':
+            return <><PlayerName>{details.playerName || t('playerFallback')}</PlayerName> incorrect</>;
+        case 'question_skipped':
+            return <>Skipped &quot;{details.categoryName || t('question')}&quot; for <PointValue value={details.points} /></>;
+        case 'board_resumed':
+            return <>Back to board</>;
+        case 'score_adjusted':
+            return <><PlayerName>{details.playerName || t('playerFallback')}</PlayerName> score <PointValue value={details.delta} showSign /> → {details.nextScore}</>;
+        case 'score_set':
+            return <><PlayerName>{details.playerName || t('playerFallback')}</PlayerName> score {details.previousScore} → {details.nextScore} (<PointValue value={details.delta} showSign />)</>;
+        default:
+            return item.message;
+    }
+};
+
+function HistoryModal({ history, onClose, t }) {
+    const sortedHistory = [...(history || [])].sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
+
+    return (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-6">
+            <div className="w-full max-w-2xl rounded-xl border border-slate-700 bg-slate-900 shadow-2xl">
+                <div className="flex items-center justify-between border-b border-slate-800 p-5">
+                    <h2 className="text-xl font-bold text-white">{t('gameHistory')}</h2>
+                    <button onClick={onClose} className="text-slate-500 hover:text-white">
+                        <X size={22} />
+                    </button>
+                </div>
+                <div className="max-h-[65vh] overflow-y-auto p-5">
+                    {sortedHistory.length === 0 ? (
+                        <div className="rounded-lg border border-dashed border-slate-700 p-8 text-center text-slate-500">
+                            {t('historyEmpty')}
+                        </div>
+                    ) : (
+                        <div className="space-y-3">
+                            {sortedHistory.map((item) => (
+                                <div key={item.id} className="rounded-lg border border-slate-800 bg-slate-950 p-4">
+                                    <div className="mb-1 flex items-center justify-between gap-4 text-xs uppercase tracking-widest text-slate-500">
+                                        <span>{item.actorName || t('hostLabel')}</span>
+                                        <time dateTime={new Date(item.timestamp || 0).toISOString()}>
+                                            {new Date(item.timestamp || 0).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+                                        </time>
+                                    </div>
+                                    <div className="text-sm font-medium text-slate-200">{renderHistoryMessage(item, t)}</div>
+                                </div>
+                            ))}
+                        </div>
+                    )}
+                </div>
+            </div>
+        </div>
+    );
+}
 
 export default function GameRoom({ room, roomCode, user, onLeaveRoom }) {
     const { t } = useLanguage();
@@ -14,6 +199,10 @@ export default function GameRoom({ room, roomCode, user, onLeaveRoom }) {
     const roomRef = doc(db, 'artifacts', appId, 'public', 'data', 'rooms', roomCode);
     const [copiedRoomCode, setCopiedRoomCode] = useState(false);
     const [copiedJoinLink, setCopiedJoinLink] = useState(false);
+    const [isScoreEditorOpen, setIsScoreEditorOpen] = useState(false);
+    const [isHistoryOpen, setIsHistoryOpen] = useState(false);
+    const hostName = room.players[user.uid]?.name || user.displayName || t('hostLabel');
+    const host = { id: user.uid, name: hostName };
 
     const leaveRoom = async () => {
         onLeaveRoom();
@@ -26,9 +215,40 @@ export default function GameRoom({ room, roomCode, user, onLeaveRoom }) {
 
         await updateDoc(roomRef, {
             status: 'playing',
-            currentTurn: starterId
+            currentTurn: starterId,
+            history: arrayUnion(createHistoryItem({
+                type: 'game_started',
+                actorId: user.uid,
+                actorName: hostName,
+                message: t('historyGameStarted', {
+                    actorName: hostName,
+                    playerName: room.players[starterId]?.name || t('hostLabel')
+                }),
+                details: {
+                    actorName: hostName,
+                    playerName: room.players[starterId]?.name || t('hostLabel')
+                }
+            }))
         });
     };
+
+    const createScoreAdjustmentHistory = (player, delta, nextScore) => createHistoryItem({
+        type: 'score_adjusted',
+        actorId: user.uid,
+        actorName: hostName,
+        message: t('historyScoreAdjusted', {
+            actorName: hostName,
+            playerName: player.name,
+            delta: delta > 0 ? `+${delta}` : delta,
+            nextScore
+        }),
+        details: {
+            actorName: hostName,
+            playerName: player.name,
+            delta,
+            nextScore
+        }
+    });
 
     const handleCopyRoomCode = async () => {
         try {
@@ -56,6 +276,7 @@ export default function GameRoom({ room, roomCode, user, onLeaveRoom }) {
     if (room.status === 'lobby') {
         return (
             <div className="min-h-screen flex flex-col items-center justify-center p-6 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-slate-800 via-slate-900 to-black">
+                {isHost && isHistoryOpen && <HistoryModal history={room.history} onClose={() => setIsHistoryOpen(false)} t={t} />}
                 <div className="absolute top-4 left-4">
                     <button onClick={leaveRoom} className="text-slate-400 hover:text-white flex items-center gap-2">
                         <ArrowLeft size={20} /> {t('leave')}
@@ -107,13 +328,22 @@ export default function GameRoom({ room, roomCode, user, onLeaveRoom }) {
                             <Users className="text-blue-400" /> {t('playersCount', { count: Object.keys(room.players).length - 1 })}
                         </h3>
                         {isHost && (
-                            <button
-                                onClick={handleStartGame}
-                                disabled={Object.keys(room.players).length < 2} // need at least 1 player + host
-                                className="bg-green-600 hover:bg-green-500 disabled:opacity-50 text-white px-6 py-2 rounded-lg font-bold flex items-center gap-2 transition-all shadow-lg shadow-green-600/20"
-                            >
-                                <Play size={18} /> {t('startGame')}
-                            </button>
+                            <div className="flex items-center gap-2">
+                                <button
+                                    onClick={() => setIsHistoryOpen(true)}
+                                    className="rounded-lg border border-slate-700 p-2 text-slate-300 hover:bg-slate-700"
+                                    title={t('gameHistory')}
+                                >
+                                    <ScrollText size={18} />
+                                </button>
+                                <button
+                                    onClick={handleStartGame}
+                                    disabled={Object.keys(room.players).length < 2} // need at least 1 player + host
+                                    className="bg-green-600 hover:bg-green-500 disabled:opacity-50 text-white px-6 py-2 rounded-lg font-bold flex items-center gap-2 transition-all shadow-lg shadow-green-600/20"
+                                >
+                                    <Play size={18} /> {t('startGame')}
+                                </button>
+                            </div>
                         )}
                     </div>
 
@@ -137,6 +367,16 @@ export default function GameRoom({ room, roomCode, user, onLeaveRoom }) {
     if (room.status === 'playing') {
         return (
             <div className="min-h-screen flex flex-col bg-slate-900 overflow-hidden">
+                {isHost && isScoreEditorOpen && (
+                    <ScoreEditorModal
+                        players={room.players}
+                        roomRef={roomRef}
+                        host={host}
+                        onClose={() => setIsScoreEditorOpen(false)}
+                        t={t}
+                    />
+                )}
+                {isHost && isHistoryOpen && <HistoryModal history={room.history} onClose={() => setIsHistoryOpen(false)} t={t} />}
                 {/* Header bar */}
                 <header className="bg-slate-950 p-4 border-b border-slate-800 flex justify-between items-center z-10 shadow-md">
                     <div className="flex items-center gap-4">
@@ -144,9 +384,27 @@ export default function GameRoom({ room, roomCode, user, onLeaveRoom }) {
                         <h1 className="font-bold text-xl text-blue-400 truncate max-w-xs">{room.pack.name}</h1>
                         <span className="bg-slate-800 px-3 py-1 rounded-full text-xs font-mono text-slate-400">{t('codeLabel', { roomCode })}</span>
                     </div>
-                    <div className="text-sm font-medium text-slate-300">
+                    <div className="flex items-center gap-3 text-sm font-medium text-slate-300">
                         {room.currentTurn && room.players[room.currentTurn] && (
                             <span>{t('currentPick')} <span className="text-yellow-400 font-bold">{room.players[room.currentTurn].name}</span></span>
+                        )}
+                        {isHost && (
+                            <div className="flex items-center gap-2">
+                                <button
+                                    onClick={() => setIsScoreEditorOpen(true)}
+                                    className="rounded-lg border border-slate-700 p-2 text-slate-300 hover:bg-slate-800"
+                                    title={t('advancedScoreEditor')}
+                                >
+                                    <SlidersHorizontal size={18} />
+                                </button>
+                                <button
+                                    onClick={() => setIsHistoryOpen(true)}
+                                    className="rounded-lg border border-slate-700 p-2 text-slate-300 hover:bg-slate-800"
+                                    title={t('gameHistory')}
+                                >
+                                    <ScrollText size={18} />
+                                </button>
+                            </div>
                         )}
                     </div>
                 </header>
@@ -172,8 +430,18 @@ export default function GameRoom({ room, roomCode, user, onLeaveRoom }) {
                                         </div>
                                         {isHost && (
                                             <div className="flex flex-col gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                                                <button onClick={() => adjustScore(roomRef, pid, p.score, 100)} className="text-slate-400 hover:text-green-400"><PlusCircle size={14}/></button>
-                                                <button onClick={() => adjustScore(roomRef, pid, p.score, -100)} className="text-slate-400 hover:text-red-400"><MinusCircle size={14}/></button>
+                                                <button
+                                                    onClick={() => adjustScore(roomRef, pid, p.score, 100, createScoreAdjustmentHistory(p, 100, p.score + 100))}
+                                                    className="text-slate-400 hover:text-green-400"
+                                                >
+                                                    <PlusCircle size={14}/>
+                                                </button>
+                                                <button
+                                                    onClick={() => adjustScore(roomRef, pid, p.score, -100, createScoreAdjustmentHistory(p, -100, p.score - 100))}
+                                                    className="text-slate-400 hover:text-red-400"
+                                                >
+                                                    <MinusCircle size={14}/>
+                                                </button>
                                             </div>
                                         )}
                                     </div>
