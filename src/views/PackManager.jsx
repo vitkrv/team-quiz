@@ -2,8 +2,17 @@ import { useEffect, useState } from 'react';
 import { collection, deleteDoc, doc, getDocs, query, where } from 'firebase/firestore';
 import { ArrowLeft, Edit3, Plus, Trash2 } from 'lucide-react';
 import { appId, db } from '../firebase';
+import { deleteImage } from '../services/imageStorage';
 import { useLanguage } from '../useLanguage';
 import { getFirestoreErrorMessage } from '../utils/errors';
+
+const getPackImages = (pack) => (
+    (pack.categories || []).flatMap((category) => (
+        (category.questions || []).flatMap((question) => (
+            [question.questionImage, question.answerImage].filter((image) => image?.fileId)
+        ))
+    ))
+);
 
 export default function PackManager({ setView, user, setError, onCreatePack, onEditPack }) {
     const { language, t } = useLanguage();
@@ -38,11 +47,13 @@ export default function PackManager({ setView, user, setError, onCreatePack, onE
 
         setDeletingPackId(pack.id);
         try {
+            const packImages = getPackImages(pack);
+            await Promise.all(packImages.map((image) => deleteImage(image)));
             await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'packs', pack.id));
             setPacks(packs.filter((item) => item.id !== pack.id));
         } catch (err) {
             console.error("Delete pack error:", err);
-            setError(getFirestoreErrorMessage(err, t('deletePackAction'), language));
+            setError(err.messageKey ? t(err.messageKey) : getFirestoreErrorMessage(err, t('deletePackAction'), language));
         }
         setDeletingPackId(null);
     };

@@ -129,27 +129,27 @@ const renderHistoryMessage = (item, t) => {
 
     switch (item.type) {
         case 'room_created':
-            return <><PlayerName>{details.hostName || fallbackName}</PlayerName> created room</>;
+            return <><PlayerName>{details.hostName || fallbackName}</PlayerName> {t('historyViewCreatedRoom')}</>;
         case 'game_started':
-            return <><PlayerName>{details.actorName || fallbackName}</PlayerName> started game. First: <PlayerName>{details.playerName || t('playerFallback')}</PlayerName></>;
+            return <><PlayerName>{details.actorName || fallbackName}</PlayerName> {t('historyViewStartedGame')} {t('historyViewFirst')} <PlayerName>{details.playerName || t('playerFallback')}</PlayerName></>;
         case 'game_finished':
-            return <><PlayerName>{details.actorName || fallbackName}</PlayerName> ended game</>;
+            return <><PlayerName>{details.actorName || fallbackName}</PlayerName> {t('historyViewEndedGame')}</>;
         case 'question_picked':
-            return <><PlayerName>{details.actorName || fallbackName}</PlayerName> picked &quot;{details.categoryName || t('question')}&quot; for <PointValue value={details.points} /></>;
+            return <><PlayerName>{details.actorName || fallbackName}</PlayerName> {t('historyViewPicked')} &quot;{details.categoryName || t('question')}&quot; {t('historyViewFor')} <PointValue value={details.points} /></>;
         case 'player_buzzed':
-            return <><PlayerName>{details.actorName || fallbackName}</PlayerName> buzzed</>;
+            return <><PlayerName>{details.actorName || fallbackName}</PlayerName> {t('historyViewBuzzed')}</>;
         case 'answer_correct':
-            return <><PlayerName>{details.playerName || t('playerFallback')}</PlayerName> correct, <PointValue value={details.points} showSign /></>;
+            return <><PlayerName>{details.playerName || t('playerFallback')}</PlayerName> {t('historyViewCorrect')}, <PointValue value={details.points} showSign /></>;
         case 'answer_incorrect':
-            return <><PlayerName>{details.playerName || t('playerFallback')}</PlayerName> incorrect</>;
+            return <><PlayerName>{details.playerName || t('playerFallback')}</PlayerName> {t('historyViewIncorrect')}</>;
         case 'question_skipped':
-            return <>Skipped &quot;{details.categoryName || t('question')}&quot; for <PointValue value={details.points} /></>;
+            return <>{t('historyViewSkipped')} &quot;{details.categoryName || t('question')}&quot; {t('historyViewFor')} <PointValue value={details.points} /></>;
         case 'board_resumed':
-            return <>Back to board</>;
+            return <>{t('historyViewBackToBoard')}</>;
         case 'score_adjusted':
-            return <><PlayerName>{details.playerName || t('playerFallback')}</PlayerName> score <PointValue value={details.delta} showSign /> → {details.nextScore}</>;
+            return <><PlayerName>{details.playerName || t('playerFallback')}</PlayerName> {t('historyViewScore')} <PointValue value={details.delta} showSign /> → {details.nextScore}</>;
         case 'score_set':
-            return <><PlayerName>{details.playerName || t('playerFallback')}</PlayerName> score {details.previousScore} → {details.nextScore} (<PointValue value={details.delta} showSign />)</>;
+            return <><PlayerName>{details.playerName || t('playerFallback')}</PlayerName> {t('historyViewScore')} {details.previousScore} → {details.nextScore} (<PointValue value={details.delta} showSign />)</>;
         default:
             return item.message;
     }

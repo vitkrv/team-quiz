@@ -4,6 +4,7 @@ import { Check, X } from 'lucide-react';
 import { useLanguage } from '../../useLanguage';
 import { createHistoryItem } from '../../actions/gameActions';
 import HoldToConfirmButton from '../../components/HoldToConfirmButton';
+import QuestionImage from '../../components/QuestionImage';
 
 export default function ActiveQuestionView({ room, roomRef, user, isHost }) {
     const { t } = useLanguage();
@@ -47,6 +48,9 @@ export default function ActiveQuestionView({ room, roomRef, user, isHost }) {
     const buzzedPlayerAvatar = buzzedPlayer ? buzzedPlayer.avatar : '';
     const isAnswerRevealed = Boolean(room.answerRevealed);
     const actorName = room.players[user.uid]?.name || user.displayName || t('playerFallback');
+    const hasQuestionText = Boolean(activeQ.text?.trim());
+    const hasAnswerText = Boolean(activeQ.answer?.trim());
+    const shouldShowQuestionContext = isHost || !isAnswerRevealed;
 
     const handleBuzzIn = async () => {
         if (!canIBuzz) return;
@@ -152,30 +156,51 @@ export default function ActiveQuestionView({ room, roomRef, user, isHost }) {
     };
 
     return (
-        <div className="flex-1 flex flex-col items-center justify-center max-w-4xl mx-auto w-full text-center relative z-10">
+        <div className="flex-1 min-h-0 flex flex-col items-center justify-start max-w-4xl mx-auto w-full text-center relative z-10">
 
-            <div className="absolute top-0 w-full flex justify-between text-slate-400 font-bold uppercase tracking-widest text-sm">
-                <span>{activeCatName}</span>
-                <span className="text-yellow-500">{t('pointsShort', { points: activeQ.points })}</span>
-            </div>
+            {shouldShowQuestionContext && (
+                <div className="absolute top-0 w-full flex justify-between text-slate-400 font-bold uppercase tracking-widest text-sm">
+                    <span>{activeCatName}</span>
+                    <span className="text-yellow-500">{t('pointsShort', { points: activeQ.points })}</span>
+                </div>
+            )}
 
-            <div className="w-full bg-blue-900 border-4 border-blue-600 rounded-3xl p-10 md:p-16 shadow-2xl shadow-blue-900/50 mb-12 mt-10">
-                <h2 className="text-3xl md:text-5xl font-black text-white leading-tight drop-shadow-lg" style={{textShadow: '2px 2px 4px rgba(0,0,0,0.5)'}}>
-                    {activeQ.text}
-                </h2>
-            </div>
+            {shouldShowQuestionContext && (
+                <div className={`mt-10 flex w-full min-h-0 flex-col items-center ${isHost ? 'gap-5' : 'gap-6'}`}>
+                    {hasQuestionText && (
+                        <div className="w-full bg-blue-900 border-4 border-blue-600 rounded-3xl p-6 md:p-10 shadow-2xl shadow-blue-900/50">
+                            <h2 className="text-3xl md:text-5xl font-black text-white leading-tight drop-shadow-lg" style={{textShadow: '2px 2px 4px rgba(0,0,0,0.5)'}}>
+                                {activeQ.text}
+                            </h2>
+                        </div>
+                    )}
+                    {activeQ.questionImage && (
+                        <QuestionImage
+                            image={activeQ.questionImage}
+                            alt={t('questionImageAlt')}
+                            variant={isHost ? 'host' : 'player'}
+                            className={hasQuestionText ? '' : 'max-h-[52vh]'}
+                        />
+                    )}
+                </div>
+            )}
 
             {(isHost || isAnswerRevealed) && (
-                <div className="bg-slate-800 border border-slate-700 p-6 rounded-xl w-full max-w-2xl mb-8">
+                <div className={`${shouldShowQuestionContext ? 'mt-6' : 'mt-10'} ${isHost ? 'bg-slate-800 border border-slate-700 p-5 rounded-xl max-w-2xl' : 'p-2 md:p-4 max-w-4xl'} w-full`}>
                     <p className="text-sm text-slate-400 uppercase tracking-widest font-bold mb-2">
                         {isAnswerRevealed ? t('correctAnswer') : t('hiddenAnswer')}
                     </p>
-                    <p className="text-2xl font-black text-green-400">{activeQ.answer}</p>
+                    {hasAnswerText && <p className="text-2xl font-black text-green-400">{activeQ.answer}</p>}
+                    {activeQ.answerImage && (
+                        <div className={hasAnswerText ? 'mt-4 flex justify-center' : 'flex justify-center'}>
+                            <QuestionImage image={activeQ.answerImage} alt={t('answerImageAlt')} variant={isHost ? 'host' : 'player'} />
+                        </div>
+                    )}
                 </div>
             )}
 
             {isAnswerRevealed && (
-                <div className="flex flex-col items-center gap-4">
+                <div className="mt-6 flex flex-col items-center gap-4">
                     {!isHost && (
                         <div className="text-slate-400 font-bold text-lg">
                             {t('waitingForHostContinue')}
@@ -194,7 +219,7 @@ export default function ActiveQuestionView({ room, roomRef, user, isHost }) {
 
             {/* State: Someone buzzed */}
             {hasBuzzed && !isAnswerRevealed && (
-                <div className="flex flex-col items-center animate-in zoom-in duration-200">
+                <div className="mt-6 flex flex-col items-center animate-in zoom-in duration-200">
                     <div className="text-xl text-slate-300 mb-4 flex items-center gap-2">
                         <span className="text-3xl">{buzzedPlayerAvatar}</span>
                         <span className="font-black text-2xl text-yellow-400">{buzzedPlayerName}</span> {t('playerIsAnswering', { playerName: '' }).trim()}
@@ -233,7 +258,7 @@ export default function ActiveQuestionView({ room, roomRef, user, isHost }) {
 
             {/* State: Waiting for buzz */}
             {!hasBuzzed && !isAnswerRevealed && (
-                <div className="flex flex-col items-center w-full max-w-md">
+                <div className="mt-6 flex shrink-0 flex-col items-center w-full max-w-md">
                     {isHost ? (
                         <div className="text-slate-400 mb-6">{t('waitingForBuzz')}</div>
                     ) : (

@@ -5,6 +5,7 @@ import { X } from 'lucide-react';
 import FirebaseSetupMissing from './components/FirebaseSetupMissing';
 import { appId, auth, db, hasFirebaseConfig } from './firebase';
 import LanguageProvider from './LanguageProvider';
+import { clearImageKitAuthSession } from './services/imageStorage';
 import { normalizeLanguage, translate } from './i18n';
 import { getAuthErrorMessage } from './utils/errors';
 import Login from './views/Login';
@@ -65,6 +66,7 @@ export default function App() {
             const isGoogleUser = u?.providerData?.some((provider) => provider.providerId === 'google.com');
 
             if (u && !isGoogleUser) {
+                clearImageKitAuthSession();
                 signOut(auth).catch((err) => {
                     console.error("Sign out error:", err);
                     setError(getAuthErrorMessage(err, language));
@@ -131,6 +133,7 @@ export default function App() {
 
     const handleSignOut = async () => {
         try {
+            clearImageKitAuthSession();
             await signOut(auth);
             handleSetCurrentRoomCode(null);
             setRoomData(null);

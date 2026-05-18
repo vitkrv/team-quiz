@@ -20,23 +20,27 @@ export default function BoardView({ room, roomRef, user, isHost }) {
 
     return (
         <div className="flex-1 flex flex-col h-full">
-            <div className="flex justify-between items-center mb-6">
-                <h2 className="text-2xl font-black text-slate-300">
-                    {isHost ? t('hostAwaitingSelection') : isMyTurn ? t('yourTurnPickQuestion') : t('waitingForPick')}
-                </h2>
-                {isHost && (
-                    <HoldToConfirmButton
-                        onConfirm={handleHostEndGame}
-                        className="rounded border border-red-500/30 bg-red-600/20 px-4 py-2 text-sm font-bold text-red-400 transition-colors hover:text-white"
-                    >
-                        {t('endGameEarly')}
-                    </HoldToConfirmButton>
-                )}
-            </div>
+            {!allDone && (
+                <div className="flex justify-between items-center mb-6">
+                    <h2 className="text-2xl font-black text-slate-300">
+                        {isHost ? t('hostAwaitingSelection') : isMyTurn ? t('yourTurnPickQuestion') : t('waitingForPick')}
+                    </h2>
+                    {isHost && (
+                        <HoldToConfirmButton
+                            onConfirm={handleHostEndGame}
+                            className="rounded border border-red-500/30 bg-red-600/20 px-4 py-2 text-sm font-bold text-red-400 transition-colors hover:text-white"
+                        >
+                            {t('endGameEarly')}
+                        </HoldToConfirmButton>
+                    )}
+                </div>
+            )}
 
             {allDone ? (
                 <div className="flex-1 flex flex-col items-center justify-center">
-                    <h2 className="text-4xl font-bold text-white mb-6">{t('boardEmpty')}</h2>
+                    <h2 className="text-4xl font-bold text-white mb-6">
+                        {isHost ? t('boardEmpty') : t('boardCompleteWaitingResults')}
+                    </h2>
                     {isHost && (
                         <button
                             onClick={handleHostEndGame}

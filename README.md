@@ -22,7 +22,18 @@ Question packs are public so any signed-in user can host a room with them. Only 
    firebase deploy --only firestore:rules
    ```
 
-5. Start the app:
+5. Deploy an ImageKit auth endpoint.
+
+   Firebase Functions are not required. The app calls the URL from `VITE_IMAGEKIT_AUTH_ENDPOINT` to get ImageKit upload signatures and to delete replaced/removed files. Follow the Cloudflare Worker guide in `imagekit-auth-worker/README.md`.
+   After changing Worker code or secrets, run `wrangler deploy` again.
+
+6. Add the deployed endpoint URL to `.env.local`:
+
+   ```env
+   VITE_IMAGEKIT_AUTH_ENDPOINT=https://your-worker.your-subdomain.workers.dev
+   ```
+
+7. Start the app:
 
    ```sh
    npm run dev
