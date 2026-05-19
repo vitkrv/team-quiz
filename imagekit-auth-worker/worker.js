@@ -1,4 +1,4 @@
-const VALID_SLOTS = new Set(['questionImage', 'answerImage']);
+const VALID_SLOTS = new Set(['questionMedia', 'answerMedia']);
 const IMAGEKIT_FOLDER = '/TeamQuiz';
 
 const getSecret = (env, key) => {
@@ -81,7 +81,7 @@ const assertPackOwner = async ({ request, env, appId, packId }) => {
 
     const packDoc = await getFirestorePack({ env, appId, packId, idToken });
     if (getStringField(packDoc, 'ownerId') !== uid) {
-        throw new Error('Only the question pack owner can manage images.');
+        throw new Error('Only the question pack owner can manage media.');
     }
 
     return { packDoc, uid };
@@ -92,7 +92,7 @@ const handleUploadAuth = async ({ request, env, body }) => {
     const packId = assertString(body.packId, 'packId');
     const questionId = assertString(body.questionId, 'questionId');
     const slot = assertString(body.slot, 'slot');
-    if (!VALID_SLOTS.has(slot)) throw new Error('Invalid image slot.');
+    if (!VALID_SLOTS.has(slot)) throw new Error('Invalid media slot.');
 
     const { packDoc } = await assertPackOwner({ request, env, appId, packId });
     const questionExists = getQuestions(packDoc).some((question) => (
@@ -118,19 +118,19 @@ const handleUploadAuth = async ({ request, env, body }) => {
 
 const handleDelete = async ({ request, env, body }) => {
     const appId = assertString(body.appId, 'appId');
-    const image = body.image || {};
-    const packId = assertString(image.packId, 'image.packId');
-    const fileId = assertString(image.fileId, 'image.fileId');
-    const filePath = assertString(image.filePath, 'image.filePath');
-    assertString(image.questionId, 'image.questionId');
-    const slot = assertString(image.slot, 'image.slot');
-    if (!VALID_SLOTS.has(slot)) throw new Error('Invalid image slot.');
+    const media = body.media || {};
+    const packId = assertString(media.packId, 'media.packId');
+    const fileId = assertString(media.fileId, 'media.fileId');
+    const filePath = assertString(media.filePath, 'media.filePath');
+    assertString(media.questionId, 'media.questionId');
+    const slot = assertString(media.slot, 'media.slot');
+    if (!VALID_SLOTS.has(slot)) throw new Error('Invalid media slot.');
 
     await assertPackOwner({ request, env, appId, packId });
 
     const expectedPrefix = `${IMAGEKIT_FOLDER}/${packId}-`;
     if (!filePath.startsWith(expectedPrefix)) {
-        throw new Error('Image does not belong to this question pack.');
+        throw new Error('Media does not belong to this question pack.');
     }
 
     const detailsResponse = await fetch(`https://api.imagekit.io/v1/files/${encodeURIComponent(fileId)}/details`, {
@@ -142,7 +142,7 @@ const handleDelete = async ({ request, env, body }) => {
 
     const details = await detailsResponse.json();
     if (details.filePath !== filePath || !details.filePath.startsWith(expectedPrefix)) {
-        throw new Error('Image does not belong to this question pack.');
+        throw new Error('Media does not belong to this question pack.');
     }
 
     const deleteResponse = await fetch(`https://api.imagekit.io/v1/files/${encodeURIComponent(fileId)}`, {

@@ -1,10 +1,11 @@
 import { useEffect, useState } from 'react';
 import { arrayUnion, updateDoc } from 'firebase/firestore';
-import { Check, X } from 'lucide-react';
+import { Check, Play, X } from 'lucide-react';
 import { useLanguage } from '../../useLanguage';
 import { createHistoryItem } from '../../actions/gameActions';
 import HoldToConfirmButton from '../../components/HoldToConfirmButton';
-import QuestionImage from '../../components/QuestionImage';
+import QuestionMedia from '../../components/QuestionMedia';
+import { getMediaKind, MEDIA_KINDS, MEDIA_SLOTS } from '../../services/imageStorage';
 
 export default function ActiveQuestionView({ room, roomRef, user, isHost }) {
     const { t } = useLanguage();
@@ -51,6 +52,16 @@ export default function ActiveQuestionView({ room, roomRef, user, isHost }) {
     const hasQuestionText = Boolean(activeQ.text?.trim());
     const hasAnswerText = Boolean(activeQ.answer?.trim());
     const shouldShowQuestionContext = isHost || !isAnswerRevealed;
+    const questionMediaKind = getMediaKind(activeQ.questionMedia);
+    const hasGatedQuestionMedia = [MEDIA_KINDS.AUDIO, MEDIA_KINDS.VIDEO].includes(questionMediaKind);
+    const mediaPlayback = room.mediaPlayback || null;
+    const isQuestionMediaStarted = Boolean(
+        hasGatedQuestionMedia
+        && mediaPlayback?.questionId === activeQ.id
+        && mediaPlayback?.slot === MEDIA_SLOTS.QUESTION
+        && mediaPlayback?.status === 'started'
+    );
+    const questionMediaStartAt = mediaPlayback?.startedAt || 0;
 
     const handleBuzzIn = async () => {
         if (!canIBuzz) return;
@@ -120,6 +131,7 @@ export default function ActiveQuestionView({ room, roomRef, user, isHost }) {
             answerRevealed: true,
             buzzedPlayerId: null,
             buzzTimestamp: null,
+            mediaPlayback: null,
             [`questionStates.${activeQ.id}`]: 'done',
             history: arrayUnion(createHistoryItem({
                 type: 'question_skipped',
@@ -145,6 +157,7 @@ export default function ActiveQuestionView({ room, roomRef, user, isHost }) {
             buzzedPlayerId: null,
             buzzTimestamp: null,
             incorrectBuzzedIds: [],
+            mediaPlayback: null,
             history: arrayUnion(createHistoryItem({
                 type: 'board_resumed',
                 actorId: user.uid,
@@ -152,6 +165,19 @@ export default function ActiveQuestionView({ room, roomRef, user, isHost }) {
                 message: t('historyBoardResumed', { actorName }),
                 details: { actorName }
             }))
+        });
+    };
+
+    const handleStartQuestionMedia = async () => {
+        if (!isHost || !hasGatedQuestionMedia || isQuestionMediaStarted) return;
+        await updateDoc(roomRef, {
+            mediaPlayback: {
+                questionId: activeQ.id,
+                slot: MEDIA_SLOTS.QUESTION,
+                status: 'started',
+                startedAt: Date.now() + 600,
+                startedBy: user.uid
+            }
         });
     };
 
@@ -174,13 +200,27 @@ export default function ActiveQuestionView({ room, roomRef, user, isHost }) {
                             </h2>
                         </div>
                     )}
-                    {activeQ.questionImage && (
-                        <QuestionImage
-                            image={activeQ.questionImage}
-                            alt={t('questionImageAlt')}
+                    {activeQ.questionMedia && (
+                        <QuestionMedia
+                            media={activeQ.questionMedia}
+                            alt={t('questionMediaAlt')}
                             variant={isHost ? 'host' : 'player'}
                             className={hasQuestionText ? '' : 'max-h-[52vh]'}
+                            t={t}
+                            locked={hasGatedQuestionMedia && !isHost && !isQuestionMediaStarted}
+                            unlocked={!hasGatedQuestionMedia || isQuestionMediaStarted}
+                            shouldStart={hasGatedQuestionMedia && isQuestionMediaStarted}
+                            startAt={questionMediaStartAt}
                         />
+                    )}
+                    {isHost && hasGatedQuestionMedia && !isQuestionMediaStarted && (
+                        <button
+                            type="button"
+                            onClick={handleStartQuestionMedia}
+                            className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-6 py-3 text-lg font-bold text-white shadow-lg shadow-blue-900 transition-colors hover:bg-blue-500"
+                        >
+                            <Play size={22} /> {t('startMediaForEveryone')}
+                        </button>
                     )}
                 </div>
             )}
@@ -191,9 +231,9 @@ export default function ActiveQuestionView({ room, roomRef, user, isHost }) {
                         {isAnswerRevealed ? t('correctAnswer') : t('hiddenAnswer')}
                     </p>
                     {hasAnswerText && <p className="text-2xl font-black text-green-400">{activeQ.answer}</p>}
-                    {activeQ.answerImage && (
+                    {activeQ.answerMedia && (
                         <div className={hasAnswerText ? 'mt-4 flex justify-center' : 'flex justify-center'}>
-                            <QuestionImage image={activeQ.answerImage} alt={t('answerImageAlt')} variant={isHost ? 'host' : 'player'} />
+                            <QuestionMedia media={activeQ.answerMedia} alt={t('answerMediaAlt')} variant={isHost ? 'host' : 'player'} t={t} />
                         </div>
                     )}
                 </div>

@@ -1,6 +1,6 @@
-# Q&A Showdown
+# Cortex Rush
 
-Q&A Showdown is a real-time multiplayer trivia game built with React, Tailwind CSS, lucide-react, and Firebase.
+Cortex Rush is a real-time multiplayer trivia game built with React, Tailwind CSS, lucide-react, and Firebase.
 
 Question packs are public so any signed-in user can host a room with them. Only the Google-authenticated author who created a pack can edit or delete it.
 

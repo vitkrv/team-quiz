@@ -1,9 +1,9 @@
 import { useEffect, useRef, useState } from 'react';
 import { addDoc, collection, doc, setDoc, updateDoc } from 'firebase/firestore';
 import { ArrowLeft, Check, Plus, Trash2, X } from 'lucide-react';
-import PackImageAttachment from '../components/PackImageAttachment';
+import PackMediaAttachment from '../components/PackMediaAttachment';
 import { appId, db } from '../firebase';
-import { deleteImage, IMAGE_SLOTS, uploadImage } from '../services/imageStorage';
+import { deleteMedia, MEDIA_SLOTS, uploadMedia, getMediaKind } from '../services/imageStorage';
 import { useLanguage } from '../useLanguage';
 import { generateId } from '../utils/ids';
 import { getFirestoreErrorMessage } from '../utils/errors';
@@ -17,47 +17,52 @@ const createDefaultCategories = (t) => [
         ]}
 ];
 
-const cleanImageForSave = (image) => {
-    if (!image) return null;
-    const savedImage = { ...image };
-    delete savedImage.previewUrl;
-    delete savedImage.pendingFile;
-    delete savedImage.previousImage;
-    return savedImage;
+const cleanMediaForSave = (media) => {
+    if (!media) return null;
+    const savedMedia = { ...media };
+    delete savedMedia.previewUrl;
+    delete savedMedia.pendingFile;
+    delete savedMedia.previousMedia;
+    return savedMedia;
 };
 
 const stripPendingCategories = (categories) => categories.map((category) => ({
     ...category,
     questions: category.questions.map((question) => {
-        const nextQuestion = { ...question };
-        const questionImage = cleanImageForSave(question.questionImage);
-        const answerImage = cleanImageForSave(question.answerImage);
+        const nextQuestion = {
+            id: question.id,
+            points: question.points,
+            text: question.text,
+            answer: question.answer
+        };
+        const questionMedia = cleanMediaForSave(question.questionMedia);
+        const answerMedia = cleanMediaForSave(question.answerMedia);
 
-        if (questionImage) {
-            nextQuestion.questionImage = questionImage;
+        if (questionMedia) {
+            nextQuestion.questionMedia = questionMedia;
         } else {
-            delete nextQuestion.questionImage;
+            delete nextQuestion.questionMedia;
         }
 
-        if (answerImage) {
-            nextQuestion.answerImage = answerImage;
+        if (answerMedia) {
+            nextQuestion.answerMedia = answerMedia;
         } else {
-            delete nextQuestion.answerImage;
+            delete nextQuestion.answerMedia;
         }
 
         return nextQuestion;
     })
 }));
 
-const hasEffectiveImage = (question, field) => Boolean(question[field]);
+const hasEffectiveMedia = (question, field) => Boolean(question[field]);
 
-const getSavedImagesFromQuestion = (question) => (
-    [question.questionImage, question.answerImage]
-        .map((image) => image?.previousImage || image)
-        .filter((image) => image?.fileId)
+const getSavedMediaFromQuestion = (question) => (
+    [question.questionMedia, question.answerMedia]
+        .map((media) => media?.previousMedia || media)
+        .filter((media) => media?.fileId)
 );
 
-const setQuestionImageInCategories = (categories, catId, qId, field, image) => categories.map((category) => {
+const setQuestionMediaInCategories = (categories, catId, qId, field, media) => categories.map((category) => {
     if (category.id !== catId) return category;
 
     return {
@@ -65,8 +70,8 @@ const setQuestionImageInCategories = (categories, catId, qId, field, image) => c
         questions: category.questions.map((question) => {
             if (question.id !== qId) return question;
             const nextQuestion = { ...question };
-            if (image) {
-                nextQuestion[field] = image;
+            if (media) {
+                nextQuestion[field] = media;
             } else {
                 delete nextQuestion[field];
             }
@@ -78,9 +83,9 @@ const setQuestionImageInCategories = (categories, catId, qId, field, image) => c
 const getPackSummary = (categories) => {
     const sectionCount = categories.length;
     const questionCount = categories.reduce((total, category) => total + (category.questions?.length || 0), 0);
-    const imageCount = categories.reduce((total, category) => (
+    const mediaCount = categories.reduce((total, category) => (
         total + (category.questions || []).reduce((questionTotal, question) => (
-            questionTotal + (question.questionImage ? 1 : 0) + (question.answerImage ? 1 : 0)
+            questionTotal + (question.questionMedia ? 1 : 0) + (question.answerMedia ? 1 : 0)
         ), 0)
     ), 0);
     const totalPoints = categories.reduce((total, category) => (
@@ -91,7 +96,7 @@ const getPackSummary = (categories) => {
     return {
         sectionCount,
         questionCount,
-        imageCount,
+        mediaCount,
         totalPoints,
         averageQuestionsPerCategory
     };
@@ -104,19 +109,19 @@ export default function PackCreator({ pack, setView, user, setError, onSaved }) 
     const [packName, setPackName] = useState(pack?.name || '');
     const [categories, setCategories] = useState(pack?.categories || createDefaultCategories(t));
     const [isSaving, setIsSaving] = useState(false);
-    const [imageProgress, setImageProgress] = useState({});
-    const [imageErrors, setImageErrors] = useState({});
+    const [mediaProgress, setMediaProgress] = useState({});
+    const [mediaErrors, setMediaErrors] = useState({});
     const categoriesRef = useRef(categories);
 
     categoriesRef.current = categories;
-    const hasActiveImageAction = Object.values(imageProgress).some((value) => value > 0 && value < 100);
+    const hasActiveMediaAction = Object.values(mediaProgress).some((value) => value > 0 && value < 100);
     const packSummary = getPackSummary(categories);
 
     useEffect(() => () => {
         categoriesRef.current.forEach((category) => {
             category.questions.forEach((question) => {
-                [question.questionImage, question.answerImage].forEach((image) => {
-                    if (image?.previewUrl) URL.revokeObjectURL(image.previewUrl);
+                [question.questionMedia, question.answerMedia].forEach((media) => {
+                    if (media?.previewUrl) URL.revokeObjectURL(media.previewUrl);
                 });
             });
         });
@@ -140,7 +145,7 @@ export default function PackCreator({ pack, setView, user, setError, onSaved }) 
         categories: stripPendingCategories(sourceCategories)
     });
 
-    const ensurePackForImageAction = async (sourceCategories = categories) => {
+    const ensurePackForMediaAction = async (sourceCategories = categories) => {
         if (persistedPackId) {
             const timestamp = Date.now();
             await updateDoc(getPackRef(persistedPackId), getPackData(sourceCategories, timestamp));
@@ -158,10 +163,10 @@ export default function PackCreator({ pack, setView, user, setError, onSaved }) 
         return newPackRef.id;
     };
 
-    const deleteImagesNow = async (images) => {
-        const savedImages = images.filter((image) => image?.fileId);
-        if (savedImages.length === 0) return;
-        await Promise.all(savedImages.map((image) => deleteImage(image)));
+    const deleteMediaNow = async (mediaItems) => {
+        const savedMedia = mediaItems.filter((media) => media?.fileId);
+        if (savedMedia.length === 0) return;
+        await Promise.all(savedMedia.map((media) => deleteMedia(media)));
     };
 
     const persistCategoriesIfNeeded = async (nextCategories) => {
@@ -178,9 +183,9 @@ export default function PackCreator({ pack, setView, user, setError, onSaved }) 
         setCategories(nextCategories);
         try {
             await persistCategoriesIfNeeded(nextCategories);
-            await deleteImagesNow((category?.questions || []).flatMap(getSavedImagesFromQuestion));
+            await deleteMediaNow((category?.questions || []).flatMap(getSavedMediaFromQuestion));
         } catch (err) {
-            console.error("Image delete error:", err);
+            console.error("Media delete error:", err);
             setError(err.messageKey ? t(err.messageKey) : err.message);
         }
     };
@@ -223,74 +228,75 @@ export default function PackCreator({ pack, setView, user, setError, onSaved }) 
         setCategories(nextCategories);
         try {
             await persistCategoriesIfNeeded(nextCategories);
-            await deleteImagesNow(getSavedImagesFromQuestion(question || {}));
+            await deleteMediaNow(getSavedMediaFromQuestion(question || {}));
         } catch (err) {
-            console.error("Image delete error:", err);
+            console.error("Media delete error:", err);
             setError(err.messageKey ? t(err.messageKey) : err.message);
         }
     };
 
-    const updateQuestionImage = async (catId, qId, field, file) => {
+    const updateQuestionMedia = async (catId, qId, field, file) => {
         const previewUrl = URL.createObjectURL(file);
         const progressKey = `${qId}:${field}`;
         const previousQuestion = categories
             .find((category) => category.id === catId)
             ?.questions.find((question) => question.id === qId);
-        const previousImage = previousQuestion?.[field];
-        const previewImage = {
+        const previousMedia = previousQuestion?.[field];
+        const previewMedia = {
             provider: 'imagekit',
+            kind: getMediaKind(file),
             pendingFile: file,
             previewUrl,
             name: file.name,
             size: file.size,
             mimeType: file.type,
-            previousImage
+            previousMedia
         };
-        const previewCategories = setQuestionImageInCategories(categories, catId, qId, field, previewImage);
+        const previewCategories = setQuestionMediaInCategories(categories, catId, qId, field, previewMedia);
 
-        setImageErrors((errors) => ({ ...errors, [`${qId}:${field}`]: '' }));
-        setImageProgress((progress) => ({ ...progress, [progressKey]: 1 }));
+        setMediaErrors((errors) => ({ ...errors, [`${qId}:${field}`]: '' }));
+        setMediaProgress((progress) => ({ ...progress, [progressKey]: 1 }));
         setCategories(previewCategories);
 
         try {
-            const packId = await ensurePackForImageAction(stripPendingCategories(categories));
-            const uploadedImage = await uploadImage(file, {
+            const packId = await ensurePackForMediaAction(stripPendingCategories(categories));
+            const uploadedMedia = await uploadMedia(file, {
                 packId,
                 questionId: qId,
                 slot: field,
-                onProgress: (value) => setImageProgress((progress) => ({ ...progress, [progressKey]: value }))
+                onProgress: (value) => setMediaProgress((progress) => ({ ...progress, [progressKey]: value }))
             });
-            const nextCategories = setQuestionImageInCategories(categoriesRef.current, catId, qId, field, uploadedImage);
+            const nextCategories = setQuestionMediaInCategories(categoriesRef.current, catId, qId, field, uploadedMedia);
             setCategories(nextCategories);
             await updateDoc(getPackRef(packId), {
                 categories: stripPendingCategories(nextCategories),
                 updatedAt: Date.now()
             });
-            if (previousImage?.fileId) {
-                await deleteImage(previousImage);
+            if (previousMedia?.fileId) {
+                await deleteMedia(previousMedia);
             }
-            setImageProgress((progress) => ({ ...progress, [progressKey]: 100 }));
+            setMediaProgress((progress) => ({ ...progress, [progressKey]: 100 }));
         } catch (err) {
-            console.error("Image upload error:", err);
-            const restoredCategories = setQuestionImageInCategories(categoriesRef.current, catId, qId, field, previousImage);
+            console.error("Media upload error:", err);
+            const restoredCategories = setQuestionMediaInCategories(categoriesRef.current, catId, qId, field, previousMedia);
             setCategories(restoredCategories);
-            setImageProgress((progress) => ({ ...progress, [progressKey]: 0 }));
-            setImageErrors((errors) => ({ ...errors, [progressKey]: err.messageKey ? t(err.messageKey) : err.message }));
+            setMediaProgress((progress) => ({ ...progress, [progressKey]: 0 }));
+            setMediaErrors((errors) => ({ ...errors, [progressKey]: err.messageKey ? t(err.messageKey) : err.message }));
             setError(err.messageKey ? t(err.messageKey) : err.message);
         } finally {
             URL.revokeObjectURL(previewUrl);
         }
     };
 
-    const removeQuestionImage = async (catId, qId, field) => {
+    const removeQuestionMedia = async (catId, qId, field) => {
         const progressKey = `${qId}:${field}`;
         const previousQuestion = categories
             .find((category) => category.id === catId)
             ?.questions.find((question) => question.id === qId);
-        const previousImage = previousQuestion?.[field];
-        const nextCategories = setQuestionImageInCategories(categories, catId, qId, field, null);
+        const previousMedia = previousQuestion?.[field];
+        const nextCategories = setQuestionMediaInCategories(categories, catId, qId, field, null);
 
-        setImageErrors((errors) => ({ ...errors, [progressKey]: '' }));
+        setMediaErrors((errors) => ({ ...errors, [progressKey]: '' }));
         setCategories(nextCategories);
 
         try {
@@ -300,13 +306,13 @@ export default function PackCreator({ pack, setView, user, setError, onSaved }) 
                     updatedAt: Date.now()
                 });
             }
-            if (previousImage?.fileId) {
-                await deleteImage(previousImage);
+            if (previousMedia?.fileId) {
+                await deleteMedia(previousMedia);
             }
         } catch (err) {
-            console.error("Image delete error:", err);
-            setCategories(setQuestionImageInCategories(categoriesRef.current, catId, qId, field, previousImage));
-            setImageErrors((errors) => ({ ...errors, [progressKey]: err.messageKey ? t(err.messageKey) : err.message }));
+            console.error("Media delete error:", err);
+            setCategories(setQuestionMediaInCategories(categoriesRef.current, catId, qId, field, previousMedia));
+            setMediaErrors((errors) => ({ ...errors, [progressKey]: err.messageKey ? t(err.messageKey) : err.message }));
             setError(err.messageKey ? t(err.messageKey) : err.message);
         }
     };
@@ -314,13 +320,13 @@ export default function PackCreator({ pack, setView, user, setError, onSaved }) 
     const validateQuestions = () => {
         for (const category of categories) {
             for (const question of category.questions) {
-                if (!question.text.trim() && !hasEffectiveImage(question, IMAGE_SLOTS.QUESTION)) {
-                    alert(t('questionTextOrImageRequired'));
+                if (!question.text.trim() && !hasEffectiveMedia(question, MEDIA_SLOTS.QUESTION)) {
+                    alert(t('questionTextOrMediaRequired'));
                     return false;
                 }
 
-                if (!question.answer.trim() && !hasEffectiveImage(question, IMAGE_SLOTS.ANSWER)) {
-                    alert(t('answerTextOrImageRequired'));
+                if (!question.answer.trim() && !hasEffectiveMedia(question, MEDIA_SLOTS.ANSWER)) {
+                    alert(t('answerTextOrMediaRequired'));
                     return false;
                 }
             }
@@ -331,11 +337,11 @@ export default function PackCreator({ pack, setView, user, setError, onSaved }) 
 
     const handleSave = async () => {
         if (!packName.trim()) return alert(t('pleaseEnterPackName'));
-        if (hasActiveImageAction) return alert(t('imageActionInProgress'));
+        if (hasActiveMediaAction) return alert(t('mediaActionInProgress'));
         if (!validateQuestions()) return;
 
         setIsSaving(true);
-        setImageErrors({});
+        setMediaErrors({});
 
         try {
             const finalCategories = stripPendingCategories(categories);
@@ -376,7 +382,7 @@ export default function PackCreator({ pack, setView, user, setError, onSaved }) 
                 <h2 className="text-3xl font-bold flex-1">{isEditMode ? t('editQuestionPack') : t('createQuestionPack')}</h2>
                 <button
                     onClick={handleSave}
-                    disabled={isSaving || hasActiveImageAction}
+                    disabled={isSaving || hasActiveMediaAction}
                     className="bg-green-600 hover:bg-green-500 disabled:opacity-50 text-white px-6 py-2 rounded-lg font-bold flex items-center gap-2"
                 >
                     <Check size={20} /> {isSaving ? t('saving') : isEditMode ? t('updatePack') : t('savePack')}
@@ -406,8 +412,8 @@ export default function PackCreator({ pack, setView, user, setError, onSaved }) 
                         <div className="mt-1 text-2xl font-black text-white">{packSummary.sectionCount}</div>
                     </div>
                     <div className="rounded-lg border border-slate-700 bg-slate-900 p-3">
-                        <div className="text-xs font-bold uppercase tracking-wide text-slate-500">{t('summaryImages')}</div>
-                        <div className="mt-1 text-2xl font-black text-white">{packSummary.imageCount}</div>
+                        <div className="text-xs font-bold uppercase tracking-wide text-slate-500">{t('summaryMedia')}</div>
+                        <div className="mt-1 text-2xl font-black text-white">{packSummary.mediaCount}</div>
                     </div>
                     <div className="rounded-lg border border-slate-700 bg-slate-900 p-3">
                         <div className="text-xs font-bold uppercase tracking-wide text-slate-500">{t('summaryTotalPoints')}</div>
@@ -460,15 +466,15 @@ export default function PackCreator({ pack, setView, user, setError, onSaved }) 
                                                 rows={3}
                                                 className="w-full resize-y bg-slate-800 border border-slate-700 rounded p-2 text-white outline-none"
                                             />
-                                            <PackImageAttachment
-                                                image={q.questionImage}
-                                                label={t('questionImageAlt')}
-                                                disabled={isSaving || Boolean(imageProgress[`${q.id}:${IMAGE_SLOTS.QUESTION}`] > 0 && imageProgress[`${q.id}:${IMAGE_SLOTS.QUESTION}`] < 100)}
-                                                progress={imageProgress[`${q.id}:${IMAGE_SLOTS.QUESTION}`] || 0}
-                                                error={imageErrors[`${q.id}:${IMAGE_SLOTS.QUESTION}`]}
+                                            <PackMediaAttachment
+                                                media={q.questionMedia}
+                                                label={t('questionMediaAlt')}
+                                                disabled={isSaving || Boolean(mediaProgress[`${q.id}:${MEDIA_SLOTS.QUESTION}`] > 0 && mediaProgress[`${q.id}:${MEDIA_SLOTS.QUESTION}`] < 100)}
+                                                progress={mediaProgress[`${q.id}:${MEDIA_SLOTS.QUESTION}`] || 0}
+                                                error={mediaErrors[`${q.id}:${MEDIA_SLOTS.QUESTION}`]}
                                                 t={t}
-                                                onChange={(file) => updateQuestionImage(cat.id, q.id, IMAGE_SLOTS.QUESTION, file)}
-                                                onRemove={() => removeQuestionImage(cat.id, q.id, IMAGE_SLOTS.QUESTION)}
+                                                onChange={(file) => updateQuestionMedia(cat.id, q.id, MEDIA_SLOTS.QUESTION, file)}
+                                                onRemove={() => removeQuestionMedia(cat.id, q.id, MEDIA_SLOTS.QUESTION)}
                                             />
                                         </div>
                                         <div>
@@ -480,15 +486,15 @@ export default function PackCreator({ pack, setView, user, setError, onSaved }) 
                                                 placeholder={t('answerPlaceholder')}
                                                 className="w-full bg-slate-800 border border-slate-700 rounded p-2 text-green-400 outline-none"
                                             />
-                                            <PackImageAttachment
-                                                image={q.answerImage}
-                                                label={t('answerImageAlt')}
-                                                disabled={isSaving || Boolean(imageProgress[`${q.id}:${IMAGE_SLOTS.ANSWER}`] > 0 && imageProgress[`${q.id}:${IMAGE_SLOTS.ANSWER}`] < 100)}
-                                                progress={imageProgress[`${q.id}:${IMAGE_SLOTS.ANSWER}`] || 0}
-                                                error={imageErrors[`${q.id}:${IMAGE_SLOTS.ANSWER}`]}
+                                            <PackMediaAttachment
+                                                media={q.answerMedia}
+                                                label={t('answerMediaAlt')}
+                                                disabled={isSaving || Boolean(mediaProgress[`${q.id}:${MEDIA_SLOTS.ANSWER}`] > 0 && mediaProgress[`${q.id}:${MEDIA_SLOTS.ANSWER}`] < 100)}
+                                                progress={mediaProgress[`${q.id}:${MEDIA_SLOTS.ANSWER}`] || 0}
+                                                error={mediaErrors[`${q.id}:${MEDIA_SLOTS.ANSWER}`]}
                                                 t={t}
-                                                onChange={(file) => updateQuestionImage(cat.id, q.id, IMAGE_SLOTS.ANSWER, file)}
-                                                onRemove={() => removeQuestionImage(cat.id, q.id, IMAGE_SLOTS.ANSWER)}
+                                                onChange={(file) => updateQuestionMedia(cat.id, q.id, MEDIA_SLOTS.ANSWER, file)}
+                                                onRemove={() => removeQuestionMedia(cat.id, q.id, MEDIA_SLOTS.ANSWER)}
                                             />
                                         </div>
                                     </div>

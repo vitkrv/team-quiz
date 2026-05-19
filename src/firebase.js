@@ -22,4 +22,4 @@ const app = hasFirebaseConfig ? initializeApp(firebaseConfig) : null;
 
 export const auth = app ? getAuth(app) : null;
 export const db = app ? getFirestore(app) : null;
-export const appId = globalThis.__app_id ?? import.meta.env.VITE_FIREBASE_APP_NAMESPACE ?? 'qa-showdown';
+export const appId = globalThis.__app_id ?? import.meta.env.VITE_FIREBASE_APP_NAMESPACE ?? 'cortex-rush';

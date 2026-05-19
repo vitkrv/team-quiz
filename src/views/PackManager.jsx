@@ -2,14 +2,14 @@ import { useEffect, useState } from 'react';
 import { collection, deleteDoc, doc, getDocs, query, where } from 'firebase/firestore';
 import { ArrowLeft, Edit3, Plus, Trash2 } from 'lucide-react';
 import { appId, db } from '../firebase';
-import { deleteImage } from '../services/imageStorage';
+import { deleteMedia } from '../services/imageStorage';
 import { useLanguage } from '../useLanguage';
 import { getFirestoreErrorMessage } from '../utils/errors';
 
-const getPackImages = (pack) => (
+const getPackMedia = (pack) => (
     (pack.categories || []).flatMap((category) => (
         (category.questions || []).flatMap((question) => (
-            [question.questionImage, question.answerImage].filter((image) => image?.fileId)
+            [question.questionMedia, question.answerMedia].filter((media) => media?.fileId)
         ))
     ))
 );
@@ -47,8 +47,8 @@ export default function PackManager({ setView, user, setError, onCreatePack, onE
 
         setDeletingPackId(pack.id);
         try {
-            const packImages = getPackImages(pack);
-            await Promise.all(packImages.map((image) => deleteImage(image)));
+            const packMedia = getPackMedia(pack);
+            await Promise.all(packMedia.map((media) => deleteMedia(media)));
             await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'packs', pack.id));
             setPacks(packs.filter((item) => item.id !== pack.id));
         } catch (err) {

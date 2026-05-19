@@ -43,7 +43,8 @@ export const handlePickQuestion = async (roomRef, qId, historyItem) => {
         answerRevealed: false,
         buzzedPlayerId: null,
         buzzTimestamp: null,
-        incorrectBuzzedIds: []
+        incorrectBuzzedIds: [],
+        mediaPlayback: null
     };
 
     if (historyItem) {
@@ -54,7 +55,7 @@ export const handlePickQuestion = async (roomRef, qId, historyItem) => {
 };
 
 export const handleEndGame = async (roomRef, historyItem) => {
-    const update = { status: 'finished' };
+    const update = { status: 'finished', mediaPlayback: null };
 
     if (historyItem) {
         update.history = arrayUnion(historyItem);

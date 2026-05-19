@@ -15,7 +15,7 @@ export default function Login({ error, pendingRoomCode, onDismissError, onSignIn
 
             <div className="w-full max-w-md bg-slate-800 border border-slate-700 rounded-2xl p-8 shadow-2xl text-center">
                 <h1 className="text-5xl font-black text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-purple-500 mb-3">
-                    Q&A SHOWDOWN
+                    Cortex Rush
                 </h1>
                 <p className="text-slate-400 mb-8">
                     {pendingRoomCode

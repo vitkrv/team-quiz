@@ -1,11 +1,17 @@
 import { appId, auth } from '../firebase';
 
 export const IMAGE_SIZE_LIMIT_BYTES = 10 * 1024 * 1024;
+export const MEDIA_SIZE_LIMIT_BYTES = 100 * 1024 * 1024;
 const IMAGE_COMPRESSION_SKIP_BYTES = 200 * 1024;
 const IMAGE_COMPRESSION_MIN_SAVINGS_RATIO = 0.9;
-export const IMAGE_SLOTS = {
-    QUESTION: 'questionImage',
-    ANSWER: 'answerImage'
+export const MEDIA_SLOTS = {
+    QUESTION: 'questionMedia',
+    ANSWER: 'answerMedia'
+};
+export const MEDIA_KINDS = {
+    IMAGE: 'image',
+    AUDIO: 'audio',
+    VIDEO: 'video'
 };
 
 const IMAGEKIT_UPLOAD_URL = 'https://upload.imagekit.io/api/v1/files/upload';
@@ -25,7 +31,7 @@ const appendTransformation = (url, transformation) => {
 };
 
 const cleanFileName = (name) => (
-    (name || 'image')
+    (name || 'media')
         .replace(/[^a-zA-Z0-9._-]/g, '_')
         .replace(/_+/g, '_')
         .slice(0, 90)
@@ -44,6 +50,14 @@ const createStorageError = (messageKey, fallbackMessage) => {
     const error = new Error(fallbackMessage || messageKey);
     error.messageKey = messageKey;
     return error;
+};
+
+export const getMediaKind = (fileOrMedia) => {
+    const mimeType = fileOrMedia?.type || fileOrMedia?.mimeType || '';
+    if (mimeType.startsWith('image/')) return MEDIA_KINDS.IMAGE;
+    if (mimeType.startsWith('audio/')) return MEDIA_KINDS.AUDIO;
+    if (mimeType.startsWith('video/')) return MEDIA_KINDS.VIDEO;
+    return fileOrMedia?.kind || '';
 };
 
 const shouldCompressImage = (file) => (
@@ -147,35 +161,42 @@ const getUploadAuth = async ({ packId, questionId, slot }) => {
 
     const data = await authResponse.json();
     if (!authResponse.ok) {
-        throw createStorageError('imageKitUploadAuthFailed', data.message || 'ImageKit upload authorization failed.');
+        throw createStorageError('mediaKitUploadAuthFailed', data.message || 'ImageKit upload authorization failed.');
     }
 
     writeUploadAuthToSession(cacheKey, data);
     return consumeUploadAuthFromSession(cacheKey);
 };
 
-export const validateImageFile = (file) => {
+export const validateMediaFile = (file) => {
     if (!file) {
-        return { valid: false, messageKey: 'imageRequired' };
+        return { valid: false, messageKey: 'mediaRequired' };
     }
 
-    if (!file.type?.startsWith('image/')) {
-        return { valid: false, messageKey: 'imageInvalidType' };
+    const kind = getMediaKind(file);
+    if (![MEDIA_KINDS.IMAGE, MEDIA_KINDS.AUDIO, MEDIA_KINDS.VIDEO].includes(kind)) {
+        return { valid: false, messageKey: 'mediaInvalidType' };
     }
 
-    if (file.size > IMAGE_SIZE_LIMIT_BYTES) {
+    if (kind === MEDIA_KINDS.IMAGE && file.size > IMAGE_SIZE_LIMIT_BYTES) {
         return { valid: false, messageKey: 'imageTooLarge' };
     }
 
-    return { valid: true };
+    if ((kind === MEDIA_KINDS.AUDIO || kind === MEDIA_KINDS.VIDEO) && file.size > MEDIA_SIZE_LIMIT_BYTES) {
+        return { valid: false, messageKey: 'mediaTooLarge' };
+    }
+
+    return { valid: true, kind };
 };
 
-export const getImageUrl = (image, variant = 'full') => {
-    if (!image) return '';
-    if (image.previewUrl) return image.previewUrl;
+export const getMediaUrl = (media, variant = 'full') => {
+    if (!media) return '';
+    if (media.previewUrl) return media.previewUrl;
 
-    const url = image.url || image.thumbnailUrl;
+    const url = media.url || media.thumbnailUrl;
     if (!url) return '';
+
+    if (media.kind && media.kind !== MEDIA_KINDS.IMAGE) return url;
 
     switch (variant) {
         case 'thumbnail':
@@ -189,8 +210,8 @@ export const getImageUrl = (image, variant = 'full') => {
     }
 };
 
-export const uploadImage = async (file, { packId, questionId, slot, onProgress }) => {
-    const validation = validateImageFile(file);
+export const uploadMedia = async (file, { packId, questionId, slot, onProgress }) => {
+    const validation = validateMediaFile(file);
     if (!validation.valid) {
         const error = new Error(validation.messageKey);
         error.messageKey = validation.messageKey;
@@ -200,7 +221,8 @@ export const uploadImage = async (file, { packId, questionId, slot, onProgress }
     if (!imageKitAuthEndpoint) throw createStorageError('imageKitAuthEndpointMissing', 'ImageKit auth endpoint is not configured.');
     if (!auth?.currentUser) throw createStorageError('imageKitSignInRequired', 'Sign in is required.');
 
-    const uploadFile = await compressImage(file);
+    const kind = validation.kind;
+    const uploadFile = kind === MEDIA_KINDS.IMAGE ? await compressImage(file) : file;
     const uploadTimestamp = Date.now();
     const data = await getUploadAuth({ packId, questionId, slot });
 
@@ -213,7 +235,7 @@ export const uploadImage = async (file, { packId, questionId, slot, onProgress }
     formData.append('token', data.token);
     formData.append('folder', data.folder);
     formData.append('useUniqueFileName', 'false');
-    formData.append('tags', ['team-quiz', appId, packId, questionId, slot].join(','));
+    formData.append('tags', ['team-quiz', appId, packId, questionId, slot, kind].join(','));
 
     const response = await new Promise((resolve, reject) => {
         const xhr = new XMLHttpRequest();
@@ -228,15 +250,16 @@ export const uploadImage = async (file, { packId, questionId, slot, onProgress }
             if (xhr.status >= 200 && xhr.status < 300) {
                 resolve(body);
             } else {
-                reject(createStorageError('imageUploadFailed', body.message || 'Image upload failed.'));
+                reject(createStorageError('mediaUploadFailed', body.message || 'Media upload failed.'));
             }
         };
-        xhr.onerror = () => reject(createStorageError('imageUploadFailed', 'Image upload failed.'));
+        xhr.onerror = () => reject(createStorageError('mediaUploadFailed', 'Media upload failed.'));
         xhr.send(formData);
     });
 
     return {
         provider: 'imagekit',
+        kind,
         packId,
         questionId,
         slot,
@@ -244,20 +267,20 @@ export const uploadImage = async (file, { packId, questionId, slot, onProgress }
         name: response.name,
         filePath: response.filePath,
         url: response.url,
-        thumbnailUrl: response.thumbnailUrl,
+        thumbnailUrl: response.thumbnailUrl || null,
         size: response.size || uploadFile.size,
         width: response.width || null,
         height: response.height || null,
-        mimeType: uploadFile.type || null,
+        mimeType: uploadFile.type || file.type || null,
         originalName: file.name,
         originalSize: file.size,
-        compressed: uploadFile !== file,
+        compressed: kind === MEDIA_KINDS.IMAGE && uploadFile !== file,
         uploadedAt: uploadTimestamp
     };
 };
 
-export const deleteImage = async (image) => {
-    if (!image?.fileId || !imageKitAuthEndpoint || !auth?.currentUser) return;
+export const deleteMedia = async (media) => {
+    if (!media?.fileId || !imageKitAuthEndpoint || !auth?.currentUser) return;
     const idToken = await auth.currentUser.getIdToken();
     const response = await fetch(imageKitAuthEndpoint, {
         method: 'POST',
@@ -268,12 +291,12 @@ export const deleteImage = async (image) => {
         body: JSON.stringify({
             action: 'delete',
             appId,
-            image
+            media
         })
     });
 
     if (!response.ok) {
         const data = await response.json().catch(() => ({}));
-        throw createStorageError('imageKitDeleteFailed', data.message || 'ImageKit delete failed.');
+        throw createStorageError('mediaKitDeleteFailed', data.message || 'ImageKit delete failed.');
     }
 };

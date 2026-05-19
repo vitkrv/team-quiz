@@ -67,7 +67,7 @@ export default function MainMenu({ setView, user, lastRoomCode, onCreatePack, on
             </div>
 
             <h1 className="text-6xl font-black text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-purple-500 mb-2 text-center tracking-tight">
-                Q&A SHOWDOWN
+                Cortex Rush
             </h1>
             <p className="text-slate-400 mb-12 text-lg text-center max-w-md">
                 {t('mainMenuDescription')}

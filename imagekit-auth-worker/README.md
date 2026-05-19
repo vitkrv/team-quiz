@@ -1,8 +1,8 @@
 # ImageKit Auth Worker
 
-This Cloudflare Worker signs ImageKit uploads and deletes replaced/removed images without Firebase Functions or the Firebase Blaze plan.
+This Cloudflare Worker signs ImageKit uploads and deletes replaced/removed media without Firebase Functions or the Firebase Blaze plan.
 
-The React app sends the signed-in user's Firebase ID token to this Worker. The Worker reads the pack through Firestore REST with that token and only allows image operations when the user owns the question pack.
+The React app sends the signed-in user's Firebase ID token to this Worker. The Worker reads the pack through Firestore REST with that token and only allows media operations when the user owns the question pack.
 
 The app stores unused upload-auth responses in `sessionStorage` for the active browser session and clears them on logout. ImageKit upload tokens are short-lived and single-use, so the app consumes a cached response before an upload attempt instead of reusing it after ImageKit has seen it.
 
@@ -96,10 +96,10 @@ Restart the Vite dev server after changing `.env.local`.
 
 1. Sign in to the app.
 2. Open a question pack that you own.
-3. Attach an image to a question or answer.
+3. Attach an image, audio file, or video file to a question or answer.
 4. Save the pack.
 5. Confirm the file appears in ImageKit under `/TeamQuiz`.
-6. Replace or remove the image and save again.
+6. Replace or remove the media and save again.
 
 Uploaded file names use:
 
@@ -117,7 +117,7 @@ Auth request goes to `http://localhost:5173/...workers.dev`.
 
 The endpoint was configured as a bare hostname and the running dev server has not picked up the latest code/env. Set `VITE_IMAGEKIT_AUTH_ENDPOINT` to the full `https://...workers.dev` URL and restart Vite.
 
-`Only the question pack owner can manage images.`
+`Only the question pack owner can manage media.`
 
 The signed-in user does not own the pack, or Firestore denied the Worker request made with that user's Firebase ID token.
 

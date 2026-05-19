@@ -16,8 +16,8 @@ import HostSetup from './views/HostSetup';
 import JoinRoom from './views/JoinRoom';
 import GameRoom from './views/game/GameRoom';
 
-const LAST_ROOM_CODE_KEY = 'qa-showdown:lastRoomCode';
-const LANGUAGE_CACHE_KEY = 'qa-showdown:language';
+const LAST_ROOM_CODE_KEY = 'cortex-rush:lastRoomCode';
+const LANGUAGE_CACHE_KEY = 'cortex-rush:language';
 const getRoomCodeFromUrl = () => new URLSearchParams(window.location.search).get('room')?.trim().toUpperCase() || '';
 const getGameCodeFromUrl = () => new URLSearchParams(window.location.search).get('game')?.trim().toUpperCase() || '';
 const replaceUrl = (url) => {
