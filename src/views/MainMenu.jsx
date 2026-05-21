@@ -66,8 +66,12 @@ export default function MainMenu({ setView, user, lastRoomCode, onCreatePack, on
                 </button>
             </div>
 
-            <h1 className="text-6xl font-black text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-purple-500 mb-2 text-center tracking-tight">
-                Cortex Rush
+            <h1 className="cortex-title mb-3 text-center text-5xl font-black uppercase sm:text-7xl" aria-label="Cortex Rush">
+                <span className="cortex-title__streak cortex-title__streak--top" aria-hidden="true" />
+                <span className="cortex-title__streak cortex-title__streak--bottom" aria-hidden="true" />
+                <span className="cortex-title__word cortex-title__word--cortex">Cortex</span>
+                <span className="cortex-title__bolt" aria-hidden="true" />
+                <span className="cortex-title__word cortex-title__word--rush">Rush</span>
             </h1>
             <p className="text-slate-400 mb-12 text-lg text-center max-w-md">
                 {t('mainMenuDescription')}
