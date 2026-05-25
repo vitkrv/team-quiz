@@ -1,12 +1,32 @@
 import { useEffect, useRef, useState } from 'react';
 import { addDoc, collection, doc, setDoc, updateDoc } from 'firebase/firestore';
-import { ArrowLeft, Check, Plus, Trash2, X } from 'lucide-react';
+import { ArrowLeft, Check, PartyPopper, Plus, Trash2, X } from 'lucide-react';
 import PackMediaAttachment from '../components/PackMediaAttachment';
 import { appId, db } from '../firebase';
 import { deleteMedia, MEDIA_SLOTS, uploadMedia, getMediaKind } from '../services/imageStorage';
 import { useLanguage } from '../useLanguage';
 import { generateId } from '../utils/ids';
 import { getFirestoreErrorMessage } from '../utils/errors';
+
+const SURPRISE_DEFAULT_MIN_POINTS = 100;
+const SURPRISE_DEFAULT_MAX_POINTS = 500;
+const POINT_STEP = 100;
+
+const normalizePoints = (value, fallback = POINT_STEP) => {
+    const parsedValue = Number.parseInt(value, 10);
+    if (Number.isNaN(parsedValue)) return fallback;
+
+    return Math.max(POINT_STEP, Math.round(parsedValue / POINT_STEP) * POINT_STEP);
+};
+
+const getSurpriseMinPoints = (question) => normalizePoints(question.surpriseMinPoints, SURPRISE_DEFAULT_MIN_POINTS);
+const getSurpriseMaxPoints = (question) => Math.max(
+    getSurpriseMinPoints(question),
+    normalizePoints(question.surpriseMaxPoints ?? question.points, SURPRISE_DEFAULT_MAX_POINTS)
+);
+const getQuestionPointsForSummary = (question) => (
+    question.isSurpriseQuestion ? getSurpriseMaxPoints(question) : (Number(question.points) || 0)
+);
 
 const createEmptyQuestion = (points = 100) => ({ id: generateId(), points, text: '', answer: '' });
 
@@ -29,12 +49,22 @@ const cleanMediaForSave = (media) => {
 const stripPendingCategories = (categories) => categories.map((category) => ({
     ...category,
     questions: category.questions.map((question) => {
+        const isSurpriseQuestion = Boolean(question.isSurpriseQuestion);
+        const surpriseMinPoints = getSurpriseMinPoints(question);
+        const surpriseMaxPoints = getSurpriseMaxPoints(question);
         const nextQuestion = {
             id: question.id,
-            points: question.points,
+            points: isSurpriseQuestion ? surpriseMaxPoints : normalizePoints(question.points),
             text: question.text,
             answer: question.answer
         };
+
+        if (isSurpriseQuestion) {
+            nextQuestion.isSurpriseQuestion = true;
+            nextQuestion.surpriseMinPoints = surpriseMinPoints;
+            nextQuestion.surpriseMaxPoints = surpriseMaxPoints;
+        }
+
         const questionMedia = cleanMediaForSave(question.questionMedia);
         const answerMedia = cleanMediaForSave(question.answerMedia);
 
@@ -83,19 +113,23 @@ const setQuestionMediaInCategories = (categories, catId, qId, field, media) => c
 const getPackSummary = (categories) => {
     const sectionCount = categories.length;
     const questionCount = categories.reduce((total, category) => total + (category.questions?.length || 0), 0);
+    const surpriseQuestionCount = categories.reduce((total, category) => (
+        total + (category.questions || []).filter((question) => question.isSurpriseQuestion).length
+    ), 0);
     const mediaCount = categories.reduce((total, category) => (
         total + (category.questions || []).reduce((questionTotal, question) => (
             questionTotal + (question.questionMedia ? 1 : 0) + (question.answerMedia ? 1 : 0)
         ), 0)
     ), 0);
     const totalPoints = categories.reduce((total, category) => (
-        total + (category.questions || []).reduce((questionTotal, question) => questionTotal + (Number(question.points) || 0), 0)
+        total + (category.questions || []).reduce((questionTotal, question) => questionTotal + getQuestionPointsForSummary(question), 0)
     ), 0);
     const averageQuestionsPerCategory = sectionCount > 0 ? questionCount / sectionCount : 0;
 
     return {
         sectionCount,
         questionCount,
+        surpriseQuestionCount,
         mediaCount,
         totalPoints,
         averageQuestionsPerCategory
@@ -197,7 +231,7 @@ export default function PackCreator({ pack, setView, user, setError, onSaved }) 
     const addQuestion = (catId) => {
         setCategories(categories.map(c => {
             if (c.id === catId) {
-                const lastPoints = c.questions.length > 0 ? c.questions[c.questions.length - 1].points : 0;
+                const lastPoints = c.questions.length > 0 ? normalizePoints(c.questions[c.questions.length - 1].points, 0) : 0;
                 return { ...c, questions: [...c.questions, createEmptyQuestion(lastPoints + 100)] };
             }
             return c;
@@ -209,10 +243,81 @@ export default function PackCreator({ pack, setView, user, setError, onSaved }) 
             if (c.id === catId) {
                 return {
                     ...c,
-                    questions: c.questions.map(q => q.id === qId ? { ...q, [field]: field === 'points' ? parseInt(value) || 0 : value } : q)
+                    questions: c.questions.map(q => {
+                        if (q.id !== qId) return q;
+
+                        if (field === 'isSurpriseQuestion') {
+                            const isSurpriseQuestion = Boolean(value);
+                            const surpriseMinPoints = getSurpriseMinPoints(q);
+                            const surpriseMaxPoints = q.surpriseMaxPoints === undefined
+                                ? SURPRISE_DEFAULT_MAX_POINTS
+                                : getSurpriseMaxPoints(q);
+
+                            return {
+                                ...q,
+                                isSurpriseQuestion,
+                                surpriseMinPoints,
+                                surpriseMaxPoints,
+                                points: isSurpriseQuestion ? surpriseMaxPoints : normalizePoints(q.points ?? surpriseMaxPoints)
+                            };
+                        }
+
+                        if (field === 'points') {
+                            return { ...q, points: value };
+                        }
+
+                        if (field === 'surpriseMinPoints') {
+                            return { ...q, surpriseMinPoints: value };
+                        }
+
+                        if (field === 'surpriseMaxPoints') {
+                            return { ...q, surpriseMaxPoints: value, points: value };
+                        }
+
+                        return { ...q, [field]: value };
+                    })
                 };
             }
             return c;
+        }));
+    };
+
+    const validateQuestionPoints = (catId, qId, field) => {
+        setCategories(categories.map(c => {
+            if (c.id !== catId) return c;
+
+            return {
+                ...c,
+                questions: c.questions.map(q => {
+                    if (q.id !== qId) return q;
+
+                    if (field === 'points') {
+                        return { ...q, points: normalizePoints(q.points) };
+                    }
+
+                    if (field === 'surpriseMinPoints') {
+                        const surpriseMinPoints = normalizePoints(q.surpriseMinPoints, SURPRISE_DEFAULT_MIN_POINTS);
+                        const surpriseMaxPoints = Math.max(
+                            surpriseMinPoints,
+                            normalizePoints(q.surpriseMaxPoints ?? q.points, SURPRISE_DEFAULT_MAX_POINTS)
+                        );
+
+                        return { ...q, surpriseMinPoints, surpriseMaxPoints, points: surpriseMaxPoints };
+                    }
+
+                    if (field === 'surpriseMaxPoints') {
+                        const surpriseMinPoints = normalizePoints(q.surpriseMinPoints, SURPRISE_DEFAULT_MIN_POINTS);
+                        const surpriseMaxPoints = Math.max(
+                            surpriseMinPoints,
+                            normalizePoints(q.surpriseMaxPoints ?? q.points, SURPRISE_DEFAULT_MAX_POINTS)
+                        );
+
+                        return { ...q, surpriseMinPoints, surpriseMaxPoints, points: surpriseMaxPoints };
+                    }
+
+                    return q;
+                })
+            };
         }));
     };
 
@@ -402,10 +507,14 @@ export default function PackCreator({ pack, setView, user, setError, onSaved }) 
 
             <div className="mb-8 rounded-xl border border-slate-700 bg-slate-800/50 p-5">
                 <h3 className="mb-4 text-sm font-black uppercase tracking-widest text-slate-400">{t('packSummary')}</h3>
-                <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+                <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-6">
                     <div className="rounded-lg border border-slate-700 bg-slate-900 p-3">
                         <div className="text-xs font-bold uppercase tracking-wide text-slate-500">{t('summaryQuestions')}</div>
                         <div className="mt-1 text-2xl font-black text-white">{packSummary.questionCount}</div>
+                    </div>
+                    <div className="rounded-lg border border-slate-700 bg-slate-900 p-3">
+                        <div className="text-xs font-bold uppercase tracking-wide text-slate-500">{t('summarySurpriseQuestions')}</div>
+                        <div className="mt-1 text-2xl font-black text-yellow-300">{packSummary.surpriseQuestionCount}</div>
                     </div>
                     <div className="rounded-lg border border-slate-700 bg-slate-900 p-3">
                         <div className="text-xs font-bold uppercase tracking-wide text-slate-500">{t('summaryCategories')}</div>
@@ -446,15 +555,58 @@ export default function PackCreator({ pack, setView, user, setError, onSaved }) 
 
                         <div className="space-y-4 pl-4 border-l-2 border-slate-700">
                             {cat.questions.map((q) => (
-                                <div key={q.id} className="bg-slate-900 p-4 rounded-lg flex gap-4">
-                                    <div className="w-24">
-                                        <label className="block text-xs text-slate-500 mb-1">{t('points')}</label>
-                                        <input
-                                            type="number"
-                                            value={q.points}
-                                            onChange={(e) => updateQuestion(cat.id, q.id, 'points', e.target.value)}
-                                            className="w-full bg-slate-800 border border-slate-700 rounded p-2 text-yellow-400 font-mono text-center outline-none"
-                                        />
+                                <div key={q.id} className={`flex gap-4 rounded-lg border p-4 ${q.isSurpriseQuestion ? 'border-yellow-400 bg-yellow-950/20' : 'border-transparent bg-slate-900'}`}>
+                                    <div className="w-32 shrink-0 space-y-3">
+                                        <label className="flex items-center gap-2 text-xs font-bold text-yellow-300">
+                                            <input
+                                                type="checkbox"
+                                                checked={Boolean(q.isSurpriseQuestion)}
+                                                onChange={(e) => updateQuestion(cat.id, q.id, 'isSurpriseQuestion', e.target.checked)}
+                                                className="h-4 w-4 accent-yellow-400"
+                                            />
+                                            <PartyPopper size={14} /> {t('surpriseQuestion')}
+                                        </label>
+                                        {q.isSurpriseQuestion ? (
+                                            <div className="space-y-2">
+                                                <label className="block">
+                                                    <span className="mb-1 block text-xs text-slate-500">{t('pointsFrom')}</span>
+                                                    <input
+                                                        type="number"
+                                                        min={POINT_STEP}
+                                                        step={POINT_STEP}
+                                                        value={q.surpriseMinPoints ?? SURPRISE_DEFAULT_MIN_POINTS}
+                                                        onChange={(e) => updateQuestion(cat.id, q.id, 'surpriseMinPoints', e.target.value)}
+                                                        onBlur={() => validateQuestionPoints(cat.id, q.id, 'surpriseMinPoints')}
+                                                        className="w-full rounded border border-slate-700 bg-slate-800 p-2 text-center font-mono text-yellow-400 outline-none"
+                                                    />
+                                                </label>
+                                                <label className="block">
+                                                    <span className="mb-1 block text-xs text-slate-500">{t('pointsTo')}</span>
+                                                    <input
+                                                        type="number"
+                                                        min={getSurpriseMinPoints(q)}
+                                                        step={POINT_STEP}
+                                                        value={q.surpriseMaxPoints ?? getSurpriseMaxPoints(q)}
+                                                        onChange={(e) => updateQuestion(cat.id, q.id, 'surpriseMaxPoints', e.target.value)}
+                                                        onBlur={() => validateQuestionPoints(cat.id, q.id, 'surpriseMaxPoints')}
+                                                        className="w-full rounded border border-slate-700 bg-slate-800 p-2 text-center font-mono text-yellow-400 outline-none"
+                                                    />
+                                                </label>
+                                            </div>
+                                        ) : (
+                                            <div>
+                                                <label className="block text-xs text-slate-500 mb-1">{t('points')}</label>
+                                                <input
+                                                    type="number"
+                                                    min={POINT_STEP}
+                                                    step={POINT_STEP}
+                                                    value={q.points}
+                                                    onChange={(e) => updateQuestion(cat.id, q.id, 'points', e.target.value)}
+                                                    onBlur={() => validateQuestionPoints(cat.id, q.id, 'points')}
+                                                    className="w-full bg-slate-800 border border-slate-700 rounded p-2 text-yellow-400 font-mono text-center outline-none"
+                                                />
+                                            </div>
+                                        )}
                                     </div>
                                     <div className="flex-1 space-y-3">
                                         <div>

@@ -1,15 +1,172 @@
 import { useEffect, useState } from 'react';
 import { arrayUnion, updateDoc } from 'firebase/firestore';
-import { Check, Play, X } from 'lucide-react';
+import { Check, Play, RotateCw, X } from 'lucide-react';
 import { useLanguage } from '../../useLanguage';
 import { createHistoryItem } from '../../actions/gameActions';
 import HoldToConfirmButton from '../../components/HoldToConfirmButton';
 import QuestionMedia from '../../components/QuestionMedia';
 import { getMediaKind, MEDIA_KINDS, MEDIA_SLOTS } from '../../services/imageStorage';
 
+const POINT_STEP = 100;
+const SURPRISE_DEFAULT_MIN_POINTS = 100;
+const SURPRISE_DEFAULT_MAX_POINTS = 500;
+const WHEEL_ANIMATION_MS = 6000;
+
+const normalizePoints = (value, fallback = POINT_STEP) => {
+    const parsedValue = Number.parseInt(value, 10);
+    if (Number.isNaN(parsedValue)) return fallback;
+
+    return Math.max(POINT_STEP, Math.round(parsedValue / POINT_STEP) * POINT_STEP);
+};
+
+const getSurpriseMinPoints = (question) => normalizePoints(question.surpriseMinPoints, SURPRISE_DEFAULT_MIN_POINTS);
+const getSurpriseMaxPoints = (question) => Math.max(
+    getSurpriseMinPoints(question),
+    normalizePoints(question.surpriseMaxPoints ?? question.points, SURPRISE_DEFAULT_MAX_POINTS)
+);
+
+const getFullSurpriseWheelValues = (question) => {
+    const values = [];
+    const minPoints = getSurpriseMinPoints(question);
+    const maxPoints = getSurpriseMaxPoints(question);
+
+    for (let points = minPoints; points <= maxPoints; points += POINT_STEP) {
+        values.push(points, -points);
+    }
+
+    return values;
+};
+
+const arrangeWheelValues = (values) => {
+    const positives = values.filter((value) => value > 0).sort((a, b) => Math.abs(a) - Math.abs(b));
+    const negatives = values.filter((value) => value < 0).sort((a, b) => Math.abs(a) - Math.abs(b));
+    const arrangedValues = [];
+    const maxLength = Math.max(positives.length, negatives.length);
+
+    for (let index = 0; index < maxLength; index += 1) {
+        if (positives[index] !== undefined) arrangedValues.push(positives[index]);
+        if (negatives[index] !== undefined) arrangedValues.push(negatives[index]);
+    }
+
+    return arrangedValues;
+};
+
+const pruneSurpriseWheelValues = (question, isCorrect) => {
+    const values = getFullSurpriseWheelValues(question);
+    const removedSign = isCorrect ? -1 : 1;
+    const valuesToPrune = values
+        .filter((value) => Math.sign(value) === removedSign)
+        .sort((a, b) => Math.abs(b) - Math.abs(a));
+    const removeCount = Math.min(valuesToPrune.length - 1, Math.floor(valuesToPrune.length * 0.8));
+    const removedValues = new Set(valuesToPrune.slice(0, Math.max(0, removeCount)));
+    return arrangeWheelValues(values.filter((value) => !removedValues.has(value)));
+};
+
+const polarToCartesian = (center, radius, angleInDegrees) => {
+    const angleInRadians = (angleInDegrees - 90) * Math.PI / 180;
+    return {
+        x: center + (radius * Math.cos(angleInRadians)),
+        y: center + (radius * Math.sin(angleInRadians))
+    };
+};
+
+const describeSlice = (center, radius, startAngle, endAngle) => {
+    const start = polarToCartesian(center, radius, startAngle);
+    const end = polarToCartesian(center, radius, endAngle);
+    const largeArcFlag = endAngle - startAngle <= 180 ? 0 : 1;
+    return `M ${center} ${center} L ${start.x} ${start.y} A ${radius} ${radius} 0 ${largeArcFlag} 1 ${end.x} ${end.y} Z`;
+};
+
+function PointsWheel({ values, result, rolledAt, t }) {
+    const [rotation, setRotation] = useState(0);
+    const [isResultVisible, setIsResultVisible] = useState(false);
+    const size = 320;
+    const center = size / 2;
+    const radius = 150;
+    const sliceAngle = values.length > 0 ? 360 / values.length : 360;
+    const resultIndex = result === null || result === undefined ? -1 : values.findIndex((value) => value === result);
+
+    useEffect(() => {
+        if (resultIndex < 0) {
+            setRotation(0);
+            setIsResultVisible(false);
+            return undefined;
+        }
+
+        setRotation(0);
+        setIsResultVisible(false);
+        const frame = window.requestAnimationFrame(() => {
+            const targetCenterAngle = resultIndex * sliceAngle + (sliceAngle / 2);
+            setRotation((360 * 6) - targetCenterAngle);
+        });
+        const timeoutId = window.setTimeout(() => {
+            setIsResultVisible(true);
+        }, WHEEL_ANIMATION_MS);
+
+        return () => {
+            window.cancelAnimationFrame(frame);
+            window.clearTimeout(timeoutId);
+        };
+    }, [resultIndex, rolledAt, sliceAngle]);
+
+    return (
+        <div className="flex flex-col items-center gap-3">
+            <div className="relative h-80 w-80">
+                <div className="absolute left-1/2 top-0 z-10 h-0 w-0 -translate-x-1/2 border-l-[16px] border-r-[16px] border-t-[28px] border-l-transparent border-r-transparent border-t-yellow-300 drop-shadow-lg" />
+                <svg
+                    viewBox={`0 0 ${size} ${size}`}
+                    className="h-full w-full drop-shadow-2xl"
+                    style={{
+                        transform: `rotate(${rotation}deg)`,
+                        transition: resultIndex >= 0 ? `transform ${WHEEL_ANIMATION_MS}ms cubic-bezier(0.12, 0.72, 0.16, 1)` : 'none'
+                    }}
+                >
+                    {values.map((value, index) => {
+                        const startAngle = index * sliceAngle;
+                        const endAngle = startAngle + sliceAngle;
+                        const labelAngle = startAngle + (sliceAngle / 2);
+                        const labelPoint = polarToCartesian(center, radius * 0.66, labelAngle);
+                        const isPositive = value > 0;
+
+                        return (
+                            <g key={`${value}:${index}`}>
+                                <path
+                                    d={describeSlice(center, radius, startAngle, endAngle)}
+                                    fill={isPositive ? '#16a34a' : '#dc2626'}
+                                    stroke="#020617"
+                                    strokeWidth="3"
+                                />
+                                <text
+                                    x={labelPoint.x}
+                                    y={labelPoint.y}
+                                    fill="white"
+                                    fontSize="20"
+                                    fontWeight="900"
+                                    textAnchor="middle"
+                                    dominantBaseline="middle"
+                                    transform={`rotate(${labelAngle} ${labelPoint.x} ${labelPoint.y})`}
+                                >
+                                    {value > 0 ? `+${value}` : value}
+                                </text>
+                            </g>
+                        );
+                    })}
+                    <circle cx={center} cy={center} r="34" fill="#0f172a" stroke="#facc15" strokeWidth="5" />
+                </svg>
+            </div>
+            {isResultVisible && result !== null && result !== undefined && (
+                <div className={`rounded-lg px-5 py-2 text-3xl font-black ${result >= 0 ? 'bg-green-600 text-white' : 'bg-red-600 text-white'}`}>
+                    {t('wheelResult', { points: result > 0 ? `+${result}` : result })}
+                </div>
+            )}
+        </div>
+    );
+}
+
 export default function ActiveQuestionView({ room, roomRef, user, isHost }) {
     const { t } = useLanguage();
     const [timeLeft, setTimeLeft] = useState(10);
+    const [isRolling, setIsRolling] = useState(false);
 
     // Find the active question data
     let activeQ = null;
@@ -40,14 +197,27 @@ export default function ActiveQuestionView({ room, roomRef, user, isHost }) {
 
     if (!activeQ) return null;
 
+    const isSurpriseQuestion = Boolean(activeQ.isSurpriseQuestion);
+    const surpriseRound = room.surpriseRound?.questionId === activeQ.id ? room.surpriseRound : null;
+    const surpriseAnswererId = surpriseRound?.answererId || null;
+    const surpriseAnswerer = surpriseAnswererId ? room.players[surpriseAnswererId] : null;
+    const surpriseWheelValues = surpriseRound?.wheelValues || [];
+    const isSurpriseJudged = Boolean(surpriseRound?.judgeResult);
+    const isSurpriseRolled = surpriseRound?.rollResult !== null && surpriseRound?.rollResult !== undefined;
+    const isAnswerRevealed = Boolean(room.answerRevealed);
+    const canRollSurpriseWheel = isSurpriseQuestion
+        && isAnswerRevealed
+        && isSurpriseJudged
+        && !isSurpriseRolled
+        && !isRolling
+        && (user.uid === surpriseAnswererId || isHost);
     const hasBuzzed = !!room.buzzedPlayerId;
-    const amIIncorrect = room.incorrectBuzzedIds.includes(user.uid);
-    const canIBuzz = !isHost && !hasBuzzed && !amIIncorrect;
+    const amIIncorrect = (room.incorrectBuzzedIds || []).includes(user.uid);
+    const canIBuzz = !isSurpriseQuestion && !isHost && !hasBuzzed && !amIIncorrect;
     const didIBuzz = room.buzzedPlayerId === user.uid;
     const buzzedPlayer = room.buzzedPlayerId ? room.players[room.buzzedPlayerId] : null;
     const buzzedPlayerName = buzzedPlayer ? buzzedPlayer.name : '';
     const buzzedPlayerAvatar = buzzedPlayer ? buzzedPlayer.avatar : '';
-    const isAnswerRevealed = Boolean(room.answerRevealed);
     const actorName = room.players[user.uid]?.name || user.displayName || t('playerFallback');
     const hasQuestionText = Boolean(activeQ.text?.trim());
     const hasAnswerText = Boolean(activeQ.answer?.trim());
@@ -79,7 +249,39 @@ export default function ActiveQuestionView({ room, roomRef, user, isHost }) {
     };
 
     const handleJudge = async (isCorrect) => {
-        if (!isHost || !room.buzzedPlayerId) return;
+        if (!isHost) return;
+
+        if (isSurpriseQuestion) {
+            if (!surpriseAnswererId) return;
+
+            const playerName = room.players[surpriseAnswererId]?.name || t('playerFallback');
+            await updateDoc(roomRef, {
+                answerRevealed: true,
+                buzzedPlayerId: null,
+                buzzTimestamp: null,
+                currentTurn: surpriseAnswererId,
+                [`questionStates.${activeQ.id}`]: 'done',
+                surpriseRound: {
+                    ...surpriseRound,
+                    judgeResult: isCorrect ? 'correct' : 'incorrect',
+                    wheelValues: pruneSurpriseWheelValues(activeQ, isCorrect),
+                    rollResult: null,
+                    rolledAt: null
+                },
+                history: arrayUnion(createHistoryItem({
+                    type: isCorrect ? 'surprise_answer_correct' : 'surprise_answer_incorrect',
+                    actorId: user.uid,
+                    actorName,
+                    message: isCorrect
+                        ? t('historySurpriseAnswerCorrect', { playerName })
+                        : t('historySurpriseAnswerIncorrect', { playerName }),
+                    details: { playerName }
+                }))
+            });
+            return;
+        }
+
+        if (!room.buzzedPlayerId) return;
 
         if (isCorrect) {
             // Award points and reveal the answer before returning to the board.
@@ -158,6 +360,7 @@ export default function ActiveQuestionView({ room, roomRef, user, isHost }) {
             buzzTimestamp: null,
             incorrectBuzzedIds: [],
             mediaPlayback: null,
+            surpriseRound: null,
             history: arrayUnion(createHistoryItem({
                 type: 'board_resumed',
                 actorId: user.uid,
@@ -166,6 +369,43 @@ export default function ActiveQuestionView({ room, roomRef, user, isHost }) {
                 details: { actorName }
             }))
         });
+    };
+
+    const handleRollSurpriseWheel = async () => {
+        if (!canRollSurpriseWheel || surpriseWheelValues.length === 0 || !surpriseAnswererId) return;
+
+        setIsRolling(true);
+        const result = surpriseWheelValues[Math.floor(Math.random() * surpriseWheelValues.length)];
+        const player = room.players[surpriseAnswererId];
+        const currentScore = player?.score || 0;
+
+        try {
+            await updateDoc(roomRef, {
+                [`players.${surpriseAnswererId}.score`]: currentScore + result,
+                currentTurn: surpriseAnswererId,
+                surpriseRound: {
+                    ...surpriseRound,
+                    rollResult: result,
+                    rolledAt: Date.now(),
+                    rolledBy: user.uid
+                },
+                history: arrayUnion(createHistoryItem({
+                    type: 'surprise_wheel_rolled',
+                    actorId: user.uid,
+                    actorName,
+                    message: t('historySurpriseWheelRolled', {
+                        playerName: player?.name || t('playerFallback'),
+                        points: result > 0 ? `+${result}` : result
+                    }),
+                    details: {
+                        playerName: player?.name || t('playerFallback'),
+                        points: result
+                    }
+                }))
+            });
+        } finally {
+            setIsRolling(false);
+        }
     };
 
     const handleStartQuestionMedia = async () => {
@@ -241,12 +481,34 @@ export default function ActiveQuestionView({ room, roomRef, user, isHost }) {
 
             {isAnswerRevealed && (
                 <div className="mt-6 flex flex-col items-center gap-4">
-                    {!isHost && (
+                    {isSurpriseQuestion && isSurpriseJudged && surpriseWheelValues.length > 0 && (
+                        <PointsWheel
+                            values={surpriseWheelValues}
+                            result={surpriseRound.rollResult}
+                            rolledAt={surpriseRound.rolledAt}
+                            t={t}
+                        />
+                    )}
+                    {canRollSurpriseWheel && (
+                        <button
+                            onClick={handleRollSurpriseWheel}
+                            className="inline-flex items-center gap-2 rounded-xl bg-yellow-500 px-8 py-4 text-xl font-black text-slate-950 shadow-lg shadow-yellow-900 transition-colors hover:bg-yellow-400 disabled:opacity-60"
+                            disabled={isRolling}
+                        >
+                            <RotateCw size={24} /> {isHost && user.uid !== surpriseAnswererId ? t('forceRollWheel') : t('rollTheWheel')}
+                        </button>
+                    )}
+                    {!canRollSurpriseWheel && isSurpriseQuestion && isSurpriseJudged && !isSurpriseRolled && (
+                        <div className="text-slate-400 font-bold text-lg">
+                            {t('waitingForWheelRoll', { playerName: surpriseAnswerer?.name || t('playerFallback') })}
+                        </div>
+                    )}
+                    {!isHost && (!isSurpriseQuestion || !isSurpriseJudged || isSurpriseRolled) && (
                         <div className="text-slate-400 font-bold text-lg">
                             {t('waitingForHostContinue')}
                         </div>
                     )}
-                    {isHost && (
+                    {isHost && (!isSurpriseQuestion || !isSurpriseJudged || isSurpriseRolled) && (
                         <button
                             onClick={handleContinue}
                             className="bg-blue-600 hover:bg-blue-500 text-white px-8 py-4 rounded-xl font-bold text-xl shadow-lg shadow-blue-900 transition-colors"
@@ -258,7 +520,51 @@ export default function ActiveQuestionView({ room, roomRef, user, isHost }) {
             )}
 
             {/* State: Someone buzzed */}
-            {hasBuzzed && !isAnswerRevealed && (
+            {isSurpriseQuestion && !isAnswerRevealed && (
+                <div className="mt-6 flex flex-col items-center animate-in zoom-in duration-200">
+                    <div className="mb-5 flex items-center gap-3 text-xl text-slate-300">
+                        <span className="text-3xl">{surpriseAnswerer?.avatar}</span>
+                        <span className="font-black text-2xl text-yellow-400">{surpriseAnswerer?.name || t('playerFallback')}</span>
+                        <span>{t('playerIsAnswering', { playerName: '' }).trim()}</span>
+                    </div>
+
+                    {isHost && (
+                        <div className="flex gap-4">
+                            <button onClick={() => handleJudge(true)} className="bg-green-600 hover:bg-green-500 text-white px-8 py-4 rounded-xl font-bold text-xl flex items-center gap-2 shadow-lg shadow-green-900">
+                                <Check size={28}/> {t('correct')}
+                            </button>
+                            <button onClick={() => handleJudge(false)} className="bg-red-600 hover:bg-red-500 text-white px-8 py-4 rounded-xl font-bold text-xl flex items-center gap-2 shadow-lg shadow-red-900">
+                                <X size={28}/> {t('incorrect')}
+                            </button>
+                        </div>
+                    )}
+
+                    {user.uid === surpriseAnswererId && !isHost && (
+                        <div className="text-2xl font-bold text-blue-400 animate-pulse mt-4">
+                            {t('speakAnswer')}
+                        </div>
+                    )}
+
+                    {user.uid !== surpriseAnswererId && !isHost && (
+                        <div className="rounded-xl border-2 border-dashed border-slate-700 p-8 text-xl font-bold text-slate-500">
+                            {t('surpriseOnlySelectedPlayer')}
+                        </div>
+                    )}
+
+                    {isHost && (
+                        <HoldToConfirmButton
+                            onConfirm={handleSkip}
+                            durationMs={2000}
+                            fillClassName="bg-slate-700"
+                            className="mt-8 rounded-lg border border-slate-600 bg-transparent px-6 py-2 font-bold text-slate-400 transition-colors hover:text-white"
+                        >
+                            {t('skipRevealAnswer')}
+                        </HoldToConfirmButton>
+                    )}
+                </div>
+            )}
+
+            {hasBuzzed && !isAnswerRevealed && !isSurpriseQuestion && (
                 <div className="mt-6 flex flex-col items-center animate-in zoom-in duration-200">
                     <div className="text-xl text-slate-300 mb-4 flex items-center gap-2">
                         <span className="text-3xl">{buzzedPlayerAvatar}</span>
@@ -297,7 +603,7 @@ export default function ActiveQuestionView({ room, roomRef, user, isHost }) {
             )}
 
             {/* State: Waiting for buzz */}
-            {!hasBuzzed && !isAnswerRevealed && (
+            {!hasBuzzed && !isAnswerRevealed && !isSurpriseQuestion && (
                 <div className="mt-6 flex shrink-0 flex-col items-center w-full max-w-md">
                     {isHost ? (
                         <div className="text-slate-400 mb-6">{t('waitingForBuzz')}</div>

@@ -37,14 +37,16 @@ export const setPlayerScore = async (roomRef, playerId, score, historyItem) => {
     });
 };
 
-export const handlePickQuestion = async (roomRef, qId, historyItem) => {
+export const handlePickQuestion = async (roomRef, qId, historyItem, extraUpdate = {}) => {
     const update = {
         activeQuestionId: qId,
         answerRevealed: false,
         buzzedPlayerId: null,
         buzzTimestamp: null,
         incorrectBuzzedIds: [],
-        mediaPlayback: null
+        mediaPlayback: null,
+        surpriseRound: null,
+        ...extraUpdate
     };
 
     if (historyItem) {
