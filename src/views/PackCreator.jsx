@@ -508,29 +508,29 @@ export default function PackCreator({ pack, setView, user, setError, onSaved }) 
             <div className="mb-8 rounded-xl border border-slate-700 bg-slate-800/50 p-5">
                 <h3 className="mb-4 text-sm font-black uppercase tracking-widest text-slate-400">{t('packSummary')}</h3>
                 <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-6">
-                    <div className="rounded-lg border border-slate-700 bg-slate-900 p-3">
+                    <div className="flex min-h-28 flex-col justify-between rounded-lg border border-slate-700 bg-slate-900 p-3">
                         <div className="text-xs font-bold uppercase tracking-wide text-slate-500">{t('summaryQuestions')}</div>
-                        <div className="mt-1 text-2xl font-black text-white">{packSummary.questionCount}</div>
+                        <div className="pt-3 text-2xl font-black text-white">{packSummary.questionCount}</div>
                     </div>
-                    <div className="rounded-lg border border-slate-700 bg-slate-900 p-3">
+                    <div className="flex min-h-28 flex-col justify-between rounded-lg border border-slate-700 bg-slate-900 p-3">
                         <div className="text-xs font-bold uppercase tracking-wide text-slate-500">{t('summarySurpriseQuestions')}</div>
-                        <div className="mt-1 text-2xl font-black text-yellow-300">{packSummary.surpriseQuestionCount}</div>
+                        <div className="pt-3 text-2xl font-black text-yellow-300">{packSummary.surpriseQuestionCount}</div>
                     </div>
-                    <div className="rounded-lg border border-slate-700 bg-slate-900 p-3">
+                    <div className="flex min-h-28 flex-col justify-between rounded-lg border border-slate-700 bg-slate-900 p-3">
                         <div className="text-xs font-bold uppercase tracking-wide text-slate-500">{t('summaryCategories')}</div>
-                        <div className="mt-1 text-2xl font-black text-white">{packSummary.sectionCount}</div>
+                        <div className="pt-3 text-2xl font-black text-white">{packSummary.sectionCount}</div>
                     </div>
-                    <div className="rounded-lg border border-slate-700 bg-slate-900 p-3">
+                    <div className="flex min-h-28 flex-col justify-between rounded-lg border border-slate-700 bg-slate-900 p-3">
                         <div className="text-xs font-bold uppercase tracking-wide text-slate-500">{t('summaryMedia')}</div>
-                        <div className="mt-1 text-2xl font-black text-white">{packSummary.mediaCount}</div>
+                        <div className="pt-3 text-2xl font-black text-white">{packSummary.mediaCount}</div>
                     </div>
-                    <div className="rounded-lg border border-slate-700 bg-slate-900 p-3">
+                    <div className="flex min-h-28 flex-col justify-between rounded-lg border border-slate-700 bg-slate-900 p-3">
                         <div className="text-xs font-bold uppercase tracking-wide text-slate-500">{t('summaryTotalPoints')}</div>
-                        <div className="mt-1 text-2xl font-black text-yellow-400">{packSummary.totalPoints}</div>
+                        <div className="pt-3 text-2xl font-black text-yellow-400">{packSummary.totalPoints}</div>
                     </div>
-                    <div className="rounded-lg border border-slate-700 bg-slate-900 p-3">
+                    <div className="flex min-h-28 flex-col justify-between rounded-lg border border-slate-700 bg-slate-900 p-3">
                         <div className="text-xs font-bold uppercase tracking-wide text-slate-500">{t('summaryAvgQuestions')}</div>
-                        <div className="mt-1 text-2xl font-black text-white">{packSummary.averageQuestionsPerCategory.toFixed(1)}</div>
+                        <div className="pt-3 text-2xl font-black text-white">{packSummary.averageQuestionsPerCategory.toFixed(1)}</div>
                     </div>
                 </div>
             </div>
