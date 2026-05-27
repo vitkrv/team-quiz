@@ -4,6 +4,12 @@ import { createHistoryItem, handleEndGame, handlePickQuestion } from '../../acti
 import HoldToConfirmButton from '../../components/HoldToConfirmButton';
 import { useLanguage } from '../../useLanguage';
 
+const getBoardPoints = (question) => (
+    question.isSurpriseQuestion
+        ? (question.surpriseDisplayPoints ?? question.points)
+        : question.points
+);
+
 function SurprisePlayerModal({ players, question, onPick, onClose, t }) {
     const playerEntries = Object.entries(players).filter(([, player]) => !player.isHost);
 
@@ -167,7 +173,7 @@ export default function BoardView({ room, roomRef, user, isHost }) {
                                                 }
                                             `}
                                         >
-                                            {isAvailable && q.points}
+                                            {isAvailable && getBoardPoints(q)}
                                         </button>
                                     );
                                 })}

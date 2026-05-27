@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react';
-import { arrayUnion, updateDoc } from 'firebase/firestore';
+import { useEffect, useMemo, useState } from 'react';
+import { arrayUnion, increment, updateDoc } from 'firebase/firestore';
 import { Check, Play, RotateCw, X } from 'lucide-react';
 import { useLanguage } from '../../useLanguage';
 import { createHistoryItem } from '../../actions/gameActions';
@@ -11,6 +11,8 @@ const POINT_STEP = 100;
 const SURPRISE_DEFAULT_MIN_POINTS = 100;
 const SURPRISE_DEFAULT_MAX_POINTS = 500;
 const WHEEL_ANIMATION_MS = 6000;
+const SURPRISE_BACKGROUND_EMOJIS = ['🍿', '🎉', '🥳', '🎁', '🍾', '🎂', '✨', '🪄'];
+const SURPRISE_BACKGROUND_EMOJI_COUNT = 60;
 
 const normalizePoints = (value, fallback = POINT_STEP) => {
     const parsedValue = Number.parseInt(value, 10);
@@ -37,18 +39,15 @@ const getFullSurpriseWheelValues = (question) => {
     return values;
 };
 
-const arrangeWheelValues = (values) => {
-    const positives = values.filter((value) => value > 0).sort((a, b) => Math.abs(a) - Math.abs(b));
-    const negatives = values.filter((value) => value < 0).sort((a, b) => Math.abs(a) - Math.abs(b));
-    const arrangedValues = [];
-    const maxLength = Math.max(positives.length, negatives.length);
+const shuffleWheelValues = (values) => {
+    const shuffledValues = [...values];
 
-    for (let index = 0; index < maxLength; index += 1) {
-        if (positives[index] !== undefined) arrangedValues.push(positives[index]);
-        if (negatives[index] !== undefined) arrangedValues.push(negatives[index]);
+    for (let index = shuffledValues.length - 1; index > 0; index -= 1) {
+        const swapIndex = Math.floor(Math.random() * (index + 1));
+        [shuffledValues[index], shuffledValues[swapIndex]] = [shuffledValues[swapIndex], shuffledValues[index]];
     }
 
-    return arrangedValues;
+    return shuffledValues;
 };
 
 const pruneSurpriseWheelValues = (question, isCorrect) => {
@@ -59,7 +58,7 @@ const pruneSurpriseWheelValues = (question, isCorrect) => {
         .sort((a, b) => Math.abs(b) - Math.abs(a));
     const removeCount = Math.min(valuesToPrune.length - 1, Math.floor(valuesToPrune.length * 0.8));
     const removedValues = new Set(valuesToPrune.slice(0, Math.max(0, removeCount)));
-    return arrangeWheelValues(values.filter((value) => !removedValues.has(value)));
+    return shuffleWheelValues(values.filter((value) => !removedValues.has(value)));
 };
 
 const polarToCartesian = (center, radius, angleInDegrees) => {
@@ -76,6 +75,38 @@ const describeSlice = (center, radius, startAngle, endAngle) => {
     const largeArcFlag = endAngle - startAngle <= 180 ? 0 : 1;
     return `M ${center} ${center} L ${start.x} ${start.y} A ${radius} ${radius} 0 ${largeArcFlag} 1 ${end.x} ${end.y} Z`;
 };
+
+const createSurpriseBackgroundItems = () => Array.from({ length: SURPRISE_BACKGROUND_EMOJI_COUNT }, (_, index) => ({
+    id: index,
+    emoji: SURPRISE_BACKGROUND_EMOJIS[Math.floor(Math.random() * SURPRISE_BACKGROUND_EMOJIS.length)],
+    left: Math.random() * 100,
+    top: Math.random() * 100,
+    rotation: (Math.random() * 80) - 40,
+    size: 1 + (Math.random() * 2),
+    opacity: 0.08 + (Math.random() * 0.14)
+}));
+
+function SurprisePartyBackground({ items }) {
+    return (
+        <div className="pointer-events-none absolute left-1/2 top-1/2 -z-10 h-screen w-screen -translate-x-1/2 -translate-y-1/2 overflow-hidden">
+            {items.map((item) => (
+                <span
+                    key={item.id}
+                    className="absolute select-none"
+                    style={{
+                        left: `${item.left}%`,
+                        top: `${item.top}%`,
+                        fontSize: `${item.size}rem`,
+                        opacity: item.opacity,
+                        transform: `translate(-50%, -50%) rotate(${item.rotation}deg)`
+                    }}
+                >
+                    {item.emoji}
+                </span>
+            ))}
+        </div>
+    );
+}
 
 function PointsWheel({ values, result, rolledAt, t }) {
     const [rotation, setRotation] = useState(0);
@@ -167,6 +198,7 @@ export default function ActiveQuestionView({ room, roomRef, user, isHost }) {
     const { t } = useLanguage();
     const [timeLeft, setTimeLeft] = useState(10);
     const [isRolling, setIsRolling] = useState(false);
+    const surpriseBackgroundItems = useMemo(() => createSurpriseBackgroundItems(), [room.activeQuestionId]);
 
     // Find the active question data
     let activeQ = null;
@@ -204,6 +236,8 @@ export default function ActiveQuestionView({ room, roomRef, user, isHost }) {
     const surpriseWheelValues = surpriseRound?.wheelValues || [];
     const isSurpriseJudged = Boolean(surpriseRound?.judgeResult);
     const isSurpriseRolled = surpriseRound?.rollResult !== null && surpriseRound?.rollResult !== undefined;
+    const isSurpriseScoreApplied = Boolean(surpriseRound?.scoreAppliedAt);
+    const canContinueQuestion = !isSurpriseQuestion || !isSurpriseJudged || (isSurpriseRolled && isSurpriseScoreApplied);
     const isAnswerRevealed = Boolean(room.answerRevealed);
     const canRollSurpriseWheel = isSurpriseQuestion
         && isAnswerRevealed
@@ -224,6 +258,9 @@ export default function ActiveQuestionView({ room, roomRef, user, isHost }) {
     const shouldShowQuestionContext = isHost || !isAnswerRevealed;
     const questionMediaKind = getMediaKind(activeQ.questionMedia);
     const hasGatedQuestionMedia = [MEDIA_KINDS.AUDIO, MEDIA_KINDS.VIDEO].includes(questionMediaKind);
+    const questionContainerClassName = isSurpriseQuestion
+        ? 'w-full rounded-3xl border-4 border-yellow-400 bg-yellow-950/40 p-6 shadow-2xl shadow-yellow-950/40 md:p-10'
+        : 'w-full bg-blue-900 border-4 border-blue-600 rounded-3xl p-6 md:p-10 shadow-2xl shadow-blue-900/50';
     const mediaPlayback = room.mediaPlayback || null;
     const isQuestionMediaStarted = Boolean(
         hasGatedQuestionMedia
@@ -266,7 +303,9 @@ export default function ActiveQuestionView({ room, roomRef, user, isHost }) {
                     judgeResult: isCorrect ? 'correct' : 'incorrect',
                     wheelValues: pruneSurpriseWheelValues(activeQ, isCorrect),
                     rollResult: null,
-                    rolledAt: null
+                    rolledAt: null,
+                    rolledBy: null,
+                    scoreAppliedAt: null
                 },
                 history: arrayUnion(createHistoryItem({
                     type: isCorrect ? 'surprise_answer_correct' : 'surprise_answer_incorrect',
@@ -377,17 +416,16 @@ export default function ActiveQuestionView({ room, roomRef, user, isHost }) {
         setIsRolling(true);
         const result = surpriseWheelValues[Math.floor(Math.random() * surpriseWheelValues.length)];
         const player = room.players[surpriseAnswererId];
-        const currentScore = player?.score || 0;
+        const rolledAt = Date.now();
 
         try {
             await updateDoc(roomRef, {
-                [`players.${surpriseAnswererId}.score`]: currentScore + result,
-                currentTurn: surpriseAnswererId,
                 surpriseRound: {
                     ...surpriseRound,
                     rollResult: result,
-                    rolledAt: Date.now(),
-                    rolledBy: user.uid
+                    rolledAt,
+                    rolledBy: user.uid,
+                    scoreAppliedAt: null
                 },
                 history: arrayUnion(createHistoryItem({
                     type: 'surprise_wheel_rolled',
@@ -403,6 +441,18 @@ export default function ActiveQuestionView({ room, roomRef, user, isHost }) {
                     }
                 }))
             });
+
+            window.setTimeout(async () => {
+                try {
+                    await updateDoc(roomRef, {
+                        [`players.${surpriseAnswererId}.score`]: increment(result),
+                        currentTurn: surpriseAnswererId,
+                        'surpriseRound.scoreAppliedAt': Date.now()
+                    });
+                } catch (err) {
+                    console.error('Failed to apply surprise wheel score:', err);
+                }
+            }, WHEEL_ANIMATION_MS);
         } finally {
             setIsRolling(false);
         }
@@ -423,6 +473,7 @@ export default function ActiveQuestionView({ room, roomRef, user, isHost }) {
 
     return (
         <div className="flex-1 min-h-0 flex flex-col items-center justify-start max-w-4xl mx-auto w-full text-center relative z-10">
+            {isSurpriseQuestion && <SurprisePartyBackground items={surpriseBackgroundItems} />}
 
             {shouldShowQuestionContext && (
                 <div className="absolute top-0 w-full flex justify-between text-slate-400 font-bold uppercase tracking-widest text-sm">
@@ -434,7 +485,7 @@ export default function ActiveQuestionView({ room, roomRef, user, isHost }) {
             {shouldShowQuestionContext && (
                 <div className={`mt-10 flex w-full min-h-0 flex-col items-center ${isHost ? 'gap-5' : 'gap-6'}`}>
                     {hasQuestionText && (
-                        <div className="w-full bg-blue-900 border-4 border-blue-600 rounded-3xl p-6 md:p-10 shadow-2xl shadow-blue-900/50">
+                        <div className={questionContainerClassName}>
                             <h2 className="text-3xl md:text-5xl font-black text-white leading-tight drop-shadow-lg" style={{textShadow: '2px 2px 4px rgba(0,0,0,0.5)'}}>
                                 {activeQ.text}
                             </h2>
@@ -503,12 +554,12 @@ export default function ActiveQuestionView({ room, roomRef, user, isHost }) {
                             {t('waitingForWheelRoll', { playerName: surpriseAnswerer?.name || t('playerFallback') })}
                         </div>
                     )}
-                    {!isHost && (!isSurpriseQuestion || !isSurpriseJudged || isSurpriseRolled) && (
+                    {!isHost && canContinueQuestion && (
                         <div className="text-slate-400 font-bold text-lg">
                             {t('waitingForHostContinue')}
                         </div>
                     )}
-                    {isHost && (!isSurpriseQuestion || !isSurpriseJudged || isSurpriseRolled) && (
+                    {isHost && canContinueQuestion && (
                         <button
                             onClick={handleContinue}
                             className="bg-blue-600 hover:bg-blue-500 text-white px-8 py-4 rounded-xl font-bold text-xl shadow-lg shadow-blue-900 transition-colors"

@@ -24,6 +24,10 @@ const getSurpriseMaxPoints = (question) => Math.max(
     getSurpriseMinPoints(question),
     normalizePoints(question.surpriseMaxPoints ?? question.points, SURPRISE_DEFAULT_MAX_POINTS)
 );
+const getSurpriseDisplayPoints = (question) => normalizePoints(
+    question.surpriseDisplayPoints,
+    getSurpriseMaxPoints(question)
+);
 const getQuestionPointsForSummary = (question) => (
     question.isSurpriseQuestion ? getSurpriseMaxPoints(question) : (Number(question.points) || 0)
 );
@@ -63,6 +67,7 @@ const stripPendingCategories = (categories) => categories.map((category) => ({
             nextQuestion.isSurpriseQuestion = true;
             nextQuestion.surpriseMinPoints = surpriseMinPoints;
             nextQuestion.surpriseMaxPoints = surpriseMaxPoints;
+            nextQuestion.surpriseDisplayPoints = getSurpriseDisplayPoints(question);
         }
 
         const questionMedia = cleanMediaForSave(question.questionMedia);
@@ -148,7 +153,7 @@ const getPreviewCategories = (categories) => categories
             .filter(isPreviewReadyQuestion)
             .map((question) => ({
                 ...question,
-                points: question.isSurpriseQuestion ? getSurpriseMaxPoints(question) : normalizePoints(question.points)
+                points: question.isSurpriseQuestion ? getSurpriseDisplayPoints(question) : normalizePoints(question.points)
             }))
     }))
     .filter((category) => category.questions.length > 0);
@@ -337,6 +342,9 @@ export default function PackCreator({ pack, setView, user, setError, onSaved }) 
                                 isSurpriseQuestion,
                                 surpriseMinPoints,
                                 surpriseMaxPoints,
+                                surpriseDisplayPoints: isSurpriseQuestion
+                                    ? getSurpriseDisplayPoints({ ...q, surpriseMaxPoints })
+                                    : q.surpriseDisplayPoints,
                                 points: isSurpriseQuestion ? surpriseMaxPoints : normalizePoints(q.points ?? surpriseMaxPoints)
                             };
                         }
@@ -351,6 +359,10 @@ export default function PackCreator({ pack, setView, user, setError, onSaved }) 
 
                         if (field === 'surpriseMaxPoints') {
                             return { ...q, surpriseMaxPoints: value, points: value };
+                        }
+
+                        if (field === 'surpriseDisplayPoints') {
+                            return { ...q, surpriseDisplayPoints: value };
                         }
 
                         return { ...q, [field]: value };
@@ -392,6 +404,10 @@ export default function PackCreator({ pack, setView, user, setError, onSaved }) 
                         );
 
                         return { ...q, surpriseMinPoints, surpriseMaxPoints, points: surpriseMaxPoints };
+                    }
+
+                    if (field === 'surpriseDisplayPoints') {
+                        return { ...q, surpriseDisplayPoints: getSurpriseDisplayPoints(q) };
                     }
 
                     return q;
@@ -689,6 +705,20 @@ export default function PackCreator({ pack, setView, user, setError, onSaved }) 
                                                         className="w-full rounded border border-slate-700 bg-slate-800 p-2 text-center font-mono text-yellow-400 outline-none"
                                                     />
                                                 </label>
+                                                <div className="border-t border-slate-700/80 pt-2">
+                                                    <label className="block">
+                                                        <span className="mb-1 block text-xs text-slate-500">{t('shownAs')}</span>
+                                                        <input
+                                                            type="number"
+                                                            min={POINT_STEP}
+                                                            step={POINT_STEP}
+                                                            value={q.surpriseDisplayPoints ?? getSurpriseDisplayPoints(q)}
+                                                            onChange={(e) => updateQuestion(cat.id, q.id, 'surpriseDisplayPoints', e.target.value)}
+                                                            onBlur={() => validateQuestionPoints(cat.id, q.id, 'surpriseDisplayPoints')}
+                                                            className="w-full rounded border border-slate-700 bg-slate-800 p-2 text-center font-mono text-yellow-400 outline-none"
+                                                        />
+                                                    </label>
+                                                </div>
                                             </div>
                                         ) : (
                                             <div>
