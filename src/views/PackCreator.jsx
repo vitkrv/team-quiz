@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { addDoc, collection, doc, setDoc, updateDoc } from 'firebase/firestore';
-import { ArrowLeft, Check, PartyPopper, Plus, Trash2, X } from 'lucide-react';
+import { ArrowLeft, Check, Eye, PartyPopper, Plus, Trash2, X } from 'lucide-react';
 import PackMediaAttachment from '../components/PackMediaAttachment';
 import { appId, db } from '../firebase';
 import { deleteMedia, MEDIA_SLOTS, uploadMedia, getMediaKind } from '../services/imageStorage';
@@ -136,6 +136,83 @@ const getPackSummary = (categories) => {
     };
 };
 
+const isPreviewReadyQuestion = (question) => (
+    (question.text?.trim() || hasEffectiveMedia(question, MEDIA_SLOTS.QUESTION))
+    && (question.answer?.trim() || hasEffectiveMedia(question, MEDIA_SLOTS.ANSWER))
+);
+
+const getPreviewCategories = (categories) => categories
+    .map((category) => ({
+        ...category,
+        questions: (category.questions || [])
+            .filter(isPreviewReadyQuestion)
+            .map((question) => ({
+                ...question,
+                points: question.isSurpriseQuestion ? getSurpriseMaxPoints(question) : normalizePoints(question.points)
+            }))
+    }))
+    .filter((category) => category.questions.length > 0);
+
+function PreviewBoardGrid({ categories }) {
+    return (
+        <div
+            className="grid min-h-[28rem] min-w-[44rem] flex-1 gap-4"
+            style={{ gridTemplateColumns: `repeat(${categories.length}, minmax(8rem, 1fr))` }}
+        >
+            {categories.map((cat, i) => (
+                <div key={cat.id || i} className="flex min-h-0 flex-col gap-4">
+                    <div className="flex min-h-[4rem] items-center justify-center rounded-lg border-2 border-blue-500 bg-blue-900 p-3 text-center shadow-md shadow-black/50">
+                        <span className="break-words text-sm font-bold uppercase leading-tight tracking-wide text-blue-100 drop-shadow-md md:text-base">
+                            {cat.name}
+                        </span>
+                    </div>
+
+                    <div className="flex min-h-0 flex-1 flex-col gap-4">
+                        {cat.questions.map((q) => (
+                            <div
+                                key={q.id}
+                                className="flex min-h-20 flex-1 cursor-default items-center justify-center rounded-lg bg-blue-800 font-mono text-2xl font-black text-yellow-400 shadow-[inset_0_-4px_0_0_rgba(0,0,0,0.3)] shadow-black md:text-4xl"
+                            >
+                                {q.points}
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            ))}
+        </div>
+    );
+}
+
+function QuestionPackPreviewModal({ categories, onClose, t }) {
+    return (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4 sm:p-6">
+            <div className="flex max-h-[90vh] w-full max-w-6xl flex-col rounded-xl border border-slate-700 bg-slate-900 shadow-2xl">
+                <div className="flex items-center justify-between border-b border-slate-800 p-5">
+                    <h2 className="min-w-0 pr-4 text-xl font-bold text-white">{t('questionPackPreview')}</h2>
+                    <button
+                        type="button"
+                        onClick={onClose}
+                        aria-label={t('closeQuestionPackPreview')}
+                        title={t('closeQuestionPackPreview')}
+                        className="shrink-0 text-slate-500 hover:text-white"
+                    >
+                        <X size={22} />
+                    </button>
+                </div>
+                <div className="min-h-0 flex-1 overflow-auto bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-blue-950 to-slate-900 p-5">
+                    {categories.length === 0 ? (
+                        <div className="flex min-h-[18rem] items-center justify-center rounded-lg border border-dashed border-slate-700 p-8 text-center text-slate-400">
+                            {t('noPreviewQuestions')}
+                        </div>
+                    ) : (
+                        <PreviewBoardGrid categories={categories} />
+                    )}
+                </div>
+            </div>
+        </div>
+    );
+}
+
 export default function PackCreator({ pack, setView, user, setError, onSaved }) {
     const { language, t } = useLanguage();
     const isEditMode = Boolean(pack?.id);
@@ -143,6 +220,7 @@ export default function PackCreator({ pack, setView, user, setError, onSaved }) 
     const [packName, setPackName] = useState(pack?.name || '');
     const [categories, setCategories] = useState(pack?.categories || createDefaultCategories(t));
     const [isSaving, setIsSaving] = useState(false);
+    const [isPreviewOpen, setIsPreviewOpen] = useState(false);
     const [mediaProgress, setMediaProgress] = useState({});
     const [mediaErrors, setMediaErrors] = useState({});
     const categoriesRef = useRef(categories);
@@ -150,6 +228,7 @@ export default function PackCreator({ pack, setView, user, setError, onSaved }) 
     categoriesRef.current = categories;
     const hasActiveMediaAction = Object.values(mediaProgress).some((value) => value > 0 && value < 100);
     const packSummary = getPackSummary(categories);
+    const previewCategories = getPreviewCategories(categories);
 
     useEffect(() => () => {
         categoriesRef.current.forEach((category) => {
@@ -480,6 +559,13 @@ export default function PackCreator({ pack, setView, user, setError, onSaved }) 
 
     return (
         <div className="max-w-4xl mx-auto p-6 min-h-screen flex flex-col">
+            {isPreviewOpen && (
+                <QuestionPackPreviewModal
+                    categories={previewCategories}
+                    t={t}
+                    onClose={() => setIsPreviewOpen(false)}
+                />
+            )}
             <div className="flex items-center mb-8">
                 <button onClick={handleBack} className="p-2 mr-4 hover:bg-slate-800 rounded-full transition-colors">
                     <ArrowLeft size={24} />
@@ -533,6 +619,17 @@ export default function PackCreator({ pack, setView, user, setError, onSaved }) 
                         <div className="pt-3 text-2xl font-black text-white">{packSummary.averageQuestionsPerCategory.toFixed(1)}</div>
                     </div>
                 </div>
+            </div>
+
+            <div className="mb-8 rounded-xl border border-slate-700 bg-slate-800/50 p-5">
+                <h3 className="mb-4 text-sm font-black uppercase tracking-widest text-slate-400">{t('additionalSettings')}</h3>
+                <button
+                    type="button"
+                    onClick={() => setIsPreviewOpen(true)}
+                    className="inline-flex max-w-full flex-wrap items-center justify-center gap-2 rounded-lg border border-blue-500/40 bg-blue-600/20 px-4 py-3 text-left font-bold text-blue-100 transition-colors hover:border-blue-400 hover:bg-blue-600/30"
+                >
+                    <Eye size={18} className="shrink-0" /> {t('showQuestionPackPreview')}
+                </button>
             </div>
 
             <div className="flex-1 overflow-y-auto space-y-8 pb-12">
