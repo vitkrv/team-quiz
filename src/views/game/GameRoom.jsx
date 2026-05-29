@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { arrayUnion, doc, updateDoc } from 'firebase/firestore';
-import { ArrowLeft, Check, Copy, Link, Play, PlusCircle, MinusCircle, Users, SlidersHorizontal, ScrollText, X } from 'lucide-react';
+import { ArrowLeft, Check, Copy, Link, Play, PlusCircle, MinusCircle, Users, SlidersHorizontal, ScrollText, Trophy, X } from 'lucide-react';
 import { appId, db } from '../../firebase';
 import { useLanguage } from '../../useLanguage';
 import { adjustScore, createHistoryItem } from '../../actions/gameActions';
@@ -236,6 +236,93 @@ function HistoryModal({ history, onClose, t }) {
     );
 }
 
+function LeaderboardContent({ room, roomRef, isHost, now, createScoreAdjustmentHistory, t }) {
+    return (
+        <div className="space-y-1 p-2">
+            {Object.entries(room.players)
+                .filter(([, player]) => !player.isHost)
+                .sort((a, b) => b[1].score - a[1].score)
+                .map(([pid, player]) => {
+                    const buzzDeltaLabel = getBuzzDeltaLabel(room, pid, now);
+                    const playerNameStyle = getPlayerNameStyle(player.name);
+
+                    return (
+                        <div key={pid} className={`group flex items-center justify-between rounded-lg border p-3 ${room.currentTurn === pid ? 'bg-blue-900/30 border-blue-500/50 shadow-[inset_2px_0_0_0_#3b82f6]' : 'bg-slate-800/50 border-transparent'}`}>
+                            <div className="flex min-w-0 items-center gap-2 pr-2">
+                                <span className="relative flex h-8 w-14 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-transparent">
+                                    <span className={`absolute inset-0 flex items-center justify-center text-2xl transition-all duration-200 ${buzzDeltaLabel ? 'scale-90 opacity-0' : 'scale-100 opacity-100'}`}>
+                                        {player.avatar}
+                                    </span>
+                                    <span className={`absolute inset-0 flex items-center justify-center rounded-lg bg-yellow-400/10 px-1 font-mono text-xs font-black text-yellow-300 ring-1 ring-inset ring-yellow-300/25 transition-all duration-200 ${buzzDeltaLabel ? 'scale-100 opacity-100' : 'scale-90 opacity-0'}`}>
+                                        {buzzDeltaLabel}
+                                    </span>
+                                </span>
+                                <div className="min-w-0">
+                                    <div
+                                        className={`font-bold leading-tight ${playerNameStyle ? 'whitespace-nowrap' : 'truncate'} ${room.currentTurn === pid ? 'text-blue-300' : 'text-slate-200'}`}
+                                        style={playerNameStyle}
+                                    >
+                                        {player.name}
+                                    </div>
+                                    <div className="font-mono text-sm text-yellow-400">{t('scorePts', { score: player.score })}</div>
+                                </div>
+                            </div>
+                            {isHost && (
+                                <div className="flex flex-col gap-1 opacity-100 transition-opacity md:opacity-0 md:group-hover:opacity-100">
+                                    <button
+                                        onClick={() => adjustScore(roomRef, pid, player.score, 100, createScoreAdjustmentHistory(player, 100, player.score + 100))}
+                                        className="p-1 text-slate-400 hover:text-green-400"
+                                        aria-label={`Add points to ${player.name}`}
+                                    >
+                                        <PlusCircle size={14}/>
+                                    </button>
+                                    <button
+                                        onClick={() => adjustScore(roomRef, pid, player.score, -100, createScoreAdjustmentHistory(player, -100, player.score - 100))}
+                                        className="p-1 text-slate-400 hover:text-red-400"
+                                        aria-label={`Remove points from ${player.name}`}
+                                    >
+                                        <MinusCircle size={14}/>
+                                    </button>
+                                </div>
+                            )}
+                        </div>
+                    );
+                })}
+        </div>
+    );
+}
+
+function MobileLeaderboardDrawer({ room, roomRef, isHost, now, createScoreAdjustmentHistory, onClose, t }) {
+    return (
+        <div className="fixed inset-0 z-40 md:hidden" role="dialog" aria-modal="true" aria-labelledby="mobile-leaderboard-title">
+            <button
+                type="button"
+                className="absolute inset-0 h-full w-full bg-black/60"
+                onClick={onClose}
+                aria-label="Close leaderboard"
+            />
+            <aside className="absolute right-0 top-0 flex h-full w-[min(20rem,calc(100vw-2rem))] flex-col border-l border-slate-700 bg-slate-900 shadow-2xl">
+                <div className="flex items-center justify-between border-b border-slate-800 bg-slate-950/80 p-4">
+                    <h2 id="mobile-leaderboard-title" className="text-xs font-black uppercase tracking-widest text-slate-500">{t('leaderboard')}</h2>
+                    <button onClick={onClose} className="rounded-lg border border-slate-700 p-2 text-slate-300 hover:bg-slate-800" aria-label="Close leaderboard">
+                        <X size={18} />
+                    </button>
+                </div>
+                <div className="min-h-0 flex-1 overflow-y-auto">
+                    <LeaderboardContent
+                        room={room}
+                        roomRef={roomRef}
+                        isHost={isHost}
+                        now={now}
+                        createScoreAdjustmentHistory={createScoreAdjustmentHistory}
+                        t={t}
+                    />
+                </div>
+            </aside>
+        </div>
+    );
+}
+
 export default function GameRoom({ room, roomCode, user, onLeaveRoom }) {
     const { t } = useLanguage();
     const isHost = user.uid === room.hostId;
@@ -245,6 +332,7 @@ export default function GameRoom({ room, roomCode, user, onLeaveRoom }) {
     const [copiedJoinLink, setCopiedJoinLink] = useState(false);
     const [isScoreEditorOpen, setIsScoreEditorOpen] = useState(false);
     const [isHistoryOpen, setIsHistoryOpen] = useState(false);
+    const [isLeaderboardOpen, setIsLeaderboardOpen] = useState(false);
     const hostName = room.players[user.uid]?.name || user.displayName || t('hostLabel');
     const host = { id: user.uid, name: hostName };
 
@@ -431,19 +519,41 @@ export default function GameRoom({ room, roomCode, user, onLeaveRoom }) {
                     />
                 )}
                 {isHost && isHistoryOpen && <HistoryModal history={room.history} onClose={() => setIsHistoryOpen(false)} t={t} />}
+                {isLeaderboardOpen && (
+                    <MobileLeaderboardDrawer
+                        room={room}
+                        roomRef={roomRef}
+                        isHost={isHost}
+                        now={now}
+                        createScoreAdjustmentHistory={createScoreAdjustmentHistory}
+                        onClose={() => setIsLeaderboardOpen(false)}
+                        t={t}
+                    />
+                )}
                 {/* Header bar */}
-                <header className="bg-slate-950 p-4 border-b border-slate-800 flex justify-between items-center z-10 shadow-md">
-                    <div className="flex items-center gap-4">
-                        <button onClick={leaveRoom} className="text-slate-500 hover:text-slate-300"><ArrowLeft size={20}/></button>
-                        <h1 className="font-bold text-xl text-blue-400 truncate max-w-xs">{room.pack.name}</h1>
-                        <span className="bg-slate-800 px-3 py-1 rounded-full text-xs font-mono text-slate-400">{t('codeLabel', { roomCode })}</span>
+                <header className="z-10 flex flex-col gap-2 border-b border-slate-800 bg-slate-950 px-3 py-2 shadow-md md:flex-row md:items-center md:justify-between md:p-4">
+                    <div className="flex w-full min-w-0 items-center gap-2 md:w-auto md:gap-4">
+                        <button onClick={leaveRoom} className="shrink-0 text-slate-500 hover:text-slate-300"><ArrowLeft size={20}/></button>
+                        <h1 className="min-w-0 flex-1 truncate text-base font-bold text-blue-400 md:max-w-xs md:text-xl">{room.pack.name}</h1>
+                        <span className="hidden shrink-0 rounded-full bg-slate-800 px-3 py-1 font-mono text-xs text-slate-400 sm:inline-flex">{t('codeLabel', { roomCode })}</span>
+                        <button
+                            onClick={() => setIsLeaderboardOpen(true)}
+                            className="inline-flex shrink-0 items-center justify-center rounded-lg border border-slate-700 p-2 text-slate-300 hover:bg-slate-800 md:hidden"
+                            title={t('leaderboard')}
+                            aria-label={t('leaderboard')}
+                        >
+                            <Trophy size={18} />
+                        </button>
                     </div>
-                    <div className="flex items-center gap-3 text-sm font-medium text-slate-300">
+                    <div className="flex w-full min-w-0 items-center justify-between gap-2 text-xs font-medium text-slate-300 md:w-auto md:justify-end md:text-sm">
+                        <span className="shrink-0 rounded-full bg-slate-800 px-2 py-1 font-mono text-[11px] text-slate-400 sm:hidden">{t('codeLabel', { roomCode })}</span>
                         {room.currentTurn && room.players[room.currentTurn] && (
-                            <span>{t('currentPick')} <span className="text-yellow-400 font-bold">{room.players[room.currentTurn].name}</span></span>
+                            <span className="min-w-0 flex-1 truncate text-right md:flex-none">
+                                {t('currentPick')} <span className="font-bold text-yellow-400">{room.players[room.currentTurn].name}</span>
+                            </span>
                         )}
                         {isHost && (
-                            <div className="flex items-center gap-2">
+                            <div className="flex shrink-0 items-center gap-2">
                                 <button
                                     onClick={() => setIsScoreEditorOpen(true)}
                                     className="rounded-lg border border-slate-700 p-2 text-slate-300 hover:bg-slate-800"
@@ -463,65 +573,24 @@ export default function GameRoom({ room, roomCode, user, onLeaveRoom }) {
                     </div>
                 </header>
 
-                <div className="flex-1 flex overflow-hidden">
+                <div className="flex min-h-0 flex-1 overflow-hidden">
                     {/* Sidebar - Players & Scores */}
-                    <aside className="w-64 bg-slate-900 border-r border-slate-800 flex flex-col overflow-y-auto">
+                    <aside className="hidden w-64 flex-col overflow-y-auto border-r border-slate-800 bg-slate-900 md:flex">
                         <div className="p-4 bg-slate-950/50 sticky top-0 border-b border-slate-800">
                             <h2 className="text-xs font-black uppercase tracking-widest text-slate-500">{t('leaderboard')}</h2>
                         </div>
-                        <div className="p-2 space-y-1">
-                            {Object.entries(room.players)
-                                .filter(([_, p]) => !p.isHost)
-                                .sort((a, b) => b[1].score - a[1].score)
-                                .map(([pid, p]) => {
-                                    const buzzDeltaLabel = getBuzzDeltaLabel(room, pid, now);
-                                    const playerNameStyle = getPlayerNameStyle(p.name);
-
-                                    return (
-                                        <div key={pid} className={`p-3 rounded-lg border ${room.currentTurn === pid ? 'bg-blue-900/30 border-blue-500/50 shadow-[inset_2px_0_0_0_#3b82f6]' : 'bg-slate-800/50 border-transparent'} flex items-center justify-between group`}>
-                                            <div className="min-w-0 pr-2 flex items-center gap-2">
-                                                <span className="relative flex h-8 w-14 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-transparent">
-                                                    <span className={`absolute inset-0 flex items-center justify-center text-2xl transition-all duration-200 ${buzzDeltaLabel ? 'scale-90 opacity-0' : 'scale-100 opacity-100'}`}>
-                                                        {p.avatar}
-                                                    </span>
-                                                    <span className={`absolute inset-0 flex items-center justify-center rounded-lg bg-yellow-400/10 px-1 font-mono text-xs font-black text-yellow-300 ring-1 ring-inset ring-yellow-300/25 transition-all duration-200 ${buzzDeltaLabel ? 'scale-100 opacity-100' : 'scale-90 opacity-0'}`}>
-                                                        {buzzDeltaLabel}
-                                                    </span>
-                                                </span>
-                                                <div className="min-w-0">
-                                                    <div
-                                                        className={`font-bold leading-tight ${playerNameStyle ? 'whitespace-nowrap' : 'truncate'} ${room.currentTurn === pid ? 'text-blue-300' : 'text-slate-200'}`}
-                                                        style={playerNameStyle}
-                                                    >
-                                                        {p.name}
-                                                    </div>
-                                                    <div className="text-sm font-mono text-yellow-400">{t('scorePts', { score: p.score })}</div>
-                                                </div>
-                                            </div>
-                                            {isHost && (
-                                                <div className="flex flex-col gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                                                    <button
-                                                        onClick={() => adjustScore(roomRef, pid, p.score, 100, createScoreAdjustmentHistory(p, 100, p.score + 100))}
-                                                        className="text-slate-400 hover:text-green-400"
-                                                    >
-                                                        <PlusCircle size={14}/>
-                                                    </button>
-                                                    <button
-                                                        onClick={() => adjustScore(roomRef, pid, p.score, -100, createScoreAdjustmentHistory(p, -100, p.score - 100))}
-                                                        className="text-slate-400 hover:text-red-400"
-                                                    >
-                                                        <MinusCircle size={14}/>
-                                                    </button>
-                                                </div>
-                                            )}
-                                        </div>
-                                    );
-                                })}
-                        </div>
+                        <LeaderboardContent
+                            room={room}
+                            roomRef={roomRef}
+                            isHost={isHost}
+                            now={now}
+                            createScoreAdjustmentHistory={createScoreAdjustmentHistory}
+                            t={t}
+                        />
                     </aside>
 
                     {/* Main Play Area */}
-                    <main className="flex-1 relative bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-blue-950 to-slate-900 p-6 overflow-hidden flex flex-col">
+                    <main className="relative flex min-w-0 flex-1 flex-col overflow-x-hidden overflow-y-auto bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-blue-950 to-slate-900 p-3 md:overflow-hidden md:p-6">
                         {room.activeQuestionId ? (
                             <ActiveQuestionView room={room} roomRef={roomRef} user={user} isHost={isHost} />
                         ) : (

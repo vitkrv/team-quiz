@@ -143,7 +143,7 @@ function PointsWheel({ values, result, rolledAt, t }) {
 
     return (
         <div className="flex flex-col items-center gap-3">
-            <div className="relative h-80 w-80">
+            <div className="relative h-64 w-64 md:h-80 md:w-80">
                 <div className="absolute left-1/2 top-0 z-10 h-0 w-0 -translate-x-1/2 border-l-[16px] border-r-[16px] border-t-[28px] border-l-transparent border-r-transparent border-t-yellow-300 drop-shadow-lg" />
                 <svg
                     viewBox={`0 0 ${size} ${size}`}
@@ -187,7 +187,7 @@ function PointsWheel({ values, result, rolledAt, t }) {
                 </svg>
             </div>
             {isResultVisible && result !== null && result !== undefined && (
-                <div className={`rounded-lg px-5 py-2 text-3xl font-black ${result >= 0 ? 'bg-green-600 text-white' : 'bg-red-600 text-white'}`}>
+                <div className={`rounded-lg px-4 py-2 text-2xl font-black md:px-5 md:text-3xl ${result >= 0 ? 'bg-green-600 text-white' : 'bg-red-600 text-white'}`}>
                     {t('wheelResult', { points: result > 0 ? `+${result}` : result })}
                 </div>
             )}
@@ -279,8 +279,8 @@ export default function ActiveQuestionView({ room, roomRef, user, isHost }) {
     const questionMediaKind = getMediaKind(activeQ.questionMedia);
     const hasGatedQuestionMedia = [MEDIA_KINDS.AUDIO, MEDIA_KINDS.VIDEO].includes(questionMediaKind);
     const questionContainerClassName = isSurpriseQuestion
-        ? 'w-full rounded-3xl border-4 border-yellow-400 bg-yellow-950/40 p-6 shadow-2xl shadow-yellow-950/40 md:p-10'
-        : 'w-full bg-blue-900 border-4 border-blue-600 rounded-3xl p-6 md:p-10 shadow-2xl shadow-blue-900/50';
+        ? 'w-full rounded-2xl border-4 border-yellow-400 bg-yellow-950/40 p-4 shadow-2xl shadow-yellow-950/40 md:rounded-3xl md:p-10'
+        : 'w-full rounded-2xl border-4 border-blue-600 bg-blue-900 p-4 shadow-2xl shadow-blue-900/50 md:rounded-3xl md:p-10';
     const mediaPlayback = room.mediaPlayback || null;
     const isQuestionMediaStarted = Boolean(
         hasGatedQuestionMedia
@@ -542,25 +542,24 @@ export default function ActiveQuestionView({ room, roomRef, user, isHost }) {
     };
 
     return (
-        <div className="flex-1 min-h-0 flex flex-col items-center justify-start max-w-4xl mx-auto w-full text-center relative z-10">
+        <div className="relative z-10 mx-auto flex min-h-0 w-full max-w-4xl flex-1 flex-col items-center justify-start pb-4 text-center">
             <SpaceBuzzHandler enabled={canIBuzz} onBuzz={handleBuzzIn} />
             {isSurpriseQuestion && <SurprisePartyBackground items={surpriseBackgroundItems} />}
 
             {shouldShowQuestionContext && (
-                <div className="absolute top-0 w-full flex justify-between text-slate-400 font-bold uppercase tracking-widest text-sm">
-                    <span>{activeCatName}</span>
+                <div className="absolute top-0 flex w-full justify-between gap-3 text-xs font-bold uppercase tracking-widest text-slate-400 md:text-sm">
+                    <span className="min-w-0 truncate text-left">{activeCatName}</span>
                     <span className="text-yellow-500">{t('pointsShort', { points: activeQ.points })}</span>
                 </div>
             )}
 
             {shouldShowQuestionContext && (
-                <div className={`mt-10 flex w-full min-h-0 flex-col items-center ${isHost ? 'gap-5' : 'gap-6'}`}>
+                <div className={`mt-8 flex w-full min-h-0 flex-col items-center md:mt-10 ${isHost ? 'gap-4 md:gap-5' : 'gap-4 md:gap-6'}`}>
                     {hasQuestionText && (
                         <div className={questionContainerClassName}>
                             <h2
-                                className="break-words font-black leading-tight text-white drop-shadow-lg"
+                                className="break-words text-xl font-black leading-tight text-white drop-shadow-lg md:text-4xl"
                                 style={{
-                                    fontSize: 'clamp(1.35rem, 4vw, 2.5rem)',
                                     textShadow: '2px 2px 4px rgba(0,0,0,0.5)'
                                 }}
                             >
@@ -585,7 +584,7 @@ export default function ActiveQuestionView({ room, roomRef, user, isHost }) {
                         <button
                             type="button"
                             onClick={handleStartQuestionMedia}
-                            className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-6 py-3 text-lg font-bold text-white shadow-lg shadow-blue-900 transition-colors hover:bg-blue-500"
+                            className="inline-flex items-center justify-center gap-2 rounded-xl bg-blue-600 px-5 py-3 text-base font-bold text-white shadow-lg shadow-blue-900 transition-colors hover:bg-blue-500 md:px-6 md:text-lg"
                         >
                             <Play size={22} /> {t('startMediaForEveryone')}
                         </button>
@@ -594,11 +593,11 @@ export default function ActiveQuestionView({ room, roomRef, user, isHost }) {
             )}
 
             {(isHost || isAnswerRevealed) && (
-                <div className={`${shouldShowQuestionContext ? 'mt-6' : 'mt-10'} ${isHost ? 'bg-slate-800 border border-slate-700 p-5 rounded-xl max-w-2xl' : 'p-2 md:p-4 max-w-4xl'} w-full`}>
-                    <p className="text-sm text-slate-400 uppercase tracking-widest font-bold mb-2">
+                <div className={`${shouldShowQuestionContext ? 'mt-4 md:mt-6' : 'mt-8 md:mt-10'} ${isHost ? 'max-w-2xl rounded-xl border border-slate-700 bg-slate-800 p-4 md:p-5' : 'max-w-4xl p-2 md:p-4'} w-full`}>
+                    <p className="mb-2 text-xs font-bold uppercase tracking-widest text-slate-400 md:text-sm">
                         {isAnswerRevealed ? t('correctAnswer') : t('hiddenAnswer')}
                     </p>
-                    {hasAnswerText && <p className="text-2xl font-black text-green-400">{activeQ.answer}</p>}
+                    {hasAnswerText && <p className="break-words text-xl font-black text-green-400 md:text-2xl">{activeQ.answer}</p>}
                     {activeQ.answerMedia && (
                         <div className={hasAnswerText ? 'mt-4 flex justify-center' : 'flex justify-center'}>
                             <QuestionMedia media={activeQ.answerMedia} alt={t('answerMediaAlt')} variant={isHost ? 'host' : 'player'} t={t} />
@@ -608,7 +607,7 @@ export default function ActiveQuestionView({ room, roomRef, user, isHost }) {
             )}
 
             {isAnswerRevealed && (
-                <div className="mt-6 flex flex-col items-center gap-4">
+                <div className="mt-4 flex w-full flex-col items-center gap-4 md:mt-6">
                     {isSurpriseQuestion && isSurpriseJudged && surpriseWheelValues.length > 0 && (
                         <PointsWheel
                             values={surpriseWheelValues}
@@ -620,26 +619,26 @@ export default function ActiveQuestionView({ room, roomRef, user, isHost }) {
                     {canRollSurpriseWheel && (
                         <button
                             onClick={handleRollSurpriseWheel}
-                            className="inline-flex items-center gap-2 rounded-xl bg-yellow-500 px-8 py-4 text-xl font-black text-slate-950 shadow-lg shadow-yellow-900 transition-colors hover:bg-yellow-400 disabled:opacity-60"
+                            className="inline-flex items-center justify-center gap-2 rounded-xl bg-yellow-500 px-5 py-3 text-base font-black text-slate-950 shadow-lg shadow-yellow-900 transition-colors hover:bg-yellow-400 disabled:opacity-60 md:px-8 md:py-4 md:text-xl"
                             disabled={isRolling}
                         >
                             <RotateCw size={24} /> {isHost && user.uid !== surpriseAnswererId ? t('forceRollWheel') : t('rollTheWheel')}
                         </button>
                     )}
                     {!canRollSurpriseWheel && isSurpriseQuestion && isSurpriseJudged && !isSurpriseRolled && (
-                        <div className="text-slate-400 font-bold text-lg">
+                        <div className="text-base font-bold text-slate-400 md:text-lg">
                             {t('waitingForWheelRoll', { playerName: surpriseAnswerer?.name || t('playerFallback') })}
                         </div>
                     )}
                     {!isHost && canContinueQuestion && (
-                        <div className="text-slate-400 font-bold text-lg">
+                        <div className="text-base font-bold text-slate-400 md:text-lg">
                             {t('waitingForHostContinue')}
                         </div>
                     )}
                     {isHost && canContinueQuestion && (
                         <button
                             onClick={handleContinue}
-                            className="bg-blue-600 hover:bg-blue-500 text-white px-8 py-4 rounded-xl font-bold text-xl shadow-lg shadow-blue-900 transition-colors"
+                            className="rounded-xl bg-blue-600 px-6 py-3 text-lg font-bold text-white shadow-lg shadow-blue-900 transition-colors hover:bg-blue-500 md:px-8 md:py-4 md:text-xl"
                         >
                             {t('continue')}
                         </button>
@@ -649,32 +648,32 @@ export default function ActiveQuestionView({ room, roomRef, user, isHost }) {
 
             {/* State: Someone buzzed */}
             {isSurpriseQuestion && !isAnswerRevealed && (
-                <div className="mt-6 flex flex-col items-center animate-in zoom-in duration-200">
-                    <div className="mb-5 flex items-center gap-3 text-xl text-slate-300">
-                        <span className="text-3xl">{surpriseAnswerer?.avatar}</span>
-                        <span className="font-black text-2xl text-yellow-400">{surpriseAnswerer?.name || t('playerFallback')}</span>
+                <div className="mt-4 flex w-full flex-col items-center animate-in zoom-in duration-200 md:mt-6">
+                    <div className="mb-4 flex flex-wrap items-center justify-center gap-2 text-base text-slate-300 md:mb-5 md:gap-3 md:text-xl">
+                        <span className="text-2xl md:text-3xl">{surpriseAnswerer?.avatar}</span>
+                        <span className="font-black text-xl text-yellow-400 md:text-2xl">{surpriseAnswerer?.name || t('playerFallback')}</span>
                         <span>{t('playerIsAnswering', { playerName: '' }).trim()}</span>
                     </div>
 
                     {isHost && (
-                        <div className="flex gap-4">
-                            <button onClick={() => handleJudge(true)} className="bg-green-600 hover:bg-green-500 text-white px-8 py-4 rounded-xl font-bold text-xl flex items-center gap-2 shadow-lg shadow-green-900">
+                        <div className="flex w-full flex-col gap-3 sm:w-auto sm:flex-row md:gap-4">
+                            <button onClick={() => handleJudge(true)} className="flex items-center justify-center gap-2 rounded-xl bg-green-600 px-5 py-3 text-base font-bold text-white shadow-lg shadow-green-900 hover:bg-green-500 md:px-8 md:py-4 md:text-xl">
                                 <Check size={28}/> {t('correct')}
                             </button>
-                            <button onClick={() => handleJudge(false)} className="bg-red-600 hover:bg-red-500 text-white px-8 py-4 rounded-xl font-bold text-xl flex items-center gap-2 shadow-lg shadow-red-900">
+                            <button onClick={() => handleJudge(false)} className="flex items-center justify-center gap-2 rounded-xl bg-red-600 px-5 py-3 text-base font-bold text-white shadow-lg shadow-red-900 hover:bg-red-500 md:px-8 md:py-4 md:text-xl">
                                 <X size={28}/> {t('incorrect')}
                             </button>
                         </div>
                     )}
 
                     {user.uid === surpriseAnswererId && !isHost && (
-                        <div className="text-2xl font-bold text-blue-400 animate-pulse mt-4">
+                        <div className="mt-4 animate-pulse text-xl font-bold text-blue-400 md:text-2xl">
                             {t('speakAnswer')}
                         </div>
                     )}
 
                     {user.uid !== surpriseAnswererId && !isHost && (
-                        <div className="rounded-xl border-2 border-dashed border-slate-700 p-8 text-xl font-bold text-slate-500">
+                        <div className="rounded-xl border-2 border-dashed border-slate-700 p-5 text-base font-bold text-slate-500 md:p-8 md:text-xl">
                             {t('surpriseOnlySelectedPlayer')}
                         </div>
                     )}
@@ -693,37 +692,37 @@ export default function ActiveQuestionView({ room, roomRef, user, isHost }) {
             )}
 
             {hasBuzzed && !isAnswerRevealed && !isSurpriseQuestion && (
-                <div className="mt-6 flex flex-col items-center animate-in zoom-in duration-200">
-                    <div className="text-xl text-slate-300 mb-4 flex items-center gap-2">
-                        <span className="text-3xl">{buzzedPlayerAvatar}</span>
-                        <span className="font-black text-2xl text-yellow-400">{buzzedPlayerName}</span> {t('playerIsAnswering', { playerName: '' }).trim()}
+                <div className="mt-4 flex w-full flex-col items-center animate-in zoom-in duration-200 md:mt-6">
+                    <div className="mb-4 flex flex-wrap items-center justify-center gap-2 text-base text-slate-300 md:text-xl">
+                        <span className="text-2xl md:text-3xl">{buzzedPlayerAvatar}</span>
+                        <span className="font-black text-xl text-yellow-400 md:text-2xl">{buzzedPlayerName}</span> {t('playerIsAnswering', { playerName: '' }).trim()}
                     </div>
 
-                    <div className="relative w-32 h-32 mb-8">
-                        <svg className="w-full h-full transform -rotate-90">
+                    <div className="relative mb-6 h-24 w-24 md:mb-8 md:h-32 md:w-32">
+                        <svg viewBox="0 0 128 128" className="h-full w-full -rotate-90 transform">
                             <circle cx="64" cy="64" r="60" className="stroke-slate-700 fill-none" strokeWidth="8"/>
                             <circle cx="64" cy="64" r="60" className={`fill-none stroke-blue-500 transition-all duration-100 ${timeLeft < 3 ? 'stroke-red-500' : ''}`} strokeWidth="8"
                                     strokeDasharray="377" strokeDashoffset={377 - (377 * timeLeft / 10)}
                             />
                         </svg>
-                        <div className={`absolute inset-0 flex items-center justify-center text-4xl font-black font-mono ${timeLeft < 3 ? 'text-red-400' : 'text-blue-400'}`}>
+                        <div className={`absolute inset-0 flex items-center justify-center font-mono text-3xl font-black md:text-4xl ${timeLeft < 3 ? 'text-red-400' : 'text-blue-400'}`}>
                             {Math.ceil(timeLeft)}
                         </div>
                     </div>
 
                     {isHost && (
-                        <div className="flex gap-4">
-                            <button onClick={() => handleJudge(true)} className="bg-green-600 hover:bg-green-500 text-white px-8 py-4 rounded-xl font-bold text-xl flex items-center gap-2 shadow-lg shadow-green-900">
+                        <div className="flex w-full flex-col gap-3 sm:w-auto sm:flex-row md:gap-4">
+                            <button onClick={() => handleJudge(true)} className="flex items-center justify-center gap-2 rounded-xl bg-green-600 px-5 py-3 text-base font-bold text-white shadow-lg shadow-green-900 hover:bg-green-500 md:px-8 md:py-4 md:text-xl">
                                 <Check size={28}/> {t('correct')}
                             </button>
-                            <button onClick={() => handleJudge(false)} className="bg-red-600 hover:bg-red-500 text-white px-8 py-4 rounded-xl font-bold text-xl flex items-center gap-2 shadow-lg shadow-red-900">
+                            <button onClick={() => handleJudge(false)} className="flex items-center justify-center gap-2 rounded-xl bg-red-600 px-5 py-3 text-base font-bold text-white shadow-lg shadow-red-900 hover:bg-red-500 md:px-8 md:py-4 md:text-xl">
                                 <X size={28}/> {t('incorrect')}
                             </button>
                         </div>
                     )}
 
                     {didIBuzz && !isHost && (
-                        <div className="text-2xl font-bold text-blue-400 animate-pulse mt-4">
+                        <div className="mt-4 animate-pulse text-xl font-bold text-blue-400 md:text-2xl">
                             {t('speakAnswer')}
                         </div>
                     )}
@@ -732,19 +731,19 @@ export default function ActiveQuestionView({ room, roomRef, user, isHost }) {
 
             {/* State: Waiting for buzz */}
             {!hasBuzzed && !isAnswerRevealed && !isSurpriseQuestion && (
-                <div className="mt-6 flex shrink-0 flex-col items-center w-full max-w-md">
+                <div className="mt-4 flex w-full max-w-md shrink-0 flex-col items-center md:mt-6">
                     {isHost ? (
-                        <div className="text-slate-400 mb-6">{t('waitingForBuzz')}</div>
+                        <div className="mb-4 text-slate-400 md:mb-6">{t('waitingForBuzz')}</div>
                     ) : (
                         canIBuzz ? (
                             <button
                                 onClick={handleBuzzIn}
-                                className="w-48 h-48 rounded-full bg-red-600 hover:bg-red-500 border-8 border-red-800 text-white font-black text-4xl shadow-[0_10px_0_0_#7f1d1d,inset_0_10px_20px_rgba(255,255,255,0.3)] active:shadow-[0_0px_0_0_#7f1d1d,inset_0_10px_20px_rgba(255,255,255,0.3)] active:translate-y-[10px] transition-all"
+                                className="h-36 w-36 rounded-full border-[6px] border-red-800 bg-red-600 text-2xl font-black text-white shadow-[0_8px_0_0_#7f1d1d,inset_0_10px_20px_rgba(255,255,255,0.3)] transition-all hover:bg-red-500 active:translate-y-[8px] active:shadow-[0_0px_0_0_#7f1d1d,inset_0_10px_20px_rgba(255,255,255,0.3)] md:h-48 md:w-48 md:border-8 md:text-4xl md:shadow-[0_10px_0_0_#7f1d1d,inset_0_10px_20px_rgba(255,255,255,0.3)] md:active:translate-y-[10px]"
                             >
                                 {t('buzz')}
                             </button>
                         ) : (
-                            <div className="text-slate-500 font-bold text-xl p-8 border-2 border-dashed border-slate-700 rounded-xl w-full">
+                            <div className="w-full rounded-xl border-2 border-dashed border-slate-700 p-5 text-lg font-bold text-slate-500 md:p-8 md:text-xl">
                                 {amIIncorrect ? t('answeredIncorrectly') : t('waiting')}
                             </div>
                         )

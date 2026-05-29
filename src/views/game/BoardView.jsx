@@ -93,7 +93,7 @@ export default function BoardView({ room, roomRef, user, isHost }) {
     };
 
     return (
-        <div className="flex-1 flex flex-col h-full">
+        <div className="flex h-full min-h-0 flex-1 flex-col">
             {pendingSurpriseQuestion && (
                 <SurprisePlayerModal
                     players={room.players}
@@ -104,14 +104,14 @@ export default function BoardView({ room, roomRef, user, isHost }) {
                 />
             )}
             {!allDone && (
-                <div className="flex justify-between items-center mb-6">
-                    <h2 className="text-2xl font-black text-slate-300">
+                <div className="mb-4 flex flex-col items-stretch gap-3 sm:flex-row sm:items-center sm:justify-between md:mb-6">
+                    <h2 className="text-xl font-black leading-tight text-slate-300 md:text-2xl">
                         {isHost ? t('hostAwaitingSelection') : isMyTurn ? t('yourTurnPickQuestion') : t('waitingForPick')}
                     </h2>
                     {isHost && (
                         <HoldToConfirmButton
                             onConfirm={handleHostEndGame}
-                            className="rounded border border-red-500/30 bg-red-600/20 px-4 py-2 text-sm font-bold text-red-400 transition-colors hover:text-white"
+                            className="w-full rounded border border-red-500/30 bg-red-600/20 px-4 py-2 text-sm font-bold text-red-400 transition-colors hover:text-white sm:w-auto"
                         >
                             {t('endGameEarly')}
                         </HoldToConfirmButton>
@@ -120,70 +120,72 @@ export default function BoardView({ room, roomRef, user, isHost }) {
             )}
 
             {allDone ? (
-                <div className="flex-1 flex flex-col items-center justify-center">
-                    <h2 className="text-4xl font-bold text-white mb-6">
+                <div className="flex flex-1 flex-col items-center justify-center text-center">
+                    <h2 className="mb-6 text-2xl font-bold text-white md:text-4xl">
                         {isHost ? t('boardEmpty') : t('boardCompleteWaitingResults')}
                     </h2>
                     {isHost && (
                         <button
                             onClick={handleHostEndGame}
-                            className="bg-purple-600 hover:bg-purple-500 text-white px-8 py-4 rounded-xl font-black text-2xl shadow-lg shadow-purple-600/30 transition-transform transform hover:scale-105"
+                            className="rounded-xl bg-purple-600 px-6 py-3 text-lg font-black text-white shadow-lg shadow-purple-600/30 transition-transform hover:scale-105 hover:bg-purple-500 md:px-8 md:py-4 md:text-2xl"
                         >
                             {t('showFinalResults')}
                         </button>
                     )}
                 </div>
             ) : (
-                <div
-                    className="flex-1 grid gap-4 h-full"
-                    style={{ gridTemplateColumns: `repeat(${categories.length}, minmax(0, 1fr))` }}
-                >
-                    {categories.map((cat, i) => (
-                        <div key={cat.id || i} className="flex min-h-0 flex-col gap-4">
-                            <div className="flex h-24 items-center justify-center rounded-lg border-2 border-blue-500 bg-blue-900 p-3 text-center shadow-md shadow-black/50">
-                                <span className="font-bold text-sm md:text-base text-blue-100 uppercase tracking-wide leading-tight drop-shadow-md">
-                                    {cat.name}
-                                </span>
+                <div className="-mx-3 min-h-0 flex-1 overflow-x-auto overflow-y-hidden px-3 md:mx-0 md:px-0">
+                    <div
+                        className="grid h-full min-w-max gap-2 [grid-template-columns:repeat(var(--category-count),minmax(9rem,1fr))] md:min-w-0 md:gap-4 md:[grid-template-columns:repeat(var(--category-count),minmax(0,1fr))]"
+                        style={{ '--category-count': categories.length }}
+                    >
+                        {categories.map((cat, i) => (
+                            <div key={cat.id || i} className="flex min-h-0 flex-col gap-2 md:gap-4">
+                                <div className="flex h-16 items-center justify-center rounded-lg border-2 border-blue-500 bg-blue-900 p-2 text-center shadow-md shadow-black/50 md:h-24 md:p-3">
+                                    <span className="text-xs font-bold uppercase leading-tight tracking-wide text-blue-100 drop-shadow-md md:text-base">
+                                        {cat.name}
+                                    </span>
+                                </div>
+
+                                <div
+                                    className="grid min-h-0 flex-1 gap-2 md:gap-4"
+                                    style={{ gridTemplateRows: `repeat(${maxQuestionCount}, minmax(0, 1fr))` }}
+                                >
+                                    {(cat.questions || []).map((q) => {
+                                        const state = room.questionStates[q.id];
+                                        const isAvailable = state === 'available';
+                                        const canPick = isAvailable && (isMyTurn || isHost); // Host can force pick
+
+                                        return (
+                                            <button
+                                                key={q.id}
+                                                disabled={!canPick}
+                                                onClick={() => {
+                                                    if (q.isSurpriseQuestion && isHost) {
+                                                        setPendingSurpriseQuestion({ cat, q });
+                                                        return;
+                                                    }
+
+                                                    pickQuestion(cat, q, q.isSurpriseQuestion ? user.uid : null);
+                                                }}
+                                                className={`
+                                                    flex min-h-14 items-center justify-center rounded-lg font-mono text-xl font-black transition-all duration-200 md:min-h-0 md:text-4xl
+                                                    ${isAvailable
+                                                        ? (canPick
+                                                            ? 'bg-blue-800 hover:bg-blue-700 text-yellow-400 cursor-pointer shadow-[inset_0_-4px_0_0_rgba(0,0,0,0.3)] shadow-black hover:shadow-[0_0_18px_3px_rgba(59,130,246,0.55),inset_0_-4px_0_0_rgba(0,0,0,0.3)]'
+                                                            : 'bg-blue-900/50 text-yellow-500/50 cursor-not-allowed border border-blue-800/30')
+                                                        : 'bg-gray-400/10 border-2 border-slate-500/10 text-transparent cursor-default'
+                                                    }
+                                                `}
+                                            >
+                                                {isAvailable && getBoardPoints(q)}
+                                            </button>
+                                        );
+                                    })}
+                                </div>
                             </div>
-
-                            <div
-                                className="grid min-h-0 flex-1 gap-4"
-                                style={{ gridTemplateRows: `repeat(${maxQuestionCount}, minmax(0, 1fr))` }}
-                            >
-                                {(cat.questions || []).map((q) => {
-                                    const state = room.questionStates[q.id];
-                                    const isAvailable = state === 'available';
-                                    const canPick = isAvailable && (isMyTurn || isHost); // Host can force pick
-
-                                    return (
-                                        <button
-                                            key={q.id}
-                                            disabled={!canPick}
-                                            onClick={() => {
-                                                if (q.isSurpriseQuestion && isHost) {
-                                                    setPendingSurpriseQuestion({ cat, q });
-                                                    return;
-                                                }
-
-                                                pickQuestion(cat, q, q.isSurpriseQuestion ? user.uid : null);
-                                            }}
-                                            className={`
-                                                min-h-0 rounded-lg flex items-center justify-center text-2xl md:text-4xl font-black font-mono transition-all duration-200
-                                                ${isAvailable
-                                                    ? (canPick
-                                                        ? 'bg-blue-800 hover:bg-blue-700 text-yellow-400 cursor-pointer shadow-[inset_0_-4px_0_0_rgba(0,0,0,0.3)] shadow-black hover:shadow-[0_0_18px_3px_rgba(59,130,246,0.55),inset_0_-4px_0_0_rgba(0,0,0,0.3)]'
-                                                        : 'bg-blue-900/50 text-yellow-500/50 cursor-not-allowed border border-blue-800/30')
-                                                    : 'bg-gray-400/10 border-2 border-slate-500/10 text-transparent cursor-default'
-                                                }
-                                            `}
-                                        >
-                                            {isAvailable && getBoardPoints(q)}
-                                        </button>
-                                    );
-                                })}
-                            </div>
-                        </div>
-                    ))}
+                        ))}
+                    </div>
                 </div>
             )}
         </div>
