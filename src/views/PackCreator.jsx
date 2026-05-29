@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { addDoc, collection, doc, setDoc, updateDoc } from 'firebase/firestore';
 import { ArrowLeft, Check, ChevronDown, ChevronRight, Eye, PartyPopper, Plus, Trash2, X } from 'lucide-react';
 import PackMediaAttachment from '../components/PackMediaAttachment';
+import HoldToConfirmButton from '../components/HoldToConfirmButton';
 import { appId, db } from '../firebase';
 import { deleteMedia, MEDIA_SLOTS, uploadMedia, getMediaKind } from '../services/imageStorage';
 import { useLanguage } from '../useLanguage';
@@ -740,9 +741,12 @@ export default function PackCreator({ pack, setView, user, setError, onSaved }) 
                                     className="w-full bg-slate-900 border border-slate-600 rounded-lg p-2 text-white font-bold outline-none"
                                 />
                             </div>
-                            <button onClick={() => removeCategory(cat.id)} className="mt-5 p-2 text-red-400 hover:bg-red-400/10 rounded-lg transition-colors">
+                            <HoldToConfirmButton
+                                onConfirm={() => removeCategory(cat.id)}
+                                className="mt-5 rounded-lg p-2 text-red-400 transition-colors hover:bg-red-400/10 hover:text-white"
+                            >
                                 <Trash2 size={20} />
-                            </button>
+                            </HoldToConfirmButton>
                         </div>
 
                         {!isCategoryCollapsed && (
