@@ -12,7 +12,7 @@ const SURPRISE_DEFAULT_MIN_POINTS = 100;
 const SURPRISE_DEFAULT_MAX_POINTS = 500;
 const WHEEL_ANIMATION_MS = 6000;
 const SURPRISE_BACKGROUND_EMOJIS = ['🍿', '🎉', '🥳', '🎁', '🍾', '🎂', '✨', '🪄'];
-const SURPRISE_BACKGROUND_EMOJI_COUNT = 60;
+const SURPRISE_BACKGROUND_EMOJI_COUNT = 80;
 
 const normalizePoints = (value, fallback = POINT_STEP) => {
     const parsedValue = Number.parseInt(value, 10);
@@ -192,6 +192,25 @@ function PointsWheel({ values, result, rolledAt, t }) {
             )}
         </div>
     );
+}
+
+function SpaceBuzzHandler({ enabled, onBuzz }) {
+    useEffect(() => {
+        if (!enabled) return undefined;
+
+        const handleSpaceBuzz = (event) => {
+            if (event.repeat || document.hidden) return;
+            if (event.code !== 'Space' && event.key !== ' ') return;
+
+            event.preventDefault();
+            onBuzz();
+        };
+
+        window.addEventListener('keydown', handleSpaceBuzz, true);
+        return () => window.removeEventListener('keydown', handleSpaceBuzz, true);
+    }, [enabled, onBuzz]);
+
+    return null;
 }
 
 export default function ActiveQuestionView({ room, roomRef, user, isHost }) {
@@ -473,6 +492,7 @@ export default function ActiveQuestionView({ room, roomRef, user, isHost }) {
 
     return (
         <div className="flex-1 min-h-0 flex flex-col items-center justify-start max-w-4xl mx-auto w-full text-center relative z-10">
+            <SpaceBuzzHandler enabled={canIBuzz} onBuzz={handleBuzzIn} />
             {isSurpriseQuestion && <SurprisePartyBackground items={surpriseBackgroundItems} />}
 
             {shouldShowQuestionContext && (
