@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { addDoc, collection, doc, setDoc, updateDoc } from 'firebase/firestore';
-import { ArrowLeft, Check, Eye, PartyPopper, Plus, Trash2, X } from 'lucide-react';
+import { ArrowLeft, Check, ChevronDown, ChevronRight, Eye, PartyPopper, Plus, Trash2, X } from 'lucide-react';
 import PackMediaAttachment from '../components/PackMediaAttachment';
 import { appId, db } from '../firebase';
 import { deleteMedia, MEDIA_SLOTS, uploadMedia, getMediaKind } from '../services/imageStorage';
@@ -158,7 +158,7 @@ const getPreviewCategories = (categories) => categories
     }))
     .filter((category) => category.questions.length > 0);
 
-function PreviewBoardGrid({ categories }) {
+function PreviewBoardGrid({ categories, onCategorySelect, t }) {
     return (
         <div
             className="grid min-h-[28rem] min-w-[44rem] flex-1 gap-4"
@@ -166,11 +166,17 @@ function PreviewBoardGrid({ categories }) {
         >
             {categories.map((cat, i) => (
                 <div key={cat.id || i} className="flex min-h-0 flex-col gap-4">
-                    <div className="flex min-h-[4rem] items-center justify-center rounded-lg border-2 border-blue-500 bg-blue-900 p-3 text-center shadow-md shadow-black/50">
+                    <button
+                        type="button"
+                        onClick={() => onCategorySelect(cat.id)}
+                        aria-label={t('jumpToCategory', { name: cat.name })}
+                        title={t('jumpToCategory', { name: cat.name })}
+                        className="flex min-h-[4rem] items-center justify-center rounded-lg border-2 border-blue-500 bg-blue-900 p-3 text-center shadow-md shadow-black/50 transition-colors hover:border-blue-300 hover:bg-blue-800 focus:outline-none focus:ring-2 focus:ring-blue-300 focus:ring-offset-2 focus:ring-offset-slate-900"
+                    >
                         <span className="break-words text-sm font-bold uppercase leading-tight tracking-wide text-blue-100 drop-shadow-md md:text-base">
                             {cat.name}
                         </span>
-                    </div>
+                    </button>
 
                     <div className="flex min-h-0 flex-1 flex-col gap-4">
                         {cat.questions.map((q) => (
@@ -188,7 +194,7 @@ function PreviewBoardGrid({ categories }) {
     );
 }
 
-function QuestionPackPreviewModal({ categories, onClose, t }) {
+function QuestionPackPreviewModal({ categories, onCategorySelect, onClose, t }) {
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4 sm:p-6">
             <div className="flex max-h-[90vh] w-full max-w-6xl flex-col rounded-xl border border-slate-700 bg-slate-900 shadow-2xl">
@@ -210,7 +216,7 @@ function QuestionPackPreviewModal({ categories, onClose, t }) {
                             {t('noPreviewQuestions')}
                         </div>
                     ) : (
-                        <PreviewBoardGrid categories={categories} />
+                        <PreviewBoardGrid categories={categories} onCategorySelect={onCategorySelect} t={t} />
                     )}
                 </div>
             </div>
@@ -226,9 +232,11 @@ export default function PackCreator({ pack, setView, user, setError, onSaved }) 
     const [categories, setCategories] = useState(pack?.categories || createDefaultCategories(t));
     const [isSaving, setIsSaving] = useState(false);
     const [isPreviewOpen, setIsPreviewOpen] = useState(false);
+    const [collapsedCategoryIds, setCollapsedCategoryIds] = useState(() => new Set());
     const [mediaProgress, setMediaProgress] = useState({});
     const [mediaErrors, setMediaErrors] = useState({});
     const categoriesRef = useRef(categories);
+    const categoryElementsRef = useRef({});
 
     categoriesRef.current = categories;
     const hasActiveMediaAction = Object.values(mediaProgress).some((value) => value > 0 && value < 100);
@@ -299,6 +307,11 @@ export default function PackCreator({ pack, setView, user, setError, onSaved }) 
         const category = categories.find((item) => item.id === catId);
         const nextCategories = categories.filter(c => c.id !== catId);
         setCategories(nextCategories);
+        setCollapsedCategoryIds((currentIds) => {
+            const nextIds = new Set(currentIds);
+            nextIds.delete(catId);
+            return nextIds;
+        });
         try {
             await persistCategoriesIfNeeded(nextCategories);
             await deleteMediaNow((category?.questions || []).flatMap(getSavedMediaFromQuestion));
@@ -310,6 +323,44 @@ export default function PackCreator({ pack, setView, user, setError, onSaved }) 
 
     const updateCategoryName = (catId, name) => {
         setCategories(categories.map(c => c.id === catId ? { ...c, name } : c));
+    };
+
+    const toggleCategoryCollapsed = (catId) => {
+        setCollapsedCategoryIds((currentIds) => {
+            const nextIds = new Set(currentIds);
+            if (nextIds.has(catId)) {
+                nextIds.delete(catId);
+            } else {
+                nextIds.add(catId);
+            }
+            return nextIds;
+        });
+    };
+
+    const setCategoryElement = (catId) => (element) => {
+        if (element) {
+            categoryElementsRef.current[catId] = element;
+        } else {
+            delete categoryElementsRef.current[catId];
+        }
+    };
+
+    const scrollToCategory = (catId) => {
+        categoryElementsRef.current[catId]?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    };
+
+    const handlePreviewCategorySelect = (catId) => {
+        setIsPreviewOpen(false);
+        setCollapsedCategoryIds((currentIds) => {
+            const nextIds = new Set(currentIds);
+            nextIds.delete(catId);
+            return nextIds;
+        });
+        window.requestAnimationFrame(() => scrollToCategory(catId));
+    };
+
+    const collapseAllCategories = () => {
+        setCollapsedCategoryIds(new Set(categories.map((category) => category.id)));
     };
 
     const addQuestion = (catId) => {
@@ -579,6 +630,7 @@ export default function PackCreator({ pack, setView, user, setError, onSaved }) 
                 <QuestionPackPreviewModal
                     categories={previewCategories}
                     t={t}
+                    onCategorySelect={handlePreviewCategorySelect}
                     onClose={() => setIsPreviewOpen(false)}
                 />
             )}
@@ -639,19 +691,46 @@ export default function PackCreator({ pack, setView, user, setError, onSaved }) 
 
             <div className="mb-8 rounded-xl border border-slate-700 bg-slate-800/50 p-5">
                 <h3 className="mb-4 text-sm font-black uppercase tracking-widest text-slate-400">{t('additionalSettings')}</h3>
-                <button
-                    type="button"
-                    onClick={() => setIsPreviewOpen(true)}
-                    className="inline-flex max-w-full flex-wrap items-center justify-center gap-2 rounded-lg border border-blue-500/40 bg-blue-600/20 px-4 py-3 text-left font-bold text-blue-100 transition-colors hover:border-blue-400 hover:bg-blue-600/30"
-                >
-                    <Eye size={18} className="shrink-0" /> {t('showQuestionPackPreview')}
-                </button>
+                <div className="flex flex-wrap gap-3">
+                    <button
+                        type="button"
+                        onClick={() => setIsPreviewOpen(true)}
+                        className="inline-flex max-w-full flex-wrap items-center justify-center gap-2 rounded-lg border border-blue-500/40 bg-blue-600/20 px-4 py-3 text-left font-bold text-blue-100 transition-colors hover:border-blue-400 hover:bg-blue-600/30"
+                    >
+                        <Eye size={18} className="shrink-0" /> {t('showQuestionPackPreview')}
+                    </button>
+                    <button
+                        type="button"
+                        onClick={collapseAllCategories}
+                        className="inline-flex max-w-full flex-wrap items-center justify-center gap-2 rounded-lg border border-slate-600 bg-slate-900 px-4 py-3 text-left font-bold text-slate-200 transition-colors hover:border-slate-500 hover:bg-slate-800"
+                    >
+                        <ChevronRight size={18} className="shrink-0" /> {t('collapseAllCategories')}
+                    </button>
+                </div>
             </div>
 
             <div className="flex-1 overflow-y-auto space-y-8 pb-12">
-                {categories.map((cat, catIdx) => (
-                    <div key={cat.id} className="bg-slate-800/50 p-6 rounded-xl border border-slate-700/50">
+                {categories.map((cat, catIdx) => {
+                    const isCategoryCollapsed = collapsedCategoryIds.has(cat.id);
+                    const collapseLabel = isCategoryCollapsed ? t('expandCategory') : t('collapseCategory');
+                    const questionCount = cat.questions?.length || 0;
+
+                    return (
+                    <div key={cat.id} ref={setCategoryElement(cat.id)} className="bg-slate-800/50 p-6 rounded-xl border border-slate-700/50 scroll-mt-6">
                         <div className="flex items-center gap-4 mb-6">
+                            <button
+                                type="button"
+                                onClick={() => toggleCategoryCollapsed(cat.id)}
+                                aria-expanded={!isCategoryCollapsed}
+                                aria-label={collapseLabel}
+                                title={collapseLabel}
+                                className="mt-5 flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-slate-700 bg-slate-900 text-slate-300 transition-colors hover:border-slate-500 hover:bg-slate-800 hover:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            >
+                                {isCategoryCollapsed ? <ChevronRight size={20} /> : <ChevronDown size={20} />}
+                            </button>
+                            <span aria-disabled="true" className="mt-5 inline-flex min-h-10 min-w-10 shrink-0 select-none items-center justify-center rounded-lg border border-slate-700/70 bg-slate-800/70 px-3 text-sm font-bold uppercase tracking-wide text-white shadow-sm shadow-black/20">
+                                {questionCount}
+                            </span>
                             <div className="flex-1">
                                 <label className="block text-xs font-medium text-slate-500 mb-1">{t('categoryNumber', { number: catIdx + 1 })}</label>
                                 <input
@@ -666,6 +745,7 @@ export default function PackCreator({ pack, setView, user, setError, onSaved }) 
                             </button>
                         </div>
 
+                        {!isCategoryCollapsed && (
                         <div className="space-y-4 pl-4 border-l-2 border-slate-700">
                             {cat.questions.map((q) => (
                                 <div key={q.id} className={`flex gap-4 rounded-lg border p-4 ${q.isSurpriseQuestion ? 'border-yellow-400 bg-yellow-950/20' : 'border-transparent bg-slate-900'}`}>
@@ -789,8 +869,10 @@ export default function PackCreator({ pack, setView, user, setError, onSaved }) 
                                 <Plus size={16} /> {t('addQuestion')}
                             </button>
                         </div>
+                        )}
                     </div>
-                ))}
+                    );
+                })}
 
                 <button
                     onClick={addCategory}
