@@ -1,3 +1,4 @@
+import { X } from 'lucide-react';
 import { useLanguage } from '../useLanguage';
 import { getMediaUrl } from '../services/imageStorage';
 
@@ -17,10 +18,10 @@ export default function MediaLightbox({ media, alt, onClose }) {
                 <button
                     type="button"
                     onClick={onClose}
-                    className="absolute -right-3 -top-3 z-20 flex h-10 w-10 items-center justify-center rounded-full bg-slate-900 text-xl font-bold text-white shadow-lg ring-1 ring-white/20 hover:bg-slate-800"
+                    className="absolute -right-3 -top-3 z-20 flex h-10 w-10 items-center justify-center rounded-full bg-slate-900 text-white shadow-lg ring-1 ring-white/20 hover:bg-slate-800"
                     aria-label={t('closeMedia')}
                 >
-                    ×
+                    <X size={22} strokeWidth={3} />
                 </button>
                 <img
                     src={getMediaUrl(media, 'full')}

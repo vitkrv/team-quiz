@@ -486,7 +486,13 @@ export default function ActiveQuestionView({ room, roomRef, user, isHost }) {
                 <div className={`mt-10 flex w-full min-h-0 flex-col items-center ${isHost ? 'gap-5' : 'gap-6'}`}>
                     {hasQuestionText && (
                         <div className={questionContainerClassName}>
-                            <h2 className="text-3xl md:text-5xl font-black text-white leading-tight drop-shadow-lg" style={{textShadow: '2px 2px 4px rgba(0,0,0,0.5)'}}>
+                            <h2
+                                className="break-words font-black leading-tight text-white drop-shadow-lg"
+                                style={{
+                                    fontSize: 'clamp(1.35rem, 4vw, 2.5rem)',
+                                    textShadow: '2px 2px 4px rgba(0,0,0,0.5)'
+                                }}
+                            >
                                 {activeQ.text}
                             </h2>
                         </div>

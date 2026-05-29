@@ -47,6 +47,7 @@ export default function BoardView({ room, roomRef, user, isHost }) {
     const [pendingSurpriseQuestion, setPendingSurpriseQuestion] = useState(null);
     const isMyTurn = room.currentTurn === user.uid;
     const categories = room.pack.categories;
+    const maxQuestionCount = Math.max(0, ...categories.map((cat) => cat.questions?.length || 0));
     const actorName = room.players[user.uid]?.name || user.displayName || t('playerFallback');
 
     // Check if all questions are done
@@ -139,13 +140,16 @@ export default function BoardView({ room, roomRef, user, isHost }) {
                 >
                     {categories.map((cat, i) => (
                         <div key={cat.id || i} className="flex min-h-0 flex-col gap-4">
-                            <div className="bg-blue-900 border-2 border-blue-500 text-center p-3 rounded-lg flex items-center justify-center min-h-[4rem] shadow-md shadow-black/50">
+                            <div className="flex h-24 items-center justify-center rounded-lg border-2 border-blue-500 bg-blue-900 p-3 text-center shadow-md shadow-black/50">
                                 <span className="font-bold text-sm md:text-base text-blue-100 uppercase tracking-wide leading-tight drop-shadow-md">
                                     {cat.name}
                                 </span>
                             </div>
 
-                            <div className="flex min-h-0 flex-1 flex-col gap-4">
+                            <div
+                                className="grid min-h-0 flex-1 gap-4"
+                                style={{ gridTemplateRows: `repeat(${maxQuestionCount}, minmax(0, 1fr))` }}
+                            >
                                 {(cat.questions || []).map((q) => {
                                     const state = room.questionStates[q.id];
                                     const isAvailable = state === 'available';
@@ -164,10 +168,10 @@ export default function BoardView({ room, roomRef, user, isHost }) {
                                                 pickQuestion(cat, q, q.isSurpriseQuestion ? user.uid : null);
                                             }}
                                             className={`
-                                                flex-1 rounded-lg flex items-center justify-center text-2xl md:text-4xl font-black font-mono transition-all
+                                                min-h-0 rounded-lg flex items-center justify-center text-2xl md:text-4xl font-black font-mono transition-all duration-200
                                                 ${isAvailable
                                                     ? (canPick
-                                                        ? 'bg-blue-800 hover:bg-blue-700 text-yellow-400 cursor-pointer shadow-[inset_0_-4px_0_0_rgba(0,0,0,0.3)] shadow-black hover:-translate-y-1'
+                                                        ? 'bg-blue-800 hover:bg-blue-700 text-yellow-400 cursor-pointer shadow-[inset_0_-4px_0_0_rgba(0,0,0,0.3)] shadow-black hover:shadow-[0_0_18px_3px_rgba(59,130,246,0.55),inset_0_-4px_0_0_rgba(0,0,0,0.3)]'
                                                         : 'bg-blue-900/50 text-yellow-500/50 cursor-not-allowed border border-blue-800/30')
                                                     : 'bg-gray-400/10 border-2 border-slate-500/10 text-transparent cursor-default'
                                                 }
