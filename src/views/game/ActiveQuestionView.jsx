@@ -217,8 +217,10 @@ function SpaceBuzzHandler({ enabled, onBuzz }) {
 export default function ActiveQuestionView({ room, roomRef, user, isHost }) {
     const { t } = useLanguage();
     const [timeLeft, setTimeLeft] = useState(10);
+    const [buzzUnlockNow, setBuzzUnlockNow] = useState(() => Date.now());
     const [isRolling, setIsRolling] = useState(false);
     const surpriseBackgroundItems = useMemo(() => createSurpriseBackgroundItems(room.activeQuestionId), [room.activeQuestionId]);
+    const buzzUnlockAt = Number(room.buzzUnlockAt) || 0;
 
     // Find the active question data
     let activeQ = null;
@@ -247,6 +249,22 @@ export default function ActiveQuestionView({ room, roomRef, user, isHost }) {
         return () => clearInterval(interval);
     }, [room.buzzedPlayerId, room.buzzTimestamp]);
 
+    useEffect(() => {
+        if (!room.activeQuestionId || !buzzUnlockAt || room.buzzedPlayerId || room.answerRevealed) {
+            setBuzzUnlockNow(Date.now());
+            return undefined;
+        }
+
+        const remainingMs = buzzUnlockAt - Date.now();
+        if (remainingMs <= 0) {
+            setBuzzUnlockNow(Date.now());
+            return undefined;
+        }
+
+        const timeoutId = window.setTimeout(() => setBuzzUnlockNow(Date.now()), remainingMs);
+        return () => window.clearTimeout(timeoutId);
+    }, [buzzUnlockAt, room.activeQuestionId, room.answerRevealed, room.buzzedPlayerId]);
+
     if (!activeQ) return null;
 
     const isSurpriseQuestion = Boolean(activeQ.isSurpriseQuestion);
@@ -267,7 +285,9 @@ export default function ActiveQuestionView({ room, roomRef, user, isHost }) {
         && (user.uid === surpriseAnswererId || isHost);
     const hasBuzzed = !!room.buzzedPlayerId;
     const amIIncorrect = (room.incorrectBuzzedIds || []).includes(user.uid);
-    const canIBuzz = !isSurpriseQuestion && !isHost && !hasBuzzed && !amIIncorrect;
+    const isBuzzUnlocked = !buzzUnlockAt || buzzUnlockNow >= buzzUnlockAt;
+    const canIBuzz = !isSurpriseQuestion && !isHost && !hasBuzzed && !amIIncorrect && isBuzzUnlocked;
+    const shouldShowBuzzButton = !isHost && !amIIncorrect;
     const didIBuzz = room.buzzedPlayerId === user.uid;
     const buzzedPlayer = room.buzzedPlayerId ? room.players[room.buzzedPlayerId] : null;
     const buzzedPlayerName = buzzedPlayer ? buzzedPlayer.name : '';
@@ -302,6 +322,7 @@ export default function ActiveQuestionView({ room, roomRef, user, isHost }) {
             if (
                 latestRoom.activeQuestionId !== activeQ.id
                 || latestRoom.answerRevealed
+                || (latestRoom.buzzUnlockAt && clickedAt < latestRoom.buzzUnlockAt)
                 || latestRoom.players?.[user.uid]?.isHost
                 || (latestRoom.incorrectBuzzedIds || []).includes(user.uid)
             ) {
@@ -363,6 +384,7 @@ export default function ActiveQuestionView({ room, roomRef, user, isHost }) {
                 answerRevealed: true,
                 buzzedPlayerId: null,
                 buzzTimestamp: null,
+                buzzUnlockAt: null,
                 currentTurn: surpriseAnswererId,
                 [`questionStates.${activeQ.id}`]: 'done',
                 surpriseRound: {
@@ -396,6 +418,7 @@ export default function ActiveQuestionView({ room, roomRef, user, isHost }) {
             await updateDoc(roomRef, {
                 [`players.${pId}.score`]: currentScore + activeQ.points,
                 answerRevealed: true,
+                buzzUnlockAt: null,
                 currentTurn: pId,
                 [`questionStates.${activeQ.id}`]: 'done',
                 history: arrayUnion(createHistoryItem({
@@ -440,6 +463,7 @@ export default function ActiveQuestionView({ room, roomRef, user, isHost }) {
             answerRevealed: true,
             buzzedPlayerId: null,
             buzzTimestamp: null,
+            buzzUnlockAt: null,
             buzzAttempts: {},
             mediaPlayback: null,
             [`questionStates.${activeQ.id}`]: 'done',
@@ -466,6 +490,7 @@ export default function ActiveQuestionView({ room, roomRef, user, isHost }) {
             answerRevealed: false,
             buzzedPlayerId: null,
             buzzTimestamp: null,
+            buzzUnlockAt: null,
             buzzAttempts: {},
             incorrectBuzzedIds: [],
             mediaPlayback: null,
@@ -735,16 +760,21 @@ export default function ActiveQuestionView({ room, roomRef, user, isHost }) {
                     {isHost ? (
                         <div className="mb-4 text-slate-400 md:mb-6">{t('waitingForBuzz')}</div>
                     ) : (
-                        canIBuzz ? (
+                        shouldShowBuzzButton ? (
                             <button
                                 onClick={handleBuzzIn}
-                                className="h-36 w-36 rounded-full border-[6px] border-red-800 bg-red-600 text-2xl font-black text-white shadow-[0_8px_0_0_#7f1d1d,inset_0_10px_20px_rgba(255,255,255,0.3)] transition-all hover:bg-red-500 active:translate-y-[8px] active:shadow-[0_0px_0_0_#7f1d1d,inset_0_10px_20px_rgba(255,255,255,0.3)] md:h-48 md:w-48 md:border-8 md:text-4xl md:shadow-[0_10px_0_0_#7f1d1d,inset_0_10px_20px_rgba(255,255,255,0.3)] md:active:translate-y-[10px]"
+                                disabled={!canIBuzz}
+                                className={`h-36 w-36 rounded-full border-[6px] text-2xl font-black transition-all md:h-48 md:w-48 md:border-8 md:text-4xl ${
+                                    canIBuzz
+                                        ? 'border-red-800 bg-red-600 text-white shadow-[0_8px_0_0_#7f1d1d,inset_0_10px_20px_rgba(255,255,255,0.3)] hover:bg-red-500 active:translate-y-[8px] active:shadow-[0_0px_0_0_#7f1d1d,inset_0_10px_20px_rgba(255,255,255,0.3)] md:shadow-[0_10px_0_0_#7f1d1d,inset_0_10px_20px_rgba(255,255,255,0.3)] md:active:translate-y-[10px]'
+                                        : 'cursor-not-allowed border-slate-700 bg-slate-600 text-slate-300 shadow-[0_8px_0_0_#334155,inset_0_10px_20px_rgba(255,255,255,0.08)] md:shadow-[0_10px_0_0_#334155,inset_0_10px_20px_rgba(255,255,255,0.08)]'
+                                }`}
                             >
                                 {t('buzz')}
                             </button>
                         ) : (
                             <div className="w-full rounded-xl border-2 border-dashed border-slate-700 p-5 text-lg font-bold text-slate-500 md:p-8 md:text-xl">
-                                {amIIncorrect ? t('answeredIncorrectly') : t('waiting')}
+                                {t('answeredIncorrectly')}
                             </div>
                         )
                     )}

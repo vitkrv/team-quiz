@@ -222,7 +222,7 @@ function HistoryModal({ history, onClose, t }) {
                                     <div className="mb-1 flex items-center justify-between gap-4 text-xs uppercase tracking-widest text-slate-500">
                                         <span>{item.actorName || t('hostLabel')}</span>
                                         <time dateTime={new Date(item.timestamp || 0).toISOString()}>
-                                            {new Date(item.timestamp || 0).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+                                            {new Date(item.timestamp || 0).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false })}
                                         </time>
                                     </div>
                                     <div className="text-sm font-medium text-slate-200">{renderHistoryMessage(item, t)}</div>

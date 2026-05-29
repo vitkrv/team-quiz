@@ -55,6 +55,7 @@ export default function HostSetup({ setView, user, setCurrentRoomCode, onCreateP
             answerRevealed: false,
             buzzedPlayerId: null,
             buzzTimestamp: null,
+            buzzUnlockAt: null,
             buzzAttempts: {},
             incorrectBuzzedIds: [],
             mediaPlayback: null,
