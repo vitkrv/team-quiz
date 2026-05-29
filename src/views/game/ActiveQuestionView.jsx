@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { arrayUnion, increment, updateDoc } from 'firebase/firestore';
+import { arrayUnion, increment, runTransaction, updateDoc } from 'firebase/firestore';
 import { Check, Play, RotateCw, X } from 'lucide-react';
 import { useLanguage } from '../../useLanguage';
 import { createHistoryItem } from '../../actions/gameActions';
@@ -11,6 +11,7 @@ const POINT_STEP = 100;
 const SURPRISE_DEFAULT_MIN_POINTS = 100;
 const SURPRISE_DEFAULT_MAX_POINTS = 500;
 const WHEEL_ANIMATION_MS = 6000;
+const LATE_BUZZ_WINDOW_MS = 2000;
 const SURPRISE_BACKGROUND_EMOJIS = ['🍿', '🎉', '🥳', '🎁', '🍾', '🎂', '✨', '🪄'];
 const SURPRISE_BACKGROUND_EMOJI_COUNT = 80;
 
@@ -76,8 +77,8 @@ const describeSlice = (center, radius, startAngle, endAngle) => {
     return `M ${center} ${center} L ${start.x} ${start.y} A ${radius} ${radius} 0 ${largeArcFlag} 1 ${end.x} ${end.y} Z`;
 };
 
-const createSurpriseBackgroundItems = () => Array.from({ length: SURPRISE_BACKGROUND_EMOJI_COUNT }, (_, index) => ({
-    id: index,
+const createSurpriseBackgroundItems = (questionId) => Array.from({ length: SURPRISE_BACKGROUND_EMOJI_COUNT }, (_, index) => ({
+    id: `${questionId || 'question'}:${index}`,
     emoji: SURPRISE_BACKGROUND_EMOJIS[Math.floor(Math.random() * SURPRISE_BACKGROUND_EMOJIS.length)],
     left: Math.random() * 100,
     top: Math.random() * 100,
@@ -217,7 +218,7 @@ export default function ActiveQuestionView({ room, roomRef, user, isHost }) {
     const { t } = useLanguage();
     const [timeLeft, setTimeLeft] = useState(10);
     const [isRolling, setIsRolling] = useState(false);
-    const surpriseBackgroundItems = useMemo(() => createSurpriseBackgroundItems(), [room.activeQuestionId]);
+    const surpriseBackgroundItems = useMemo(() => createSurpriseBackgroundItems(room.activeQuestionId), [room.activeQuestionId]);
 
     // Find the active question data
     let activeQ = null;
@@ -291,16 +292,63 @@ export default function ActiveQuestionView({ room, roomRef, user, isHost }) {
 
     const handleBuzzIn = async () => {
         if (!canIBuzz) return;
-        await updateDoc(roomRef, {
-            buzzedPlayerId: user.uid,
-            buzzTimestamp: Date.now(),
-            history: arrayUnion(createHistoryItem({
-                type: 'player_buzzed',
-                actorId: user.uid,
-                actorName,
-                message: t('historyPlayerBuzzed', { actorName }),
-                details: { actorName }
-            }))
+        const clickedAt = Date.now();
+
+        await runTransaction(roomRef.firestore, async (transaction) => {
+            const roomSnap = await transaction.get(roomRef);
+            if (!roomSnap.exists()) return;
+
+            const latestRoom = roomSnap.data();
+            if (
+                latestRoom.activeQuestionId !== activeQ.id
+                || latestRoom.answerRevealed
+                || latestRoom.players?.[user.uid]?.isHost
+                || (latestRoom.incorrectBuzzedIds || []).includes(user.uid)
+            ) {
+                return;
+            }
+
+            const buzzAttempts = latestRoom.buzzAttempts || {};
+            const existingAttempt = buzzAttempts[user.uid];
+            const hasEarlierAttempt = existingAttempt?.questionId === activeQ.id
+                && Number(existingAttempt.clickedAt) <= clickedAt;
+
+            if (!latestRoom.buzzedPlayerId) {
+                transaction.update(roomRef, {
+                    buzzedPlayerId: user.uid,
+                    buzzTimestamp: clickedAt,
+                    buzzAttempts: {
+                        ...buzzAttempts,
+                        [user.uid]: { clickedAt, questionId: activeQ.id }
+                    },
+                    history: arrayUnion(createHistoryItem({
+                        type: 'player_buzzed',
+                        actorId: user.uid,
+                        actorName,
+                        message: t('historyPlayerBuzzed', { actorName }),
+                        details: { actorName }
+                    }))
+                });
+                return;
+            }
+
+            if (
+                latestRoom.buzzedPlayerId === user.uid
+                || !latestRoom.buzzTimestamp
+                || hasEarlierAttempt
+            ) {
+                return;
+            }
+
+            const buzzDelta = clickedAt - latestRoom.buzzTimestamp;
+            if (buzzDelta > 0 && buzzDelta <= LATE_BUZZ_WINDOW_MS) {
+                transaction.update(roomRef, {
+                    buzzAttempts: {
+                        ...buzzAttempts,
+                        [user.uid]: { clickedAt, questionId: activeQ.id }
+                    }
+                });
+            }
         });
     };
 
@@ -369,6 +417,7 @@ export default function ActiveQuestionView({ room, roomRef, user, isHost }) {
             await updateDoc(roomRef, {
                 buzzedPlayerId: null,
                 buzzTimestamp: null,
+                buzzAttempts: {},
                 incorrectBuzzedIds: arrayUnion(room.buzzedPlayerId),
                 history: arrayUnion(createHistoryItem({
                     type: 'answer_incorrect',
@@ -391,6 +440,7 @@ export default function ActiveQuestionView({ room, roomRef, user, isHost }) {
             answerRevealed: true,
             buzzedPlayerId: null,
             buzzTimestamp: null,
+            buzzAttempts: {},
             mediaPlayback: null,
             [`questionStates.${activeQ.id}`]: 'done',
             history: arrayUnion(createHistoryItem({
@@ -416,6 +466,7 @@ export default function ActiveQuestionView({ room, roomRef, user, isHost }) {
             answerRevealed: false,
             buzzedPlayerId: null,
             buzzTimestamp: null,
+            buzzAttempts: {},
             incorrectBuzzedIds: [],
             mediaPlayback: null,
             surpriseRound: null,

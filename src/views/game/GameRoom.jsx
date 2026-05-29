@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { arrayUnion, doc, updateDoc } from 'firebase/firestore';
 import { ArrowLeft, Check, Copy, Link, Play, PlusCircle, MinusCircle, Users, SlidersHorizontal, ScrollText, X } from 'lucide-react';
 import { appId, db } from '../../firebase';
@@ -8,7 +8,44 @@ import ActiveQuestionView from './ActiveQuestionView';
 import BoardView from './BoardView';
 import ResultsView from './ResultsView';
 
+const ANSWER_WINDOW_MS = 10000;
+const LATE_BUZZ_WINDOW_MS = 2000;
+
 const getPlayerEntries = (players) => Object.entries(players).filter(([, player]) => !player.isHost);
+
+const formatBuzzDelta = (deltaMs) => `+${(deltaMs / 1000).toFixed(2)}s`;
+
+const getPlayerNameStyle = (name = '') => {
+    const characterCount = Array.from(name).length;
+    if (characterCount <= 14) return undefined;
+
+    return {
+        fontSize: `${Math.max(12, Math.min(16, 224 / characterCount))}px`
+    };
+};
+
+const getBuzzDeltaLabel = (room, playerId, now) => {
+    if (
+        !room.activeQuestionId
+        || room.answerRevealed
+        || !room.buzzedPlayerId
+        || !room.buzzTimestamp
+        || room.buzzedPlayerId === playerId
+    ) {
+        return null;
+    }
+
+    const answerElapsed = now - room.buzzTimestamp;
+    if (answerElapsed < 0 || answerElapsed > ANSWER_WINDOW_MS) return null;
+
+    const attempt = room.buzzAttempts?.[playerId];
+    if (attempt?.questionId !== room.activeQuestionId) return null;
+
+    const deltaMs = Number(attempt.clickedAt) - room.buzzTimestamp;
+    if (deltaMs <= 0 || deltaMs > LATE_BUZZ_WINDOW_MS) return null;
+
+    return formatBuzzDelta(deltaMs);
+};
 
 function ScoreEditorModal({ players, roomRef, host, onClose, t }) {
     const playerEntries = getPlayerEntries(players);
@@ -203,12 +240,23 @@ export default function GameRoom({ room, roomCode, user, onLeaveRoom }) {
     const { t } = useLanguage();
     const isHost = user.uid === room.hostId;
     const roomRef = doc(db, 'artifacts', appId, 'public', 'data', 'rooms', roomCode);
+    const [now, setNow] = useState(() => Date.now());
     const [copiedRoomCode, setCopiedRoomCode] = useState(false);
     const [copiedJoinLink, setCopiedJoinLink] = useState(false);
     const [isScoreEditorOpen, setIsScoreEditorOpen] = useState(false);
     const [isHistoryOpen, setIsHistoryOpen] = useState(false);
     const hostName = room.players[user.uid]?.name || user.displayName || t('hostLabel');
     const host = { id: user.uid, name: hostName };
+
+    useEffect(() => {
+        if (!room.buzzedPlayerId || !room.buzzTimestamp || room.answerRevealed) {
+            setNow(Date.now());
+            return undefined;
+        }
+
+        const intervalId = window.setInterval(() => setNow(Date.now()), 100);
+        return () => window.clearInterval(intervalId);
+    }, [room.answerRevealed, room.buzzedPlayerId, room.buzzTimestamp]);
 
     const leaveRoom = async () => {
         onLeaveRoom();
@@ -425,33 +473,50 @@ export default function GameRoom({ room, roomCode, user, onLeaveRoom }) {
                             {Object.entries(room.players)
                                 .filter(([_, p]) => !p.isHost)
                                 .sort((a, b) => b[1].score - a[1].score)
-                                .map(([pid, p]) => (
-                                    <div key={pid} className={`p-3 rounded-lg border ${room.currentTurn === pid ? 'bg-blue-900/30 border-blue-500/50 shadow-[inset_2px_0_0_0_#3b82f6]' : 'bg-slate-800/50 border-transparent'} flex items-center justify-between group`}>
-                                        <div className="truncate pr-2 flex items-center gap-2">
-                                            <span className="text-2xl">{p.avatar}</span>
-                                            <div>
-                                                <div className={`font-bold truncate ${room.currentTurn === pid ? 'text-blue-300' : 'text-slate-200'}`}>{p.name}</div>
-                                                <div className="text-sm font-mono text-yellow-400">{t('scorePts', { score: p.score })}</div>
+                                .map(([pid, p]) => {
+                                    const buzzDeltaLabel = getBuzzDeltaLabel(room, pid, now);
+                                    const playerNameStyle = getPlayerNameStyle(p.name);
+
+                                    return (
+                                        <div key={pid} className={`p-3 rounded-lg border ${room.currentTurn === pid ? 'bg-blue-900/30 border-blue-500/50 shadow-[inset_2px_0_0_0_#3b82f6]' : 'bg-slate-800/50 border-transparent'} flex items-center justify-between group`}>
+                                            <div className="min-w-0 pr-2 flex items-center gap-2">
+                                                <span className="relative flex h-8 w-14 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-transparent">
+                                                    <span className={`absolute inset-0 flex items-center justify-center text-2xl transition-all duration-200 ${buzzDeltaLabel ? 'scale-90 opacity-0' : 'scale-100 opacity-100'}`}>
+                                                        {p.avatar}
+                                                    </span>
+                                                    <span className={`absolute inset-0 flex items-center justify-center rounded-lg bg-yellow-400/10 px-1 font-mono text-xs font-black text-yellow-300 ring-1 ring-inset ring-yellow-300/25 transition-all duration-200 ${buzzDeltaLabel ? 'scale-100 opacity-100' : 'scale-90 opacity-0'}`}>
+                                                        {buzzDeltaLabel}
+                                                    </span>
+                                                </span>
+                                                <div className="min-w-0">
+                                                    <div
+                                                        className={`font-bold leading-tight ${playerNameStyle ? 'whitespace-nowrap' : 'truncate'} ${room.currentTurn === pid ? 'text-blue-300' : 'text-slate-200'}`}
+                                                        style={playerNameStyle}
+                                                    >
+                                                        {p.name}
+                                                    </div>
+                                                    <div className="text-sm font-mono text-yellow-400">{t('scorePts', { score: p.score })}</div>
+                                                </div>
                                             </div>
+                                            {isHost && (
+                                                <div className="flex flex-col gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                    <button
+                                                        onClick={() => adjustScore(roomRef, pid, p.score, 100, createScoreAdjustmentHistory(p, 100, p.score + 100))}
+                                                        className="text-slate-400 hover:text-green-400"
+                                                    >
+                                                        <PlusCircle size={14}/>
+                                                    </button>
+                                                    <button
+                                                        onClick={() => adjustScore(roomRef, pid, p.score, -100, createScoreAdjustmentHistory(p, -100, p.score - 100))}
+                                                        className="text-slate-400 hover:text-red-400"
+                                                    >
+                                                        <MinusCircle size={14}/>
+                                                    </button>
+                                                </div>
+                                            )}
                                         </div>
-                                        {isHost && (
-                                            <div className="flex flex-col gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                                                <button
-                                                    onClick={() => adjustScore(roomRef, pid, p.score, 100, createScoreAdjustmentHistory(p, 100, p.score + 100))}
-                                                    className="text-slate-400 hover:text-green-400"
-                                                >
-                                                    <PlusCircle size={14}/>
-                                                </button>
-                                                <button
-                                                    onClick={() => adjustScore(roomRef, pid, p.score, -100, createScoreAdjustmentHistory(p, -100, p.score - 100))}
-                                                    className="text-slate-400 hover:text-red-400"
-                                                >
-                                                    <MinusCircle size={14}/>
-                                                </button>
-                                            </div>
-                                        )}
-                                    </div>
-                                ))}
+                                    );
+                                })}
                         </div>
                     </aside>
 

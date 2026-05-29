@@ -43,6 +43,7 @@ export const handlePickQuestion = async (roomRef, qId, historyItem, extraUpdate 
         answerRevealed: false,
         buzzedPlayerId: null,
         buzzTimestamp: null,
+        buzzAttempts: {},
         incorrectBuzzedIds: [],
         mediaPlayback: null,
         surpriseRound: null,
