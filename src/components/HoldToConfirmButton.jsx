@@ -18,6 +18,7 @@ export default function HoldToConfirmButton({
     const [isHolding, setIsHolding] = useState(false);
     const startedAtRef = useRef(null);
     const confirmedRef = useRef(false);
+    const pointerIdRef = useRef(null);
 
     useEffect(() => {
         if (!isHolding) return undefined;
@@ -50,13 +51,65 @@ export default function HoldToConfirmButton({
         setProgress(0);
     };
 
+    const releasePointerCapture = (button, pointerId) => {
+        if (button.hasPointerCapture(pointerId)) {
+            button.releasePointerCapture(pointerId);
+        }
+
+        if (pointerIdRef.current === pointerId) {
+            pointerIdRef.current = null;
+        }
+    };
+
+    const handlePointerDown = (event) => {
+        if (!event.isPrimary || event.button !== 0 || pointerIdRef.current !== null) return;
+
+        if (event.pointerType !== 'mouse') {
+            event.preventDefault();
+        }
+
+        pointerIdRef.current = event.pointerId;
+        event.currentTarget.setPointerCapture(event.pointerId);
+        startHold();
+    };
+
+    const handlePointerMove = (event) => {
+        if (pointerIdRef.current !== event.pointerId) return;
+
+        const rect = event.currentTarget.getBoundingClientRect();
+        const isInside = event.clientX >= rect.left
+            && event.clientX <= rect.right
+            && event.clientY >= rect.top
+            && event.clientY <= rect.bottom;
+
+        if (!isInside) {
+            cancelHold();
+            releasePointerCapture(event.currentTarget, event.pointerId);
+        }
+    };
+
+    const handlePointerEnd = (event) => {
+        if (pointerIdRef.current !== event.pointerId) return;
+
+        cancelHold();
+        releasePointerCapture(event.currentTarget, event.pointerId);
+    };
+
     return (
         <button
             type="button"
-            onPointerDown={startHold}
-            onPointerUp={cancelHold}
-            onPointerLeave={cancelHold}
-            onPointerCancel={cancelHold}
+            onPointerDown={handlePointerDown}
+            onPointerMove={handlePointerMove}
+            onPointerUp={handlePointerEnd}
+            onPointerCancel={handlePointerEnd}
+            onLostPointerCapture={(event) => {
+                if (pointerIdRef.current === event.pointerId) {
+                    pointerIdRef.current = null;
+                    cancelHold();
+                }
+            }}
+            onContextMenu={(event) => event.preventDefault()}
+            onDragStart={(event) => event.preventDefault()}
             onKeyDown={(event) => {
                 if ((event.key === 'Enter' || event.key === ' ') && !isHolding) {
                     event.preventDefault();
@@ -68,8 +121,15 @@ export default function HoldToConfirmButton({
                     cancelHold();
                 }
             }}
-            className={`relative overflow-hidden ${className}`}
-            style={{ boxShadow: `inset 0 0 0 ${progress}px currentColor` }}
+            onBlur={cancelHold}
+            className={`relative select-none overflow-hidden ${className}`}
+            style={{
+                WebkitTouchCallout: 'none',
+                WebkitUserSelect: 'none',
+                boxShadow: `inset 0 0 0 ${progress}px currentColor`,
+                touchAction: 'none',
+                userSelect: 'none'
+            }}
         >
             <span
                 className={`absolute inset-y-0 left-0 transition-[width] duration-75 ${fillClassName}`}
