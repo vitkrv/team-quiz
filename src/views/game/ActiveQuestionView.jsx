@@ -583,7 +583,7 @@ export default function ActiveQuestionView({ room, roomRef, user, isHost }) {
                     {hasQuestionText && (
                         <div className={questionContainerClassName}>
                             <h2
-                                className="break-words text-xl font-black leading-tight text-white drop-shadow-lg md:text-4xl"
+                                className="whitespace-pre-line break-words text-xl font-black leading-tight text-white drop-shadow-lg md:text-4xl"
                                 style={{
                                     textShadow: '2px 2px 4px rgba(0,0,0,0.5)'
                                 }}

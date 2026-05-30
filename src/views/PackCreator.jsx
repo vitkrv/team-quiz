@@ -51,6 +51,8 @@ const cleanMediaForSave = (media) => {
     return savedMedia;
 };
 
+const normalizeQuestionText = (text = '') => text.replace(/\r\n?/g, '\n');
+
 const stripPendingCategories = (categories) => categories.map((category) => ({
     ...category,
     questions: category.questions.map((question) => {
@@ -60,7 +62,7 @@ const stripPendingCategories = (categories) => categories.map((category) => ({
         const nextQuestion = {
             id: question.id,
             points: isSurpriseQuestion ? surpriseMaxPoints : normalizePoints(question.points),
-            text: question.text,
+            text: normalizeQuestionText(question.text),
             answer: question.answer
         };
 
