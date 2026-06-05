@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { addDoc, collection, doc, setDoc, updateDoc } from 'firebase/firestore';
-import { ArrowLeft, Check, ChevronDown, ChevronRight, Eye, PartyPopper, Plus, Trash2, X } from 'lucide-react';
+import { ArrowDown, ArrowLeft, ArrowUp, Check, ChevronDown, ChevronRight, Eye, PartyPopper, Plus, Trash2, X } from 'lucide-react';
 import PackMediaAttachment from '../components/PackMediaAttachment';
 import HoldToConfirmButton from '../components/HoldToConfirmButton';
 import { appId, db } from '../firebase';
@@ -41,6 +41,21 @@ const createDefaultCategories = (t) => [
             createEmptyQuestion(200)
         ]}
 ];
+
+const reorderItem = (items, fromIndex, toIndex) => {
+    if (fromIndex < 0 || toIndex < 0 || fromIndex >= items.length || toIndex >= items.length) {
+        return items;
+    }
+
+    const nextItems = [...items];
+    const [movedItem] = nextItems.splice(fromIndex, 1);
+    nextItems.splice(toIndex, 0, movedItem);
+    return nextItems;
+};
+
+const preventTextSelection = (event) => {
+    event.preventDefault();
+};
 
 const cleanMediaForSave = (media) => {
     if (!media) return null;
@@ -328,6 +343,14 @@ export default function PackCreator({ pack, setView, user, setError, onSaved }) 
         setCategories(categories.map(c => c.id === catId ? { ...c, name } : c));
     };
 
+    const moveCategory = (catId, direction) => {
+        setCategories((currentCategories) => {
+            const currentIndex = currentCategories.findIndex((category) => category.id === catId);
+            const nextIndex = currentIndex + direction;
+            return reorderItem(currentCategories, currentIndex, nextIndex);
+        });
+    };
+
     const toggleCategoryCollapsed = (catId) => {
         setCollapsedCategoryIds((currentIds) => {
             const nextIds = new Set(currentIds);
@@ -373,6 +396,19 @@ export default function PackCreator({ pack, setView, user, setError, onSaved }) 
                 return { ...c, questions: [...c.questions, createEmptyQuestion(lastPoints + 100)] };
             }
             return c;
+        }));
+    };
+
+    const moveQuestion = (catId, qId, direction) => {
+        setCategories((currentCategories) => currentCategories.map((category) => {
+            if (category.id !== catId) return category;
+
+            const currentIndex = category.questions.findIndex((question) => question.id === qId);
+            const nextIndex = currentIndex + direction;
+            const nextQuestions = reorderItem(category.questions, currentIndex, nextIndex);
+            if (nextQuestions === category.questions) return category;
+
+            return { ...category, questions: nextQuestions };
         }));
     };
 
@@ -734,6 +770,31 @@ export default function PackCreator({ pack, setView, user, setError, onSaved }) 
                             <span aria-disabled="true" className="mt-5 inline-flex min-h-10 min-w-10 shrink-0 select-none items-center justify-center rounded-lg border border-slate-700/70 bg-slate-800/70 px-3 text-sm font-bold uppercase tracking-wide text-white shadow-sm shadow-black/20">
                                 {questionCount}
                             </span>
+                            <div
+                                onMouseDown={preventTextSelection}
+                                className="mt-5 flex shrink-0 select-none overflow-hidden rounded-lg border border-slate-700 bg-slate-900"
+                            >
+                                <button
+                                    type="button"
+                                    onClick={() => moveCategory(cat.id, -1)}
+                                    disabled={catIdx === 0}
+                                    aria-label={t('moveCategoryUp')}
+                                    title={t('moveCategoryUp')}
+                                    className="flex h-10 w-10 select-none items-center justify-center text-slate-300 transition-colors hover:bg-slate-800 hover:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:cursor-not-allowed disabled:text-slate-700 disabled:hover:bg-transparent"
+                                >
+                                    <ArrowUp size={18} />
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => moveCategory(cat.id, 1)}
+                                    disabled={catIdx === categories.length - 1}
+                                    aria-label={t('moveCategoryDown')}
+                                    title={t('moveCategoryDown')}
+                                    className="flex h-10 w-10 select-none items-center justify-center border-l border-slate-700 text-slate-300 transition-colors hover:bg-slate-800 hover:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:cursor-not-allowed disabled:text-slate-700 disabled:hover:bg-transparent"
+                                >
+                                    <ArrowDown size={18} />
+                                </button>
+                            </div>
                             <div className="flex-1">
                                 <label className="block text-xs font-medium text-slate-500 mb-1">{t('categoryNumber', { number: catIdx + 1 })}</label>
                                 <input
@@ -753,8 +814,33 @@ export default function PackCreator({ pack, setView, user, setError, onSaved }) 
 
                         {!isCategoryCollapsed && (
                         <div className="space-y-4 pl-4 border-l-2 border-slate-700">
-                            {cat.questions.map((q) => (
+                            {cat.questions.map((q, questionIdx) => (
                                 <div key={q.id} className={`flex gap-4 rounded-lg border p-4 ${q.isSurpriseQuestion ? 'border-yellow-400 bg-yellow-950/20' : 'border-transparent bg-slate-900'}`}>
+                                    <div
+                                        onMouseDown={preventTextSelection}
+                                        className="flex shrink-0 select-none flex-col overflow-hidden rounded-lg border border-slate-700 bg-slate-950 self-start"
+                                    >
+                                        <button
+                                            type="button"
+                                            onClick={() => moveQuestion(cat.id, q.id, -1)}
+                                            disabled={questionIdx === 0}
+                                            aria-label={t('moveQuestionUp')}
+                                            title={t('moveQuestionUp')}
+                                            className="flex h-9 w-9 select-none items-center justify-center text-slate-300 transition-colors hover:bg-slate-800 hover:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:cursor-not-allowed disabled:text-slate-700 disabled:hover:bg-transparent"
+                                        >
+                                            <ArrowUp size={16} />
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={() => moveQuestion(cat.id, q.id, 1)}
+                                            disabled={questionIdx === cat.questions.length - 1}
+                                            aria-label={t('moveQuestionDown')}
+                                            title={t('moveQuestionDown')}
+                                            className="flex h-9 w-9 select-none items-center justify-center border-t border-slate-700 text-slate-300 transition-colors hover:bg-slate-800 hover:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:cursor-not-allowed disabled:text-slate-700 disabled:hover:bg-transparent"
+                                        >
+                                            <ArrowDown size={16} />
+                                        </button>
+                                    </div>
                                     <div className="w-32 shrink-0 space-y-3">
                                         <label className="flex items-center gap-2 text-xs font-bold text-yellow-300">
                                             <input
