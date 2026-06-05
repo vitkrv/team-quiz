@@ -1,7 +1,18 @@
 import { useState } from 'react';
 import { X } from 'lucide-react';
-import { createHistoryItem, handleEndGame, handlePickQuestion } from '../../actions/gameActions';
+import {
+    advanceTieBreakerMatch,
+    createHistoryItem,
+    grantTieBreakerBye,
+    handleEndGame,
+    handlePickQuestion,
+    initializeTieBreaker,
+    resolveTieBreakerThrow,
+    selectTieBreakerPair,
+    submitTieBreakerChoice
+} from '../../actions/gameActions';
 import HoldToConfirmButton from '../../components/HoldToConfirmButton';
+import RockPaperScissorsManager from '../../components/RockPaperScissorsManager';
 import { useLanguage } from '../../useLanguage';
 
 const getBoardPoints = (question) => (
@@ -9,6 +20,18 @@ const getBoardPoints = (question) => (
         ? (question.surpriseDisplayPoints ?? question.points)
         : question.points
 );
+
+const getTopTiedPlayerIds = (players) => {
+    const playerEntries = Object.entries(players).filter(([, player]) => !player.isHost);
+    if (playerEntries.length < 2) return [];
+
+    const topScore = Math.max(...playerEntries.map(([, player]) => Number(player.score) || 0));
+    const topPlayerIds = playerEntries
+        .filter(([, player]) => (Number(player.score) || 0) === topScore)
+        .map(([playerId]) => playerId);
+
+    return topPlayerIds.length > 1 ? topPlayerIds : [];
+};
 
 function SurprisePlayerModal({ players, question, onPick, onClose, t }) {
     const playerEntries = Object.entries(players).filter(([, player]) => !player.isHost);
@@ -45,6 +68,7 @@ function SurprisePlayerModal({ players, question, onPick, onClose, t }) {
 export default function BoardView({ room, roomRef, user, isHost }) {
     const { t } = useLanguage();
     const [pendingSurpriseQuestion, setPendingSurpriseQuestion] = useState(null);
+    const [isTieBreakerSetupOpen, setIsTieBreakerSetupOpen] = useState(false);
     const isMyTurn = room.currentTurn === user.uid;
     const categories = room.pack.categories;
     const maxQuestionCount = Math.max(0, ...categories.map((cat) => cat.questions?.length || 0));
@@ -52,6 +76,9 @@ export default function BoardView({ room, roomRef, user, isHost }) {
 
     // Check if all questions are done
     const allDone = Object.values(room.questionStates).every(state => state === 'done');
+    const topTiedPlayerIds = getTopTiedPlayerIds(room.players);
+    const hasTopScoreTie = topTiedPlayerIds.length > 1;
+    const shouldShowTieBreaker = Boolean(room.tieBreaker?.status) || isTieBreakerSetupOpen;
     const handleHostEndGame = () => handleEndGame(roomRef, createHistoryItem({
         type: 'game_finished',
         actorId: user.uid,
@@ -59,6 +86,26 @@ export default function BoardView({ room, roomRef, user, isHost }) {
         message: t('historyGameEnded', { actorName }),
         details: { actorName }
     }));
+    const handleFinishTieBreakerGame = () => handleEndGame(roomRef, createHistoryItem({
+        type: 'game_finished',
+        actorId: user.uid,
+        actorName,
+        message: t('historyGameEnded', { actorName }),
+        details: {
+            actorName,
+            tieBreakerChampionName: room.players[room.tieBreaker?.championId]?.name || t('playerFallback')
+        }
+    }));
+    const handleStartTieBreaker = async (mode) => {
+        await initializeTieBreaker(roomRef, topTiedPlayerIds, mode, createHistoryItem({
+            type: 'tie_breaker_started',
+            actorId: user.uid,
+            actorName,
+            message: t('historyTieBreakerStarted', { actorName }),
+            details: { actorName, mode }
+        }));
+        setIsTieBreakerSetupOpen(false);
+    };
     const createQuestionPickedHistory = (cat, q, pickerName) => createHistoryItem({
         type: 'question_picked',
         actorId: user.uid,
@@ -94,6 +141,24 @@ export default function BoardView({ room, roomRef, user, isHost }) {
 
     return (
         <div className="flex h-full min-h-0 flex-1 flex-col">
+            {shouldShowTieBreaker && (
+                <RockPaperScissorsManager
+                    players={room.players}
+                    participantIds={topTiedPlayerIds}
+                    tieBreaker={room.tieBreaker || null}
+                    userId={user.uid}
+                    isHost={isHost}
+                    onClose={() => setIsTieBreakerSetupOpen(false)}
+                    onStart={handleStartTieBreaker}
+                    onSelectPair={(playerAId, playerBId) => selectTieBreakerPair(roomRef, room.tieBreaker, playerAId, playerBId)}
+                    onGrantBye={(playerId) => grantTieBreakerBye(roomRef, room.tieBreaker, playerId)}
+                    onSubmitChoice={(choice) => submitTieBreakerChoice(roomRef, room.tieBreaker, user.uid, choice)}
+                    onResolveThrow={() => resolveTieBreakerThrow(roomRef, room.tieBreaker)}
+                    onAdvanceMatch={() => advanceTieBreakerMatch(roomRef, room.tieBreaker)}
+                    onFinish={handleFinishTieBreakerGame}
+                    t={t}
+                />
+            )}
             {pendingSurpriseQuestion && (
                 <SurprisePlayerModal
                     players={room.players}
@@ -126,10 +191,10 @@ export default function BoardView({ room, roomRef, user, isHost }) {
                     </h2>
                     {isHost && (
                         <button
-                            onClick={handleHostEndGame}
+                            onClick={hasTopScoreTie ? () => setIsTieBreakerSetupOpen(true) : handleHostEndGame}
                             className="rounded-xl bg-purple-600 px-6 py-3 text-lg font-black text-white shadow-lg shadow-purple-600/30 transition-transform hover:scale-105 hover:bg-purple-500 md:px-8 md:py-4 md:text-2xl"
                         >
-                            {t('showFinalResults')}
+                            {hasTopScoreTie ? t('determineWinner') : t('showFinalResults')}
                         </button>
                     )}
                 </div>
