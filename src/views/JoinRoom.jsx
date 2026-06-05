@@ -1,6 +1,7 @@
-import { useState } from 'react';
-import { doc, runTransaction } from 'firebase/firestore';
+import { useEffect, useState } from 'react';
+import { doc, getDoc, runTransaction } from 'firebase/firestore';
 import { ArrowLeft } from 'lucide-react';
+import PackTitle from '../components/PackTitle';
 import { ANIMAL_AVATARS, HOST_AVATAR } from '../constants';
 import { appId, db } from '../firebase';
 import { useLanguage } from '../useLanguage';
@@ -10,6 +11,41 @@ export default function JoinRoom({ initialCode = '', setView, user, setCurrentRo
     const [code, setCode] = useState(initialCode);
     const [playerName, setPlayerName] = useState(() => (user.displayName || user.email?.split('@')[0] || '').substring(0, 18));
     const [isJoining, setIsJoining] = useState(false);
+    const [roomPreview, setRoomPreview] = useState({ loading: false, pack: null });
+
+    useEffect(() => {
+        const normalizedCode = code.trim().toUpperCase();
+        if (normalizedCode.length !== 6) {
+            setRoomPreview({ loading: false, pack: null });
+            return undefined;
+        }
+
+        let isCancelled = false;
+        setRoomPreview({ loading: true, pack: null });
+
+        const timeoutId = window.setTimeout(async () => {
+            try {
+                const roomRef = doc(db, 'artifacts', appId, 'public', 'data', 'rooms', normalizedCode);
+                const roomSnap = await getDoc(roomRef);
+                if (isCancelled) return;
+
+                setRoomPreview({
+                    loading: false,
+                    pack: roomSnap.exists() ? roomSnap.data().pack || null : null
+                });
+            } catch (err) {
+                console.error("Room preview error:", err);
+                if (!isCancelled) {
+                    setRoomPreview({ loading: false, pack: null });
+                }
+            }
+        }, 250);
+
+        return () => {
+            isCancelled = true;
+            window.clearTimeout(timeoutId);
+        };
+    }, [code]);
 
     const handleJoin = async (e) => {
         e.preventDefault();
@@ -103,6 +139,20 @@ export default function JoinRoom({ initialCode = '', setView, user, setCurrentRo
                                 maxLength={6}
                                 className="w-full bg-slate-900 border border-slate-600 rounded-lg p-4 text-center text-2xl font-mono tracking-widest text-white outline-none focus:border-blue-500"
                             />
+                            {(roomPreview.loading || roomPreview.pack) && (
+                                <div className="mt-3 rounded-lg border border-slate-700 bg-slate-900/70 p-3">
+                                    <div className="mb-1 text-xs font-black uppercase tracking-widest text-slate-500">
+                                        {t('pickedQuestionPack')}
+                                    </div>
+                                    {roomPreview.loading ? (
+                                        <div className="text-sm font-medium text-slate-400">{t('loadingQuestionPack')}</div>
+                                    ) : (
+                                        <div className="text-base font-bold text-blue-300">
+                                            <PackTitle pack={roomPreview.pack} iconClassName="text-lg" />
+                                        </div>
+                                    )}
+                                </div>
+                            )}
                         </div>
                         <div>
                             <label className="block text-xs font-medium text-slate-400 mb-1">{t('yourName')}</label>
