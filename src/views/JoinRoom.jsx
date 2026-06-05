@@ -1,7 +1,7 @@
 import { useState } from 'react';
-import { doc, getDoc, updateDoc } from 'firebase/firestore';
+import { doc, runTransaction } from 'firebase/firestore';
 import { ArrowLeft } from 'lucide-react';
-import { ANIMAL_AVATARS } from '../constants';
+import { ANIMAL_AVATARS, HOST_AVATAR } from '../constants';
 import { appId, db } from '../firebase';
 import { useLanguage } from '../useLanguage';
 
@@ -17,41 +17,63 @@ export default function JoinRoom({ initialCode = '', setView, user, setCurrentRo
         setIsJoining(true);
 
         try {
-            const roomRef = doc(db, 'artifacts', appId, 'public', 'data', 'rooms', code.trim().toUpperCase());
-            const roomSnap = await getDoc(roomRef);
+            const normalizedCode = code.trim().toUpperCase();
+            const roomRef = doc(db, 'artifacts', appId, 'public', 'data', 'rooms', normalizedCode);
 
-            if (!roomSnap.exists()) {
-                setError(t('roomNotFound'));
-                setIsJoining(false);
-                return;
-            }
+            const joinResult = await runTransaction(db, async (transaction) => {
+                const roomSnap = await transaction.get(roomRef);
 
-            const rData = roomSnap.data();
-            if (rData.status !== 'lobby') {
-                setError(t('gameAlreadyStarted'));
-                setIsJoining(false);
-                return;
-            }
+                if (!roomSnap.exists()) {
+                    return { error: t('roomNotFound') };
+                }
 
-            const playerCount = Object.keys(rData.players).length;
-            if (playerCount >= 21) { // 20 players + 1 host
-                setError(t('roomFull'));
-                setIsJoining(false);
-                return;
-            }
+                const roomData = roomSnap.data();
+                if (roomData.status !== 'lobby') {
+                    return { error: t('gameAlreadyStarted') };
+                }
 
-            const usedAvatars = Object.values(rData.players).map(p => p.avatar);
-            const availableAvatars = ANIMAL_AVATARS.filter(a => !usedAvatars.includes(a));
-            const playerAvatar = availableAvatars.length > 0
-                ? availableAvatars[Math.floor(Math.random() * availableAvatars.length)]
-                : ANIMAL_AVATARS[Math.floor(Math.random() * ANIMAL_AVATARS.length)];
+                const players = roomData.players || {};
+                const existingPlayer = players[user.uid];
+                const playerCount = Object.keys(players).length;
+                if (!existingPlayer && playerCount >= 21) { // 20 players + 1 host
+                    return { error: t('roomFull') };
+                }
 
-            // Add player to room
-            await updateDoc(roomRef, {
-                [`players.${user.uid}`]: { name: playerName.substring(0, 18), score: 0, isHost: false, avatar: playerAvatar }
+                const usedAvatars = new Set(Object.entries(players)
+                    .filter(([playerId, player]) => playerId !== user.uid && !player.isHost)
+                    .map(([, player]) => player.avatar)
+                    .filter(Boolean));
+                const availableAvatars = ANIMAL_AVATARS.filter((avatar) => !usedAvatars.has(avatar));
+                const canReuseExistingAvatar = existingPlayer?.avatar && ANIMAL_AVATARS.includes(existingPlayer.avatar);
+                if (!existingPlayer?.isHost && !canReuseExistingAvatar && availableAvatars.length === 0) {
+                    return { error: t('roomFull') };
+                }
+
+                const playerAvatar = existingPlayer?.isHost
+                    ? HOST_AVATAR
+                    : canReuseExistingAvatar
+                        ? existingPlayer.avatar
+                        : availableAvatars[Math.floor(Math.random() * availableAvatars.length)];
+
+                transaction.update(roomRef, {
+                    [`players.${user.uid}`]: {
+                        name: playerName.substring(0, 18),
+                        score: existingPlayer?.score || 0,
+                        isHost: existingPlayer?.isHost || false,
+                        avatar: playerAvatar
+                    }
+                });
+
+                return { ok: true };
             });
 
-            setCurrentRoomCode(code.trim().toUpperCase());
+            if (joinResult.error) {
+                setError(joinResult.error);
+                setIsJoining(false);
+                return;
+            }
+
+            setCurrentRoomCode(normalizedCode);
             onCodeConsumed?.();
             setView('room');
         } catch (err) {

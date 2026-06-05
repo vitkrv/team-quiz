@@ -1,7 +1,9 @@
 import { useEffect, useState } from 'react';
 import { arrayUnion, doc, updateDoc } from 'firebase/firestore';
 import { ArrowLeft, Check, Copy, Link, Play, PlusCircle, MinusCircle, Users, SlidersHorizontal, ScrollText, Trophy, X } from 'lucide-react';
+import { HOST_AVATAR } from '../../constants';
 import { appId, db } from '../../firebase';
+import PackTitle from '../../components/PackTitle';
 import { useLanguage } from '../../useLanguage';
 import { adjustScore, createHistoryItem } from '../../actions/gameActions';
 import ActiveQuestionView from './ActiveQuestionView';
@@ -14,6 +16,8 @@ const LATE_BUZZ_WINDOW_MS = 2000;
 const getPlayerEntries = (players) => Object.entries(players).filter(([, player]) => !player.isHost);
 
 const formatBuzzDelta = (deltaMs) => `+${(deltaMs / 1000).toFixed(2)}s`;
+
+const getPlayerAvatar = (player) => (player.isHost ? HOST_AVATAR : player.avatar);
 
 const getPlayerNameStyle = (name = '') => {
     const characterCount = Array.from(name).length;
@@ -492,7 +496,7 @@ export default function GameRoom({ room, roomCode, user, onLeaveRoom }) {
                     <div className="flex flex-wrap gap-3">
                         {Object.values(room.players).map((p, i) => (
                             <div key={i} className={`px-4 py-2 rounded-full border font-medium flex items-center gap-2 ${p.isHost ? 'bg-purple-900/50 border-purple-500/50 text-purple-200' : 'bg-slate-700 border-slate-600 text-white'}`}>
-                                <span className="text-xl">{p.avatar}</span> {p.name} {p.isHost && <span className="text-xs ml-1 opacity-70">({t('hostLabel')})</span>}
+                                <span className="text-xl">{getPlayerAvatar(p)}</span> {p.name} {p.isHost && <span className="text-xs ml-1 opacity-70">({t('hostLabel')})</span>}
                             </div>
                         ))}
                         {Object.keys(room.players).length === 1 && (
@@ -534,7 +538,9 @@ export default function GameRoom({ room, roomCode, user, onLeaveRoom }) {
                 <header className="z-10 flex flex-col gap-2 border-b border-slate-800 bg-slate-950 px-3 py-2 shadow-md md:flex-row md:items-center md:justify-between md:p-4">
                     <div className="flex w-full min-w-0 items-center gap-2 md:w-auto md:gap-4">
                         <button onClick={leaveRoom} className="shrink-0 text-slate-500 hover:text-slate-300"><ArrowLeft size={20}/></button>
-                        <h1 className="min-w-0 flex-1 truncate text-base font-bold text-blue-400 md:max-w-xs md:text-xl">{room.pack.name}</h1>
+                        <h1 className="min-w-0 flex-1 text-base font-bold text-blue-400 md:max-w-xs md:text-xl">
+                            <PackTitle pack={room.pack} />
+                        </h1>
                         <span className="hidden shrink-0 rounded-full bg-slate-800 px-3 py-1 font-mono text-xs text-slate-400 sm:inline-flex">{t('codeLabel', { roomCode })}</span>
                         <button
                             onClick={() => setIsLeaderboardOpen(true)}

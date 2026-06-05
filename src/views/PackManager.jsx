@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { collection, deleteDoc, doc, getDocs, query, where } from 'firebase/firestore';
 import { ArrowLeft, Edit3, Plus, Trash2 } from 'lucide-react';
+import PackTitle from '../components/PackTitle';
 import { appId, db } from '../firebase';
 import { deleteMedia } from '../services/imageStorage';
 import { useLanguage } from '../useLanguage';
@@ -89,7 +90,9 @@ export default function PackManager({ setView, user, setError, onCreatePack, onE
                 <div className="grid gap-4 md:grid-cols-2">
                     {packs.map((pack) => (
                         <div key={pack.id} className="bg-slate-800 border border-slate-600 p-5 rounded-xl flex flex-col">
-                            <h4 className="font-bold text-lg mb-1">{pack.name}</h4>
+                            <h4 className="mb-1 text-lg font-bold">
+                                <PackTitle pack={pack} iconClassName="text-xl" />
+                            </h4>
                             <p className="text-sm text-slate-400 mb-2">
                                 {t('packStats', {
                                     categories: pack.categories?.length || 0,

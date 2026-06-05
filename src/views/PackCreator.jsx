@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { addDoc, collection, doc, setDoc, updateDoc } from 'firebase/firestore';
 import { ArrowDown, ArrowLeft, ArrowUp, Check, ChevronDown, ChevronRight, Eye, PartyPopper, Plus, Trash2, X } from 'lucide-react';
+import EmojiPicker from '../components/EmojiPicker';
 import PackMediaAttachment from '../components/PackMediaAttachment';
 import HoldToConfirmButton from '../components/HoldToConfirmButton';
 import { appId, db } from '../firebase';
@@ -247,6 +248,7 @@ export default function PackCreator({ pack, setView, user, setError, onSaved }) 
     const isEditMode = Boolean(pack?.id);
     const [persistedPackId, setPersistedPackId] = useState(pack?.id || null);
     const [packName, setPackName] = useState(pack?.name || '');
+    const [packIconEmoji, setPackIconEmoji] = useState(pack?.iconEmoji || '');
     const [categories, setCategories] = useState(pack?.categories || createDefaultCategories(t));
     const [isSaving, setIsSaving] = useState(false);
     const [isPreviewOpen, setIsPreviewOpen] = useState(false);
@@ -283,6 +285,7 @@ export default function PackCreator({ pack, setView, user, setError, onSaved }) 
 
     const getPackData = (sourceCategories, timestamp = Date.now()) => ({
         name: packName.trim() || t('untitledPack'),
+        iconEmoji: packIconEmoji,
         ownerId: user.uid,
         ownerEmail: user.email || null,
         updatedAt: timestamp,
@@ -638,6 +641,7 @@ export default function PackCreator({ pack, setView, user, setError, onSaved }) 
 
             const packData = {
                 name: packName,
+                iconEmoji: packIconEmoji,
                 ownerId: user.uid,
                 ownerEmail: user.email || null,
                 updatedAt: Date.now(),
@@ -688,14 +692,28 @@ export default function PackCreator({ pack, setView, user, setError, onSaved }) 
             </div>
 
             <div className="bg-slate-800 p-6 rounded-xl border border-slate-700 mb-8">
-                <label className="block text-sm font-medium text-slate-400 mb-2">{t('packName')}</label>
-                <input
-                    type="text"
-                    value={packName}
-                    onChange={(e) => setPackName(e.target.value)}
-                    placeholder={t('packNamePlaceholder')}
-                    className="w-full bg-slate-900 border border-slate-600 rounded-lg p-3 text-white focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none"
-                />
+                <div className="grid gap-4 sm:grid-cols-[auto,minmax(0,1fr)]">
+                    <EmojiPicker
+                        value={packIconEmoji}
+                        onChange={setPackIconEmoji}
+                        onClear={() => setPackIconEmoji('')}
+                        disabled={isSaving || hasActiveMediaAction}
+                        label={t('packIcon')}
+                        searchPlaceholder={t('emojiSearchPlaceholder')}
+                        clearLabel={t('clearPackIcon')}
+                        noResultsLabel={t('emojiNoResults')}
+                    />
+                    <label className="block min-w-0">
+                        <span className="mb-2 block text-sm font-medium text-slate-400">{t('packName')}</span>
+                        <input
+                            type="text"
+                            value={packName}
+                            onChange={(e) => setPackName(e.target.value)}
+                            placeholder={t('packNamePlaceholder')}
+                            className="w-full bg-slate-900 border border-slate-600 rounded-lg p-3 text-white focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none"
+                        />
+                    </label>
+                </div>
             </div>
 
             <div className="mb-8 rounded-xl border border-slate-700 bg-slate-800/50 p-5">

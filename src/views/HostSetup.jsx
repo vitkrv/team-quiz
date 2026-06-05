@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
 import { collection, doc, getDocs, setDoc } from 'firebase/firestore';
 import { ArrowLeft, Play } from 'lucide-react';
-import { ANIMAL_AVATARS } from '../constants';
+import { HOST_AVATAR } from '../constants';
+import PackTitle from '../components/PackTitle';
 import { appId, db } from '../firebase';
 import { useLanguage } from '../useLanguage';
 import { generateRoomCode } from '../utils/ids';
@@ -40,14 +41,12 @@ export default function HostSetup({ setView, user, setCurrentRoomCode, onCreateP
             });
         });
 
-        const hostAvatar = ANIMAL_AVATARS[Math.floor(Math.random() * ANIMAL_AVATARS.length)];
-
         const roomData = {
             hostId: user.uid,
             status: 'lobby',
             pack: pack,
             players: {
-                [user.uid]: { name: hostName, score: 0, isHost: true, avatar: hostAvatar }
+                [user.uid]: { name: hostName, score: 0, isHost: true, avatar: HOST_AVATAR }
             },
             questionStates: qStates,
             currentTurn: null,
@@ -119,7 +118,9 @@ export default function HostSetup({ setView, user, setCurrentRoomCode, onCreateP
                 <div className="grid gap-4 md:grid-cols-2">
                     {packs.map(pack => (
                         <div key={pack.id} className="bg-slate-800 border border-slate-600 p-5 rounded-xl hover:border-purple-500 transition-colors flex flex-col">
-                            <h4 className="font-bold text-lg mb-1">{pack.name}</h4>
+                            <h4 className="mb-1 text-lg font-bold">
+                                <PackTitle pack={pack} iconClassName="text-xl" />
+                            </h4>
                             <p className="text-sm text-slate-400 mb-2">
                                 {t('packStats', {
                                     categories: pack.categories?.length || 0,
