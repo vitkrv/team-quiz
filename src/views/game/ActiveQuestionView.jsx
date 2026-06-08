@@ -3,16 +3,18 @@ import { arrayUnion, increment, runTransaction, updateDoc } from 'firebase/fires
 import { Check, Play, RotateCw, X } from 'lucide-react';
 import { useLanguage } from '../../useLanguage';
 import { createHistoryItem } from '../../actions/gameActions';
+import FloatingEmojiBackground from '../../components/FloatingEmojiBackground';
 import HoldToConfirmButton from '../../components/HoldToConfirmButton';
 import QuestionMedia from '../../components/QuestionMedia';
 import { getMediaKind, MEDIA_KINDS, MEDIA_SLOTS } from '../../services/imageStorage';
+import { createFloatingBackgroundItems } from '../../utils/floatingBackground';
 
 const POINT_STEP = 100;
 const SURPRISE_DEFAULT_MIN_POINTS = 100;
 const SURPRISE_DEFAULT_MAX_POINTS = 500;
 const WHEEL_ANIMATION_MS = 6000;
 const LATE_BUZZ_WINDOW_MS = 2000;
-const SURPRISE_BACKGROUND_EMOJIS = ['🍿', '🎉', '🥳', '🎁', '🍾', '🎂', '✨', '🪄'];
+const SURPRISE_BACKGROUND_EMOJIS = ['\u{1F37F}', '\u{1F389}', '\u{1F973}', '\u{1F381}', '\u{1F37E}', '\u{1F382}', '\u{2728}', '\u{1FA84}'];
 const SURPRISE_BACKGROUND_EMOJI_COUNT = 80;
 
 const normalizePoints = (value, fallback = POINT_STEP) => {
@@ -76,38 +78,6 @@ const describeSlice = (center, radius, startAngle, endAngle) => {
     const largeArcFlag = endAngle - startAngle <= 180 ? 0 : 1;
     return `M ${center} ${center} L ${start.x} ${start.y} A ${radius} ${radius} 0 ${largeArcFlag} 1 ${end.x} ${end.y} Z`;
 };
-
-const createSurpriseBackgroundItems = (questionId) => Array.from({ length: SURPRISE_BACKGROUND_EMOJI_COUNT }, (_, index) => ({
-    id: `${questionId || 'question'}:${index}`,
-    emoji: SURPRISE_BACKGROUND_EMOJIS[Math.floor(Math.random() * SURPRISE_BACKGROUND_EMOJIS.length)],
-    left: Math.random() * 100,
-    top: Math.random() * 100,
-    rotation: (Math.random() * 80) - 40,
-    size: 1 + (Math.random() * 2),
-    opacity: 0.08 + (Math.random() * 0.14)
-}));
-
-function SurprisePartyBackground({ items }) {
-    return (
-        <div className="pointer-events-none absolute left-1/2 top-1/2 -z-10 h-screen w-screen -translate-x-1/2 -translate-y-1/2 overflow-hidden">
-            {items.map((item) => (
-                <span
-                    key={item.id}
-                    className="absolute select-none"
-                    style={{
-                        left: `${item.left}%`,
-                        top: `${item.top}%`,
-                        fontSize: `${item.size}rem`,
-                        opacity: item.opacity,
-                        transform: `translate(-50%, -50%) rotate(${item.rotation}deg)`
-                    }}
-                >
-                    {item.emoji}
-                </span>
-            ))}
-        </div>
-    );
-}
 
 function PointsWheel({ values, result, rolledAt, t }) {
     const [rotation, setRotation] = useState(0);
@@ -219,7 +189,18 @@ export default function ActiveQuestionView({ room, roomRef, user, isHost }) {
     const [timeLeft, setTimeLeft] = useState(10);
     const [buzzUnlockNow, setBuzzUnlockNow] = useState(() => Date.now());
     const [isRolling, setIsRolling] = useState(false);
-    const surpriseBackgroundItems = useMemo(() => createSurpriseBackgroundItems(room.activeQuestionId), [room.activeQuestionId]);
+    const surpriseBackgroundItems = useMemo(
+        () => createFloatingBackgroundItems({
+            seed: room.activeQuestionId || 'question',
+            count: SURPRISE_BACKGROUND_EMOJI_COUNT,
+            emojis: SURPRISE_BACKGROUND_EMOJIS,
+            sizeMin: 1,
+            sizeRange: 2,
+            opacityRange: 0.14,
+            rotationRange: 80
+        }),
+        [room.activeQuestionId]
+    );
     const buzzUnlockAt = Number(room.buzzUnlockAt) || 0;
 
     // Find the active question data
@@ -569,7 +550,12 @@ export default function ActiveQuestionView({ room, roomRef, user, isHost }) {
     return (
         <div className="relative z-10 mx-auto flex min-h-0 w-full max-w-4xl flex-1 flex-col items-center justify-start pb-4 text-center">
             <SpaceBuzzHandler enabled={canIBuzz} onBuzz={handleBuzzIn} />
-            {isSurpriseQuestion && <SurprisePartyBackground items={surpriseBackgroundItems} />}
+            {isSurpriseQuestion && (
+                <FloatingEmojiBackground
+                    items={surpriseBackgroundItems}
+                    className="left-1/2 top-1/2 -z-10 h-screen w-screen -translate-x-1/2 -translate-y-1/2"
+                />
+            )}
 
             {shouldShowQuestionContext && (
                 <div className="absolute top-0 flex w-full justify-between gap-3 text-xs font-bold uppercase tracking-widest text-slate-400 md:text-sm">
