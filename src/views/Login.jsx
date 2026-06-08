@@ -1,11 +1,12 @@
 import { LogIn, X } from 'lucide-react';
+import LanguagePicker from '../components/LanguagePicker';
 import { useLanguage } from '../useLanguage';
 
 export default function Login({ error, pendingRoomCode, onDismissError, onSignIn }) {
     const { t } = useLanguage();
 
     return (
-        <div className="min-h-screen bg-slate-900 text-slate-100 flex items-center justify-center p-6">
+        <div className="relative min-h-screen bg-slate-900 text-slate-100 flex items-center justify-center p-6 pb-28">
             {error && (
                 <div className="fixed top-4 left-1/2 transform -translate-x-1/2 bg-red-500 text-white px-6 py-3 rounded-lg shadow-xl z-50 flex items-center gap-2">
                     <span>{error}</span>
@@ -29,6 +30,8 @@ export default function Login({ error, pendingRoomCode, onDismissError, onSignIn
                     <LogIn size={20} /> {t('signInWithGoogle')}
                 </button>
             </div>
+
+            <LanguagePicker className="absolute bottom-6 left-1/2 -translate-x-1/2" />
         </div>
     );
 }

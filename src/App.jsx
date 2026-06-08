@@ -45,6 +45,11 @@ const clearGameCodeFromUrl = () => {
     url.searchParams.delete('game');
     replaceUrl(url);
 };
+const saveUserLanguagePreference = (userId, language) => setDoc(
+    doc(db, 'artifacts', appId, 'users', userId),
+    { language, updatedAt: Date.now() },
+    { merge: true }
+);
 
 export default function App() {
     const [user, setUser] = useState(null);
@@ -108,11 +113,7 @@ export default function App() {
         if (!user) return;
 
         try {
-            await setDoc(
-                doc(db, 'artifacts', appId, 'users', user.uid),
-                { language: normalizedLanguage, updatedAt: Date.now() },
-                { merge: true }
-            );
+            await saveUserLanguagePreference(user.uid, normalizedLanguage);
         } catch (err) {
             console.error("Language preference save error:", err);
             setError(translate(normalizedLanguage, 'languageSaveFailed'));
@@ -124,7 +125,14 @@ export default function App() {
             setError('');
             const provider = new GoogleAuthProvider();
             provider.setCustomParameters({ prompt: 'select_account' });
-            await signInWithPopup(auth, provider);
+            const loginLanguage = normalizeLanguage(localStorage.getItem(LANGUAGE_CACHE_KEY) || language);
+            const credential = await signInWithPopup(auth, provider);
+            try {
+                await saveUserLanguagePreference(credential.user.uid, loginLanguage);
+            } catch (err) {
+                console.error("Language preference save error:", err);
+                setError(translate(loginLanguage, 'languageSaveFailed'));
+            }
         } catch (err) {
             console.error("Auth Error:", err);
             setError(getAuthErrorMessage(err, language));
