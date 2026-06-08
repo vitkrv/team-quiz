@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
-import { collection, doc, getDocs, setDoc } from 'firebase/firestore';
-import { ArrowLeft, Play } from 'lucide-react';
+import { collection, doc, getDocs, query, setDoc, where } from 'firebase/firestore';
+import { ArrowLeft, ChevronDown, ChevronRight, Play } from 'lucide-react';
 import { HOST_AVATAR } from '../constants';
 import PackTitle from '../components/PackTitle';
 import { appId, db } from '../firebase';
@@ -8,27 +8,133 @@ import { useLanguage } from '../useLanguage';
 import { generateRoomCode } from '../utils/ids';
 import { createHistoryItem } from '../actions/gameActions';
 
+const sortPacksByUpdatedAt = (packs) => packs.sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
+
+function PackCard({ pack, onStartRoom, t }) {
+    return (
+        <div className="flex flex-col rounded-xl border border-slate-600 bg-slate-800 p-5 transition-colors hover:border-purple-500">
+            <h4 className="mb-1 text-lg font-bold">
+                <PackTitle pack={pack} iconClassName="text-xl" />
+            </h4>
+            <p className="mb-2 text-sm text-slate-400">
+                {t('packStats', {
+                    categories: pack.categories?.length || 0,
+                    questions: pack.categories?.reduce((acc, c) => acc + (c.questions?.length || 0), 0)
+                })}
+            </p>
+            <p className="mb-4 text-xs text-slate-500">
+                {t('byAuthor', { author: pack.ownerEmail || t('unknownAuthor') })}
+            </p>
+            <button
+                onClick={() => onStartRoom(pack)}
+                className="mt-auto flex w-full items-center justify-center gap-2 rounded-lg bg-purple-600 py-2 font-bold hover:bg-purple-500"
+            >
+                <Play size={18} /> {t('startRoom')}
+            </button>
+        </div>
+    );
+}
+
+function PackSection({ id, title, packs, isCollapsed, emptyMessage, onToggle, onStartRoom, onCreatePack, t }) {
+    const toggleLabel = isCollapsed ? t('expandPackSection', { section: title }) : t('collapsePackSection', { section: title });
+
+    return (
+        <section className="rounded-xl border border-slate-700 bg-slate-800/40">
+            <button
+                type="button"
+                onClick={() => onToggle(id)}
+                aria-expanded={!isCollapsed}
+                aria-label={toggleLabel}
+                title={toggleLabel}
+                className="flex w-full items-center gap-3 p-5 text-left transition-colors hover:bg-slate-800/70"
+            >
+                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-slate-700 bg-slate-900 text-slate-300">
+                    {isCollapsed ? <ChevronRight size={20} /> : <ChevronDown size={20} />}
+                </span>
+                <span className="min-w-0 flex-1 text-lg font-black text-white">{title}</span>
+                <span className="rounded-full border border-slate-700 bg-slate-900 px-3 py-1 text-sm font-bold text-slate-300">
+                    {packs.length}
+                </span>
+            </button>
+
+            {!isCollapsed && (
+                <div className="border-t border-slate-700 p-5">
+                    {packs.length === 0 ? (
+                        <div className="rounded-xl border-2 border-dashed border-slate-700 p-8 text-center">
+                            <p className="mb-4 text-slate-400">{emptyMessage}</p>
+                            {onCreatePack && (
+                                <button
+                                    onClick={onCreatePack}
+                                    className="rounded-lg bg-blue-600 px-6 py-2 font-bold text-white hover:bg-blue-500"
+                                >
+                                    {t('createOneNow')}
+                                </button>
+                            )}
+                        </div>
+                    ) : (
+                        <div className="grid gap-4 md:grid-cols-2">
+                            {packs.map((pack) => (
+                                <PackCard key={pack.id} pack={pack} onStartRoom={onStartRoom} t={t} />
+                            ))}
+                        </div>
+                    )}
+                </div>
+            )}
+        </section>
+    );
+}
+
 export default function HostSetup({ setView, user, setCurrentRoomCode, onCreatePack }) {
     const { t } = useLanguage();
-    const [packs, setPacks] = useState([]);
+    const [ownedPacks, setOwnedPacks] = useState([]);
+    const [sharedPacks, setSharedPacks] = useState([]);
     const [loading, setLoading] = useState(true);
     const [hostName, setHostName] = useState(() => t('hostLabel'));
+    const [collapsedSections, setCollapsedSections] = useState({ owned: false, shared: false });
 
     useEffect(() => {
         const fetchPacks = async () => {
+            setLoading(true);
             try {
                 const packsRef = collection(db, 'artifacts', appId, 'public', 'data', 'packs');
-                const snapshot = await getDocs(packsRef);
-                const loadedPacks = [];
-                snapshot.forEach(doc => loadedPacks.push({ id: doc.id, ...doc.data() }));
-                setPacks(loadedPacks.sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0)));
+                const [ownedSnapshot, publicSnapshot] = await Promise.all([
+                    getDocs(query(packsRef, where('ownerId', '==', user.uid))),
+                    getDocs(query(packsRef, where('isPublic', '==', true)))
+                ]);
+
+                const nextOwnedPacks = [];
+                ownedSnapshot.forEach((packDoc) => nextOwnedPacks.push({ id: packDoc.id, ...packDoc.data() }));
+
+                const ownedPackIds = new Set(nextOwnedPacks.map((pack) => pack.id));
+                const nextSharedPacks = [];
+                publicSnapshot.forEach((packDoc) => {
+                    const pack = { id: packDoc.id, ...packDoc.data() };
+                    if (pack.ownerId !== user.uid && !ownedPackIds.has(pack.id)) {
+                        nextSharedPacks.push(pack);
+                    }
+                });
+
+                setOwnedPacks(sortPacksByUpdatedAt(nextOwnedPacks));
+                setSharedPacks(sortPacksByUpdatedAt(nextSharedPacks));
+                setCollapsedSections((currentSections) => ({
+                    ...currentSections,
+                    owned: nextOwnedPacks.length === 0
+                }));
             } catch (err) {
                 console.error("Error fetching packs", err);
+            } finally {
+                setLoading(false);
             }
-            setLoading(false);
         };
         fetchPacks();
-    }, [user]);
+    }, [user.uid]);
+
+    const toggleSection = (sectionId) => {
+        setCollapsedSections((currentSections) => ({
+            ...currentSections,
+            [sectionId]: !currentSections[sectionId]
+        }));
+    };
 
     const handleStartRoom = async (pack) => {
         const code = generateRoomCode();
@@ -43,6 +149,7 @@ export default function HostSetup({ setView, user, setCurrentRoomCode, onCreateP
 
         const roomData = {
             hostId: user.uid,
+            packId: pack.id,
             status: 'lobby',
             pack: pack,
             players: {
@@ -104,40 +211,29 @@ export default function HostSetup({ setView, user, setCurrentRoomCode, onCreateP
 
             {loading ? (
                 <div className="text-center p-8 text-slate-500 animate-pulse">{t('loadingPacks')}</div>
-            ) : packs.length === 0 ? (
-                <div className="text-center p-12 border-2 border-dashed border-slate-700 rounded-xl">
-                    <p className="text-slate-400 mb-4">{t('noPublicPacks')}</p>
-                    <button
-                        onClick={onCreatePack}
-                        className="bg-blue-600 hover:bg-blue-500 text-white px-6 py-2 rounded-lg font-bold"
-                    >
-                        {t('createOneNow')}
-                    </button>
-                </div>
             ) : (
-                <div className="grid gap-4 md:grid-cols-2">
-                    {packs.map(pack => (
-                        <div key={pack.id} className="bg-slate-800 border border-slate-600 p-5 rounded-xl hover:border-purple-500 transition-colors flex flex-col">
-                            <h4 className="mb-1 text-lg font-bold">
-                                <PackTitle pack={pack} iconClassName="text-xl" />
-                            </h4>
-                            <p className="text-sm text-slate-400 mb-2">
-                                {t('packStats', {
-                                    categories: pack.categories?.length || 0,
-                                    questions: pack.categories?.reduce((acc, c) => acc + (c.questions?.length || 0), 0)
-                                })}
-                            </p>
-                            <p className="text-xs text-slate-500 mb-4">
-                                {t('byAuthor', { author: pack.ownerEmail || t('unknownAuthor') })}
-                            </p>
-                            <button
-                                onClick={() => handleStartRoom(pack)}
-                                className="mt-auto bg-purple-600 hover:bg-purple-500 w-full py-2 rounded-lg font-bold flex items-center justify-center gap-2"
-                            >
-                                <Play size={18} /> {t('startRoom')}
-                            </button>
-                        </div>
-                    ))}
+                <div className="space-y-6">
+                    <PackSection
+                        id="owned"
+                        title={t('myQuestionPacks')}
+                        packs={ownedPacks}
+                        isCollapsed={collapsedSections.owned}
+                        emptyMessage={t('noOwnedPacksForHosting')}
+                        onToggle={toggleSection}
+                        onStartRoom={handleStartRoom}
+                        onCreatePack={onCreatePack}
+                        t={t}
+                    />
+                    <PackSection
+                        id="shared"
+                        title={t('sharedQuestionPacks')}
+                        packs={sharedPacks}
+                        isCollapsed={collapsedSections.shared}
+                        emptyMessage={t('noSharedPacks')}
+                        onToggle={toggleSection}
+                        onStartRoom={handleStartRoom}
+                        t={t}
+                    />
                 </div>
             )}
         </div>

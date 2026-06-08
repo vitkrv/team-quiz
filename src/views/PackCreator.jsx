@@ -249,6 +249,7 @@ export default function PackCreator({ pack, setView, user, setError, onSaved }) 
     const [persistedPackId, setPersistedPackId] = useState(pack?.id || null);
     const [packName, setPackName] = useState(pack?.name || '');
     const [packIconEmoji, setPackIconEmoji] = useState(pack?.iconEmoji || '');
+    const [isPublic, setIsPublic] = useState(Boolean(pack?.isPublic));
     const [categories, setCategories] = useState(pack?.categories || createDefaultCategories(t));
     const [isSaving, setIsSaving] = useState(false);
     const [isPreviewOpen, setIsPreviewOpen] = useState(false);
@@ -642,6 +643,7 @@ export default function PackCreator({ pack, setView, user, setError, onSaved }) 
             const packData = {
                 name: packName,
                 iconEmoji: packIconEmoji,
+                isPublic,
                 ownerId: user.uid,
                 ownerEmail: user.email || null,
                 updatedAt: Date.now(),
@@ -748,21 +750,40 @@ export default function PackCreator({ pack, setView, user, setError, onSaved }) 
 
             <div className="mb-8 rounded-xl border border-slate-700 bg-slate-800/50 p-5">
                 <h3 className="mb-4 text-sm font-black uppercase tracking-widest text-slate-400">{t('additionalSettings')}</h3>
-                <div className="flex flex-wrap gap-3">
-                    <button
-                        type="button"
-                        onClick={() => setIsPreviewOpen(true)}
-                        className="inline-flex max-w-full flex-wrap items-center justify-center gap-2 rounded-lg border border-blue-500/40 bg-blue-600/20 px-4 py-3 text-left font-bold text-blue-100 transition-colors hover:border-blue-400 hover:bg-blue-600/30"
-                    >
-                        <Eye size={18} className="shrink-0" /> {t('showQuestionPackPreview')}
-                    </button>
-                    <button
-                        type="button"
-                        onClick={collapseAllCategories}
-                        className="inline-flex max-w-full flex-wrap items-center justify-center gap-2 rounded-lg border border-slate-600 bg-slate-900 px-4 py-3 text-left font-bold text-slate-200 transition-colors hover:border-slate-500 hover:bg-slate-800"
-                    >
-                        <ChevronRight size={18} className="shrink-0" /> {t('collapseAllCategories')}
-                    </button>
+                <div className="flex flex-col gap-4">
+                    <label className="flex cursor-pointer flex-col gap-3 rounded-lg border border-slate-700 bg-slate-900 p-4 transition-colors hover:border-slate-600 sm:flex-row sm:items-center">
+                        <span className="min-w-0 flex-1">
+                            <span className="block font-bold text-white">{t('availableToEveryone')}</span>
+                            <span className="mt-1 block text-sm text-slate-400">{t('availableToEveryoneHelp')}</span>
+                        </span>
+                        <span className="relative inline-flex h-7 w-12 shrink-0 items-center">
+                            <input
+                                type="checkbox"
+                                checked={isPublic}
+                                onChange={(event) => setIsPublic(event.target.checked)}
+                                disabled={isSaving || hasActiveMediaAction}
+                                className="peer sr-only"
+                            />
+                            <span className="absolute inset-0 rounded-full bg-slate-700 transition-colors peer-checked:bg-green-600 peer-disabled:opacity-50" />
+                            <span className="absolute left-1 h-5 w-5 rounded-full bg-white transition-transform peer-checked:translate-x-5 peer-disabled:opacity-80" />
+                        </span>
+                    </label>
+                    <div className="flex flex-wrap gap-3">
+                        <button
+                            type="button"
+                            onClick={() => setIsPreviewOpen(true)}
+                            className="inline-flex max-w-full flex-wrap items-center justify-center gap-2 rounded-lg border border-blue-500/40 bg-blue-600/20 px-4 py-3 text-left font-bold text-blue-100 transition-colors hover:border-blue-400 hover:bg-blue-600/30"
+                        >
+                            <Eye size={18} className="shrink-0" /> {t('showQuestionPackPreview')}
+                        </button>
+                        <button
+                            type="button"
+                            onClick={collapseAllCategories}
+                            className="inline-flex max-w-full flex-wrap items-center justify-center gap-2 rounded-lg border border-slate-600 bg-slate-900 px-4 py-3 text-left font-bold text-slate-200 transition-colors hover:border-slate-500 hover:bg-slate-800"
+                        >
+                            <ChevronRight size={18} className="shrink-0" /> {t('collapseAllCategories')}
+                        </button>
+                    </div>
                 </div>
             </div>
 

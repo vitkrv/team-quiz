@@ -2,7 +2,7 @@
 
 Cortex Rush is a real-time multiplayer trivia game built with React, Tailwind CSS, lucide-react, and Firebase.
 
-Question packs are public so any signed-in user can host a room with them. Only the Google-authenticated author who created a pack can edit or delete it.
+Question packs are owner-only by default. Authors can mark a pack as available to everyone so any signed-in user can host a room with it. Only the Google-authenticated author who created a pack can edit or delete it.
 
 ## Setup
 

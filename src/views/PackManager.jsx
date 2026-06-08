@@ -100,7 +100,7 @@ export default function PackManager({ setView, user, setError, onCreatePack, onE
                                 })}
                             </p>
                             <p className="text-xs text-slate-500 mb-5">
-                                {t('publicPackOwnerOnly')}
+                                {pack.isPublic ? t('packAvailableToEveryoneStatus') : t('packPrivateStatus')}
                             </p>
                             <div className="mt-auto flex gap-2">
                                 <button
