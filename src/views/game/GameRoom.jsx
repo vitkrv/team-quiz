@@ -6,6 +6,7 @@ import { appId, db } from '../../firebase';
 import PackTitle from '../../components/PackTitle';
 import { useLanguage } from '../../useLanguage';
 import { adjustScore, createHistoryItem } from '../../actions/gameActions';
+import { hasDefinedFinalResults } from '../../utils/gameResults';
 import ActiveQuestionView from './ActiveQuestionView';
 import BoardView from './BoardView';
 import ResultsView from './ResultsView';
@@ -327,7 +328,7 @@ function MobileLeaderboardDrawer({ room, roomRef, isHost, now, createScoreAdjust
     );
 }
 
-export default function GameRoom({ room, roomCode, user, onLeaveRoom }) {
+export default function GameRoom({ room, roomCode, user, onLeaveRoom, showDefinedFinalResults = false }) {
     const { t } = useLanguage();
     const isHost = user.uid === room.hostId;
     const roomRef = doc(db, 'artifacts', appId, 'public', 'data', 'rooms', roomCode);
@@ -518,6 +519,10 @@ export default function GameRoom({ room, roomCode, user, onLeaveRoom }) {
         );
     }
 
+    if (room.status === 'finished' || (showDefinedFinalResults && hasDefinedFinalResults(room))) {
+        return <ResultsView room={room} leaveRoom={leaveRoom} />;
+    }
+
     if (room.status === 'playing') {
         return (
             <div className="min-h-screen flex flex-col bg-slate-900 overflow-hidden">
@@ -614,10 +619,6 @@ export default function GameRoom({ room, roomCode, user, onLeaveRoom }) {
                 </div>
             </div>
         );
-    }
-
-    if (room.status === 'finished') {
-        return <ResultsView room={room} leaveRoom={leaveRoom} />;
     }
 
     return null;

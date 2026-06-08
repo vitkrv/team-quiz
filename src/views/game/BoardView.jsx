@@ -14,24 +14,13 @@ import {
 import HoldToConfirmButton from '../../components/HoldToConfirmButton';
 import RockPaperScissorsManager from '../../components/RockPaperScissorsManager';
 import { useLanguage } from '../../useLanguage';
+import { areAllQuestionsDone, getTopTiedPlayerIds } from '../../utils/gameResults';
 
 const getBoardPoints = (question) => (
     question.isSurpriseQuestion
         ? (question.surpriseDisplayPoints ?? question.points)
         : question.points
 );
-
-const getTopTiedPlayerIds = (players) => {
-    const playerEntries = Object.entries(players).filter(([, player]) => !player.isHost);
-    if (playerEntries.length < 2) return [];
-
-    const topScore = Math.max(...playerEntries.map(([, player]) => Number(player.score) || 0));
-    const topPlayerIds = playerEntries
-        .filter(([, player]) => (Number(player.score) || 0) === topScore)
-        .map(([playerId]) => playerId);
-
-    return topPlayerIds.length > 1 ? topPlayerIds : [];
-};
 
 function SurprisePlayerModal({ players, question, onPick, onClose, t }) {
     const playerEntries = Object.entries(players).filter(([, player]) => !player.isHost);
@@ -75,7 +64,7 @@ export default function BoardView({ room, roomRef, user, isHost }) {
     const actorName = room.players[user.uid]?.name || user.displayName || t('playerFallback');
 
     // Check if all questions are done
-    const allDone = Object.values(room.questionStates).every(state => state === 'done');
+    const allDone = areAllQuestionsDone(room.questionStates);
     const topTiedPlayerIds = getTopTiedPlayerIds(room.players);
     const hasTopScoreTie = topTiedPlayerIds.length > 1;
     const shouldShowTieBreaker = Boolean(room.tieBreaker?.status) || isTieBreakerSetupOpen;

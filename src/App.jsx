@@ -8,6 +8,7 @@ import LanguageProvider from './LanguageProvider';
 import { clearImageKitAuthSession } from './services/imageStorage';
 import { normalizeLanguage, translate } from './i18n';
 import { getAuthErrorMessage } from './utils/errors';
+import { hasDefinedFinalResults } from './utils/gameResults';
 import Login from './views/Login';
 import MainMenu from './views/MainMenu';
 import PackCreator from './views/PackCreator';
@@ -58,6 +59,7 @@ export default function App() {
     const [view, setView] = useState('menu'); // menu, createPack, managePacks, hostSetup, joinRoom, room
     const [joinRoomCode, setJoinRoomCode] = useState(() => getRoomCodeFromUrl());
     const [gameRoomCode, setGameRoomCode] = useState(() => getGameCodeFromUrl());
+    const [linkedGameRoomCode, setLinkedGameRoomCode] = useState(() => getGameCodeFromUrl());
     const [latestActiveRoomCode, setLatestActiveRoomCode] = useState(() => localStorage.getItem(LAST_ROOM_CODE_KEY));
     const [currentRoomCode, setCurrentRoomCode] = useState(null);
     const [roomData, setRoomData] = useState(null);
@@ -149,6 +151,7 @@ export default function App() {
             setLatestActiveRoomCode(null);
             localStorage.removeItem(LAST_ROOM_CODE_KEY);
             clearGameCodeFromUrl();
+            setLinkedGameRoomCode('');
             setView('menu');
         } catch (err) {
             console.error("Sign out error:", err);
@@ -188,6 +191,7 @@ export default function App() {
     const handleLeaveGamePage = () => {
         handleSetCurrentRoomCode(null, { remember: false });
         setRoomData(null);
+        setLinkedGameRoomCode('');
         clearGameCodeFromUrl();
         setView('menu');
     };
@@ -201,6 +205,8 @@ export default function App() {
         if (!user || !gameRoomCode) return;
 
         handleSetCurrentRoomCode(gameRoomCode);
+        setLinkedGameRoomCode(gameRoomCode);
+        setRoomData(null);
         setView('room');
         setGameRoomCode('');
     }, [gameRoomCode, user]);
@@ -240,6 +246,7 @@ export default function App() {
                     setError(translate(language, 'notGameParticipant'));
                     handleSetCurrentRoomCode(null, { remember: false });
                     setRoomData(null);
+                    setLinkedGameRoomCode('');
                     localStorage.removeItem(LAST_ROOM_CODE_KEY);
                     setLatestActiveRoomCode(null);
                     clearGameCodeFromUrl();
@@ -249,7 +256,7 @@ export default function App() {
 
                 setRoomData(room);
 
-                if (room.status === 'finished') {
+                if (room.status === 'finished' || (linkedGameRoomCode === currentRoomCode && hasDefinedFinalResults(room))) {
                     localStorage.removeItem(LAST_ROOM_CODE_KEY);
                     setLatestActiveRoomCode(null);
                     clearGameCodeFromUrl();
@@ -264,6 +271,7 @@ export default function App() {
             } else {
                 setError(translate(language, 'roomClosed'));
                 handleSetCurrentRoomCode(null, { remember: false });
+                setLinkedGameRoomCode('');
                 localStorage.removeItem(LAST_ROOM_CODE_KEY);
                 setLatestActiveRoomCode(null);
                 setRoomData(null);
@@ -276,7 +284,7 @@ export default function App() {
         });
 
         return () => unsubscribe();
-    }, [user, currentRoomCode, language, view]);
+    }, [user, currentRoomCode, language, view, linkedGameRoomCode]);
 
     if (!hasFirebaseConfig) {
         return <FirebaseSetupMissing />;
@@ -375,6 +383,7 @@ export default function App() {
                     roomCode={currentRoomCode}
                     user={user}
                     onLeaveRoom={handleLeaveGamePage}
+                    showDefinedFinalResults={linkedGameRoomCode === currentRoomCode}
                 />
             )}
         </div>
