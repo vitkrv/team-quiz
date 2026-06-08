@@ -8,7 +8,7 @@ import { useLanguage } from '../useLanguage';
 
 export default function JoinRoom({ initialCode = '', setView, user, setCurrentRoomCode, setError, onCodeConsumed }) {
     const { t } = useLanguage();
-    const [code, setCode] = useState(initialCode);
+    const [code, setCode] = useState(() => initialCode.replace(/\D/g, '').slice(0, 6));
     const [playerName, setPlayerName] = useState(() => (user.displayName || user.email?.split('@')[0] || '').substring(0, 18));
     const [isJoining, setIsJoining] = useState(false);
     const [roomPreview, setRoomPreview] = useState({ loading: false, pack: null });
@@ -134,9 +134,12 @@ export default function JoinRoom({ initialCode = '', setView, user, setCurrentRo
                             <input
                                 type="text"
                                 value={code}
-                                onChange={(e) => setCode(e.target.value.toUpperCase())}
+                                onChange={(e) => setCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
                                 placeholder={t('codePlaceholder')}
                                 maxLength={6}
+                                inputMode="numeric"
+                                pattern="[0-9]*"
+                                autoComplete="one-time-code"
                                 className="w-full bg-slate-900 border border-slate-600 rounded-lg p-4 text-center text-2xl font-mono tracking-widest text-white outline-none focus:border-blue-500"
                             />
                             {(roomPreview.loading || roomPreview.pack) && (
