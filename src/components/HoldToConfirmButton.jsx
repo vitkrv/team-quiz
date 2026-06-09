@@ -9,10 +9,12 @@ const cornerClasses = [
 
 export default function HoldToConfirmButton({
     children,
+    ariaLabel,
     className,
     fillClassName = 'bg-red-600',
     durationMs = 3000,
-    onConfirm
+    onConfirm,
+    title
 }) {
     const [progress, setProgress] = useState(0);
     const [isHolding, setIsHolding] = useState(false);
@@ -98,6 +100,8 @@ export default function HoldToConfirmButton({
     return (
         <button
             type="button"
+            aria-label={ariaLabel}
+            title={title}
             onPointerDown={handlePointerDown}
             onPointerMove={handlePointerMove}
             onPointerUp={handlePointerEnd}

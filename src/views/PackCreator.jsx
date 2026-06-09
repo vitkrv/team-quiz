@@ -844,7 +844,9 @@ export default function PackCreator({ pack, setView, user, setError, onSaved }) 
                                 />
                             </div>
                             <HoldToConfirmButton
+                                ariaLabel={t('removeCategory')}
                                 onConfirm={() => removeCategory(cat.id)}
+                                title={t('holdToConfirmAction', { action: t('removeCategory') })}
                                 className="mt-5 rounded-lg p-2 text-red-400 transition-colors hover:bg-red-400/10 hover:text-white"
                             >
                                 <Trash2 size={20} />

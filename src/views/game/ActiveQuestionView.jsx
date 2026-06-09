@@ -700,6 +700,7 @@ export default function ActiveQuestionView({ room, roomRef, user, isHost, isSpec
                             onConfirm={handleSkip}
                             durationMs={2000}
                             fillClassName="bg-slate-700"
+                            title={t('holdToConfirmAction', { action: t('skipRevealAnswer') })}
                             className="mt-8 rounded-lg border border-slate-600 bg-transparent px-6 py-2 font-bold text-slate-400 transition-colors hover:text-white"
                         >
                             {t('skipRevealAnswer')}
@@ -780,6 +781,7 @@ export default function ActiveQuestionView({ room, roomRef, user, isHost, isSpec
                             onConfirm={handleSkip}
                             durationMs={2000}
                             fillClassName="bg-slate-700"
+                            title={t('holdToConfirmAction', { action: t('skipRevealAnswer') })}
                             className="mt-8 rounded-lg border border-slate-600 bg-transparent px-6 py-2 font-bold text-slate-400 transition-colors hover:text-white"
                         >
                             {t('skipRevealAnswer')}

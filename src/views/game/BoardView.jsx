@@ -166,6 +166,7 @@ export default function BoardView({ room, roomRef, user, isHost, isSpectator = f
                     {isHost && (
                         <HoldToConfirmButton
                             onConfirm={handleHostEndGame}
+                            title={t('holdToConfirmAction', { action: t('endGameEarly') })}
                             className="w-full rounded border border-red-500/30 bg-red-600/20 px-4 py-2 text-sm font-bold text-red-400 transition-colors hover:text-white sm:w-auto"
                         >
                             {t('endGameEarly')}
