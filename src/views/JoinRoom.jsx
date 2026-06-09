@@ -11,17 +11,17 @@ export default function JoinRoom({ initialCode = '', setView, user, setCurrentRo
     const [code, setCode] = useState(() => initialCode.replace(/\D/g, '').slice(0, 6));
     const [playerName, setPlayerName] = useState(() => (user.displayName || user.email?.split('@')[0] || '').substring(0, 18));
     const [isJoining, setIsJoining] = useState(false);
-    const [roomPreview, setRoomPreview] = useState({ loading: false, pack: null });
+    const [roomPreview, setRoomPreview] = useState({ loading: false, pack: null, status: null });
 
     useEffect(() => {
         const normalizedCode = code.trim().toUpperCase();
         if (normalizedCode.length !== 6) {
-            setRoomPreview({ loading: false, pack: null });
+            setRoomPreview({ loading: false, pack: null, status: null });
             return undefined;
         }
 
         let isCancelled = false;
-        setRoomPreview({ loading: true, pack: null });
+        setRoomPreview({ loading: true, pack: null, status: null });
 
         const timeoutId = window.setTimeout(async () => {
             try {
@@ -31,12 +31,13 @@ export default function JoinRoom({ initialCode = '', setView, user, setCurrentRo
 
                 setRoomPreview({
                     loading: false,
-                    pack: roomSnap.exists() ? roomSnap.data().pack || null : null
+                    pack: roomSnap.exists() ? roomSnap.data().pack || null : null,
+                    status: roomSnap.exists() ? roomSnap.data().status || null : null
                 });
             } catch (err) {
                 console.error("Room preview error:", err);
                 if (!isCancelled) {
-                    setRoomPreview({ loading: false, pack: null });
+                    setRoomPreview({ loading: false, pack: null, status: null });
                 }
             }
         }, 250);
@@ -49,7 +50,7 @@ export default function JoinRoom({ initialCode = '', setView, user, setCurrentRo
 
     const handleJoin = async (e) => {
         e.preventDefault();
-        if (!code.trim() || !playerName.trim()) return;
+        if (!code.trim()) return;
         setIsJoining(true);
 
         try {
@@ -65,7 +66,15 @@ export default function JoinRoom({ initialCode = '', setView, user, setCurrentRo
 
                 const roomData = roomSnap.data();
                 if (roomData.status !== 'lobby') {
-                    return { error: t('gameAlreadyStarted') };
+                    if (roomData.status === 'playing' || roomData.status === 'finished') {
+                        return { ok: true, spectating: true };
+                    }
+
+                    return { error: t('roomClosed') };
+                }
+
+                if (!playerName.trim()) {
+                    return { error: t('nicknameRequired') };
                 }
 
                 const players = roomData.players || {};
@@ -109,7 +118,7 @@ export default function JoinRoom({ initialCode = '', setView, user, setCurrentRo
                 return;
             }
 
-            setCurrentRoomCode(normalizedCode);
+            setCurrentRoomCode(normalizedCode, { remember: !joinResult.spectating });
             onCodeConsumed?.();
             setView('room');
         } catch (err) {
@@ -118,6 +127,9 @@ export default function JoinRoom({ initialCode = '', setView, user, setCurrentRo
         }
         setIsJoining(false);
     };
+
+    const isSpectatorPreview = roomPreview.status === 'playing' || roomPreview.status === 'finished';
+    const submitLabel = isSpectatorPreview ? t('watchGame') : t('enterRoom');
 
     return (
         <div className="flex flex-col items-center justify-center min-h-screen p-6">
@@ -170,10 +182,10 @@ export default function JoinRoom({ initialCode = '', setView, user, setCurrentRo
                         </div>
                         <button
                             type="submit"
-                            disabled={isJoining || !code || !playerName}
+                            disabled={isJoining || !code || (!isSpectatorPreview && !playerName)}
                             className="w-full bg-blue-600 hover:bg-blue-500 disabled:bg-slate-700 disabled:text-slate-500 text-white py-4 rounded-xl font-bold text-lg mt-4 transition-all"
                         >
-                            {isJoining ? t('joining') : t('enterRoom')}
+                            {isJoining ? t('joining') : submitLabel}
                         </button>
                     </form>
                 </div>

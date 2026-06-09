@@ -204,7 +204,7 @@ export default function App() {
     useEffect(() => {
         if (!user || !gameRoomCode) return;
 
-        handleSetCurrentRoomCode(gameRoomCode);
+        handleSetCurrentRoomCode(gameRoomCode, { remember: false });
         setLinkedGameRoomCode(gameRoomCode);
         setRoomData(null);
         setView('room');
@@ -242,7 +242,12 @@ export default function App() {
         const unsubscribe = onSnapshot(roomRef, (snapshot) => {
             if (snapshot.exists()) {
                 const room = snapshot.data();
-                if (!room.players?.[user.uid]) {
+                const isParticipant = Boolean(room.players?.[user.uid]);
+                const canSpectate = room.status === 'playing'
+                    || room.status === 'finished'
+                    || (linkedGameRoomCode === currentRoomCode && hasDefinedFinalResults(room));
+
+                if (!isParticipant && !canSpectate) {
                     setError(translate(language, 'notGameParticipant'));
                     handleSetCurrentRoomCode(null, { remember: false });
                     setRoomData(null);
@@ -259,12 +264,17 @@ export default function App() {
                 if (room.status === 'finished' || (linkedGameRoomCode === currentRoomCode && hasDefinedFinalResults(room))) {
                     localStorage.removeItem(LAST_ROOM_CODE_KEY);
                     setLatestActiveRoomCode(null);
-                    clearGameCodeFromUrl();
                     return;
                 }
 
-                localStorage.setItem(LAST_ROOM_CODE_KEY, currentRoomCode);
-                setLatestActiveRoomCode(currentRoomCode);
+                if (isParticipant) {
+                    localStorage.setItem(LAST_ROOM_CODE_KEY, currentRoomCode);
+                    setLatestActiveRoomCode(currentRoomCode);
+                } else {
+                    localStorage.removeItem(LAST_ROOM_CODE_KEY);
+                    setLatestActiveRoomCode(null);
+                }
+
                 if (view === 'room') {
                     setGameCodeInUrl(currentRoomCode);
                 }

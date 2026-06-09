@@ -331,6 +331,7 @@ function MobileLeaderboardDrawer({ room, roomRef, isHost, now, createScoreAdjust
 export default function GameRoom({ room, roomCode, user, onLeaveRoom, showDefinedFinalResults = false }) {
     const { t } = useLanguage();
     const isHost = user.uid === room.hostId;
+    const isSpectator = !isHost && !room.players?.[user.uid];
     const roomRef = doc(db, 'artifacts', appId, 'public', 'data', 'rooms', roomCode);
     const [now, setNow] = useState(() => Date.now());
     const [copiedRoomCode, setCopiedRoomCode] = useState(false);
@@ -555,6 +556,11 @@ export default function GameRoom({ room, roomCode, user, onLeaveRoom, showDefine
                             <PackTitle pack={room.pack} />
                         </h1>
                         <span className="hidden shrink-0 rounded-full bg-slate-800 px-3 py-1 font-mono text-xs text-slate-400 sm:inline-flex">{t('codeLabel', { roomCode })}</span>
+                        {isSpectator && (
+                            <span className="hidden shrink-0 rounded-full border border-cyan-500/40 bg-cyan-500/10 px-3 py-1 text-xs font-black uppercase tracking-widest text-cyan-200 sm:inline-flex">
+                                {t('spectatorMode')}
+                            </span>
+                        )}
                         <button
                             onClick={() => setIsLeaderboardOpen(true)}
                             className="inline-flex shrink-0 items-center justify-center rounded-lg border border-slate-700 p-2 text-slate-300 hover:bg-slate-800 md:hidden"
@@ -566,6 +572,11 @@ export default function GameRoom({ room, roomCode, user, onLeaveRoom, showDefine
                     </div>
                     <div className="flex w-full min-w-0 items-center justify-between gap-2 text-xs font-medium text-slate-300 md:w-auto md:justify-end md:text-sm">
                         <span className="shrink-0 rounded-full bg-slate-800 px-2 py-1 font-mono text-[11px] text-slate-400 sm:hidden">{t('codeLabel', { roomCode })}</span>
+                        {isSpectator && (
+                            <span className="shrink-0 rounded-full border border-cyan-500/40 bg-cyan-500/10 px-2 py-1 text-[11px] font-black uppercase tracking-widest text-cyan-200 sm:hidden">
+                                {t('spectatorMode')}
+                            </span>
+                        )}
                         {room.currentTurn && room.players[room.currentTurn] && (
                             <span className="min-w-0 flex-1 truncate text-right md:flex-none">
                                 {t('currentPick')} <span className="font-bold text-yellow-400">{room.players[room.currentTurn].name}</span>
@@ -611,9 +622,9 @@ export default function GameRoom({ room, roomCode, user, onLeaveRoom, showDefine
                     {/* Main Play Area */}
                     <main className="relative flex min-w-0 flex-1 flex-col overflow-x-hidden overflow-y-auto bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-blue-950 to-slate-900 p-3 md:overflow-hidden md:p-6">
                         {room.activeQuestionId ? (
-                            <ActiveQuestionView room={room} roomRef={roomRef} user={user} isHost={isHost} />
+                            <ActiveQuestionView room={room} roomRef={roomRef} user={user} isHost={isHost} isSpectator={isSpectator} />
                         ) : (
-                            <BoardView room={room} roomRef={roomRef} user={user} isHost={isHost} />
+                            <BoardView room={room} roomRef={roomRef} user={user} isHost={isHost} isSpectator={isSpectator} />
                         )}
                     </main>
                 </div>

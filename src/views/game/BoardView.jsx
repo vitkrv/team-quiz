@@ -54,7 +54,7 @@ function SurprisePlayerModal({ players, question, onPick, onClose, t }) {
     );
 }
 
-export default function BoardView({ room, roomRef, user, isHost }) {
+export default function BoardView({ room, roomRef, user, isHost, isSpectator = false }) {
     const { t } = useLanguage();
     const [pendingSurpriseQuestion, setPendingSurpriseQuestion] = useState(null);
     const [isTieBreakerSetupOpen, setIsTieBreakerSetupOpen] = useState(false);
@@ -137,6 +137,7 @@ export default function BoardView({ room, roomRef, user, isHost }) {
                     tieBreaker={room.tieBreaker || null}
                     userId={user.uid}
                     isHost={isHost}
+                    isSpectator={isSpectator}
                     onClose={() => setIsTieBreakerSetupOpen(false)}
                     onStart={handleStartTieBreaker}
                     onSelectPair={(playerAId, playerBId) => selectTieBreakerPair(roomRef, room.tieBreaker, playerAId, playerBId)}
@@ -160,7 +161,7 @@ export default function BoardView({ room, roomRef, user, isHost }) {
             {!allDone && (
                 <div className="mb-4 flex flex-col items-stretch gap-3 sm:flex-row sm:items-center sm:justify-between md:mb-6">
                     <h2 className="text-xl font-black leading-tight text-slate-300 md:text-2xl">
-                        {isHost ? t('hostAwaitingSelection') : isMyTurn ? t('yourTurnPickQuestion') : t('waitingForPick')}
+                        {isHost ? t('hostAwaitingSelection') : isSpectator ? t('spectatorWaitingForPick') : isMyTurn ? t('yourTurnPickQuestion') : t('waitingForPick')}
                     </h2>
                     {isHost && (
                         <HoldToConfirmButton
@@ -208,7 +209,7 @@ export default function BoardView({ room, roomRef, user, isHost }) {
                                     {(cat.questions || []).map((q) => {
                                         const state = room.questionStates[q.id];
                                         const isAvailable = state === 'available';
-                                        const canPick = isAvailable && (isMyTurn || isHost); // Host can force pick
+                                        const canPick = isAvailable && !isSpectator && (isMyTurn || isHost); // Host can force pick
 
                                         return (
                                             <button

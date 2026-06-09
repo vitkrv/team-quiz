@@ -184,7 +184,7 @@ function SpaceBuzzHandler({ enabled, onBuzz }) {
     return null;
 }
 
-export default function ActiveQuestionView({ room, roomRef, user, isHost }) {
+export default function ActiveQuestionView({ room, roomRef, user, isHost, isSpectator = false }) {
     const { t } = useLanguage();
     const [timeLeft, setTimeLeft] = useState(10);
     const [buzzUnlockNow, setBuzzUnlockNow] = useState(() => Date.now());
@@ -263,12 +263,13 @@ export default function ActiveQuestionView({ room, roomRef, user, isHost }) {
         && isSurpriseJudged
         && !isSurpriseRolled
         && !isRolling
+        && !isSpectator
         && (user.uid === surpriseAnswererId || isHost);
     const hasBuzzed = !!room.buzzedPlayerId;
     const amIIncorrect = (room.incorrectBuzzedIds || []).includes(user.uid);
     const isBuzzUnlocked = !buzzUnlockAt || buzzUnlockNow >= buzzUnlockAt;
-    const canIBuzz = !isSurpriseQuestion && !isHost && !hasBuzzed && !amIIncorrect && isBuzzUnlocked;
-    const shouldShowBuzzButton = !isHost && !amIIncorrect;
+    const canIBuzz = !isSurpriseQuestion && !isHost && !isSpectator && !hasBuzzed && !amIIncorrect && isBuzzUnlocked;
+    const shouldShowBuzzButton = !isHost && !isSpectator && !amIIncorrect;
     const didIBuzz = room.buzzedPlayerId === user.uid;
     const buzzedPlayer = room.buzzedPlayerId ? room.players[room.buzzedPlayerId] : null;
     const buzzedPlayerName = buzzedPlayer ? buzzedPlayer.name : '';
@@ -304,6 +305,7 @@ export default function ActiveQuestionView({ room, roomRef, user, isHost }) {
                 latestRoom.activeQuestionId !== activeQ.id
                 || latestRoom.answerRevealed
                 || (latestRoom.buzzUnlockAt && clickedAt < latestRoom.buzzUnlockAt)
+                || !latestRoom.players?.[user.uid]
                 || latestRoom.players?.[user.uid]?.isHost
                 || (latestRoom.incorrectBuzzedIds || []).includes(user.uid)
             ) {
@@ -677,13 +679,17 @@ export default function ActiveQuestionView({ room, roomRef, user, isHost }) {
                         </div>
                     )}
 
-                    {user.uid === surpriseAnswererId && !isHost && (
+                    {user.uid === surpriseAnswererId && !isHost && !isSpectator && (
                         <div className="mt-4 animate-pulse text-xl font-bold text-blue-400 md:text-2xl">
                             {t('speakAnswer')}
                         </div>
                     )}
 
-                    {user.uid !== surpriseAnswererId && !isHost && (
+                    {isSpectator ? (
+                        <div className="rounded-xl border-2 border-dashed border-slate-700 p-5 text-base font-bold text-slate-500 md:p-8 md:text-xl">
+                            {t('spectatorWatching')}
+                        </div>
+                    ) : user.uid !== surpriseAnswererId && !isHost && (
                         <div className="rounded-xl border-2 border-dashed border-slate-700 p-5 text-base font-bold text-slate-500 md:p-8 md:text-xl">
                             {t('surpriseOnlySelectedPlayer')}
                         </div>
@@ -732,7 +738,7 @@ export default function ActiveQuestionView({ room, roomRef, user, isHost }) {
                         </div>
                     )}
 
-                    {didIBuzz && !isHost && (
+                    {didIBuzz && !isHost && !isSpectator && (
                         <div className="mt-4 animate-pulse text-xl font-bold text-blue-400 md:text-2xl">
                             {t('speakAnswer')}
                         </div>
@@ -745,6 +751,10 @@ export default function ActiveQuestionView({ room, roomRef, user, isHost }) {
                 <div className="mt-4 flex w-full max-w-md shrink-0 flex-col items-center md:mt-6">
                     {isHost ? (
                         <div className="mb-4 text-slate-400 md:mb-6">{t('waitingForBuzz')}</div>
+                    ) : isSpectator ? (
+                        <div className="w-full rounded-xl border-2 border-dashed border-slate-700 p-5 text-lg font-bold text-slate-500 md:p-8 md:text-xl">
+                            {t('spectatorWatching')}
+                        </div>
                     ) : (
                         shouldShowBuzzButton ? (
                             <button

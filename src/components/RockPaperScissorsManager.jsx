@@ -242,7 +242,7 @@ function ChoiceStatus({ playerId, players, match, latestThrow, celebrationPlayer
     );
 }
 
-function MatchView({ tieBreaker, players, userId, isHost, onSubmitChoice, onAdvanceMatch, onFinish, trophyItems, t }) {
+function MatchView({ tieBreaker, players, userId, isHost, isSpectator, onSubmitChoice, onAdvanceMatch, onFinish, trophyItems, t }) {
     const match = tieBreaker.currentMatch;
     const [playerAId, playerBId] = match.playerIds;
     const choices = match.choices || {};
@@ -250,7 +250,7 @@ function MatchView({ tieBreaker, players, userId, isHost, onSubmitChoice, onAdva
     const isCompleteMatch = Boolean(match.winnerId);
     const isChampionState = tieBreaker.status === 'champion';
     const celebrationPlayerId = tieBreaker.championId || match.winnerId || null;
-    const isCurrentPlayer = match.playerIds.includes(userId);
+    const isCurrentPlayer = !isSpectator && match.playerIds.includes(userId);
     const hasPicked = Boolean(choices[userId]);
     const latestThrow = getLatestThrow(match);
 
@@ -327,6 +327,7 @@ export default function RockPaperScissorsManager({
     tieBreaker,
     userId,
     isHost,
+    isSpectator = false,
     onClose,
     onStart,
     onSelectPair,
@@ -414,6 +415,7 @@ export default function RockPaperScissorsManager({
                             players={players}
                             userId={userId}
                             isHost={isHost}
+                            isSpectator={isSpectator}
                             onSubmitChoice={onSubmitChoice}
                             onAdvanceMatch={onAdvanceMatch}
                             onFinish={onFinish}
