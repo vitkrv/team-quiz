@@ -189,6 +189,7 @@ export default function ActiveQuestionView({ room, roomRef, user, isHost, isSpec
     const [timeLeft, setTimeLeft] = useState(10);
     const [buzzUnlockNow, setBuzzUnlockNow] = useState(() => Date.now());
     const [isRolling, setIsRolling] = useState(false);
+    const [buzzMediaPauseSignal, setBuzzMediaPauseSignal] = useState(0);
     const surpriseBackgroundItems = useMemo(
         () => createFloatingBackgroundItems({
             seed: room.activeQuestionId || 'question',
@@ -295,6 +296,7 @@ export default function ActiveQuestionView({ room, roomRef, user, isHost, isSpec
     const handleBuzzIn = async () => {
         if (!canIBuzz) return;
         const clickedAt = Date.now();
+        setBuzzMediaPauseSignal((signal) => signal + 1);
 
         await runTransaction(roomRef.firestore, async (transaction) => {
             const roomSnap = await transaction.get(roomRef);
@@ -591,6 +593,7 @@ export default function ActiveQuestionView({ room, roomRef, user, isHost, isSpec
                             unlocked={!hasGatedQuestionMedia || isQuestionMediaStarted}
                             shouldStart={hasGatedQuestionMedia && isQuestionMediaStarted}
                             startAt={questionMediaStartAt}
+                            pauseSignal={buzzMediaPauseSignal}
                         />
                     )}
                     {isHost && hasGatedQuestionMedia && !isQuestionMediaStarted && (

@@ -32,6 +32,7 @@ export default function QuestionMedia({
     unlocked = true,
     shouldStart = false,
     startAt = 0,
+    pauseSignal = 0,
     onBlocked
 }) {
     const [isOpen, setIsOpen] = useState(false);
@@ -63,6 +64,13 @@ export default function QuestionMedia({
 
         return () => window.clearTimeout(timeoutId);
     }, [kind, media?.fileId, media?.url, onBlocked, shouldStart, startAt, unlocked]);
+
+    useEffect(() => {
+        const element = mediaRef.current;
+        if (!element || !pauseSignal || kind === MEDIA_KINDS.IMAGE) return;
+
+        element.pause();
+    }, [kind, pauseSignal]);
 
     if (!media) return null;
 
