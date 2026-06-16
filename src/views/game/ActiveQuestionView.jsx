@@ -184,10 +184,10 @@ function SpaceBuzzHandler({ enabled, onBuzz }) {
     return null;
 }
 
-export default function ActiveQuestionView({ room, roomRef, user, isHost, isSpectator = false }) {
+export default function ActiveQuestionView({ room, roomRef, user, isHost, isSpectator = false, serverNow = Date.now }) {
     const { t } = useLanguage();
     const [timeLeft, setTimeLeft] = useState(10);
-    const [buzzUnlockNow, setBuzzUnlockNow] = useState(() => Date.now());
+    const [buzzUnlockNow, setBuzzUnlockNow] = useState(() => serverNow());
     const [isRolling, setIsRolling] = useState(false);
     const [buzzMediaPauseSignal, setBuzzMediaPauseSignal] = useState(0);
     const surpriseBackgroundItems = useMemo(
@@ -221,7 +221,7 @@ export default function ActiveQuestionView({ room, roomRef, user, isHost, isSpec
         let interval;
         if (room.buzzedPlayerId && room.buzzTimestamp) {
             interval = setInterval(() => {
-                const elapsed = (Date.now() - room.buzzTimestamp) / 1000;
+                const elapsed = (serverNow() - room.buzzTimestamp) / 1000;
                 const remaining = Math.max(0, 10 - elapsed);
                 setTimeLeft(remaining);
             }, 100);
@@ -229,23 +229,23 @@ export default function ActiveQuestionView({ room, roomRef, user, isHost, isSpec
             setTimeLeft(10);
         }
         return () => clearInterval(interval);
-    }, [room.buzzedPlayerId, room.buzzTimestamp]);
+    }, [room.buzzedPlayerId, room.buzzTimestamp, serverNow]);
 
     useEffect(() => {
         if (!room.activeQuestionId || !buzzUnlockAt || room.buzzedPlayerId || room.answerRevealed) {
-            setBuzzUnlockNow(Date.now());
+            setBuzzUnlockNow(serverNow());
             return undefined;
         }
 
-        const remainingMs = buzzUnlockAt - Date.now();
+        const remainingMs = buzzUnlockAt - serverNow();
         if (remainingMs <= 0) {
-            setBuzzUnlockNow(Date.now());
+            setBuzzUnlockNow(serverNow());
             return undefined;
         }
 
-        const timeoutId = window.setTimeout(() => setBuzzUnlockNow(Date.now()), remainingMs);
+        const timeoutId = window.setTimeout(() => setBuzzUnlockNow(serverNow()), remainingMs);
         return () => window.clearTimeout(timeoutId);
-    }, [buzzUnlockAt, room.activeQuestionId, room.answerRevealed, room.buzzedPlayerId]);
+    }, [buzzUnlockAt, room.activeQuestionId, room.answerRevealed, room.buzzedPlayerId, serverNow]);
 
     if (!activeQ) return null;
 
@@ -295,7 +295,7 @@ export default function ActiveQuestionView({ room, roomRef, user, isHost, isSpec
 
     const handleBuzzIn = async () => {
         if (!canIBuzz) return;
-        const clickedAt = Date.now();
+        const clickedAt = serverNow();
         setBuzzMediaPauseSignal((signal) => signal + 1);
 
         await runTransaction(roomRef.firestore, async (transaction) => {

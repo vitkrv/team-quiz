@@ -54,7 +54,7 @@ function SurprisePlayerModal({ players, question, onPick, onClose, t }) {
     );
 }
 
-export default function BoardView({ room, roomRef, user, isHost, isSpectator = false }) {
+export default function BoardView({ room, roomRef, user, isHost, isSpectator = false, serverNow = Date.now }) {
     const { t } = useLanguage();
     const [pendingSurpriseQuestion, setPendingSurpriseQuestion] = useState(null);
     const [isTieBreakerSetupOpen, setIsTieBreakerSetupOpen] = useState(false);
@@ -124,7 +124,7 @@ export default function BoardView({ room, roomRef, user, isHost, isSpectator = f
             }
         } : {};
 
-        await handlePickQuestion(roomRef, q.id, createQuestionPickedHistory(cat, q, pickerName), extraUpdate);
+        await handlePickQuestion(roomRef, q.id, createQuestionPickedHistory(cat, q, pickerName), extraUpdate, serverNow);
         setPendingSurpriseQuestion(null);
     };
 

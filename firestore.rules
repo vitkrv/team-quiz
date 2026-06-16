@@ -45,6 +45,18 @@ service cloud.firestore {
       allow delete: if false;
     }
 
+    match /artifacts/{appId}/users/{userId}/clockSync/{syncId} {
+      allow read: if isGoogleUser()
+        && request.auth.uid == userId;
+      allow create, update: if isGoogleUser()
+        && request.auth.uid == userId
+        && request.resource.data.keys().hasOnly(['serverReceivedAt', 'clientSentAt', 'sampleId'])
+        && request.resource.data.serverReceivedAt == request.time
+        && (request.resource.data.clientSentAt is int || request.resource.data.clientSentAt is float)
+        && request.resource.data.sampleId is string;
+      allow delete: if false;
+    }
+
     function roomParticipantOrHost(room, uid) {
       return room.hostId == uid || uid in room.players;
     }

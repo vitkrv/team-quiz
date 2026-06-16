@@ -119,13 +119,13 @@ export const setPlayerScore = async (roomRef, playerId, score, historyItem) => {
     });
 };
 
-export const handlePickQuestion = async (roomRef, qId, historyItem, extraUpdate = {}) => {
+export const handlePickQuestion = async (roomRef, qId, historyItem, extraUpdate = {}, now = Date.now) => {
     const update = {
         activeQuestionId: qId,
         answerRevealed: false,
         buzzedPlayerId: null,
         buzzTimestamp: null,
-        buzzUnlockAt: Date.now() + 2000,
+        buzzUnlockAt: now() + 2000,
         buzzAttempts: {},
         incorrectBuzzedIds: [],
         mediaPlayback: null,

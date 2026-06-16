@@ -4,6 +4,7 @@ import { ArrowLeft, Check, Copy, Link, Play, PlusCircle, MinusCircle, Users, Sli
 import { HOST_AVATAR } from '../../constants';
 import { appId, db } from '../../firebase';
 import PackTitle from '../../components/PackTitle';
+import useServerClock from '../../hooks/useServerClock';
 import { useLanguage } from '../../useLanguage';
 import { adjustScore, createHistoryItem } from '../../actions/gameActions';
 import { hasDefinedFinalResults } from '../../utils/gameResults';
@@ -333,7 +334,8 @@ export default function GameRoom({ room, roomCode, user, onLeaveRoom, showDefine
     const isHost = user.uid === room.hostId;
     const isSpectator = !isHost && !room.players?.[user.uid];
     const roomRef = doc(db, 'artifacts', appId, 'public', 'data', 'rooms', roomCode);
-    const [now, setNow] = useState(() => Date.now());
+    const { serverNow } = useServerClock(user.uid);
+    const [now, setNow] = useState(() => serverNow());
     const [copiedRoomCode, setCopiedRoomCode] = useState(false);
     const [copiedJoinLink, setCopiedJoinLink] = useState(false);
     const [isScoreEditorOpen, setIsScoreEditorOpen] = useState(false);
@@ -344,13 +346,13 @@ export default function GameRoom({ room, roomCode, user, onLeaveRoom, showDefine
 
     useEffect(() => {
         if (!room.buzzedPlayerId || !room.buzzTimestamp || room.answerRevealed) {
-            setNow(Date.now());
+            setNow(serverNow());
             return undefined;
         }
 
-        const intervalId = window.setInterval(() => setNow(Date.now()), 100);
+        const intervalId = window.setInterval(() => setNow(serverNow()), 100);
         return () => window.clearInterval(intervalId);
-    }, [room.answerRevealed, room.buzzedPlayerId, room.buzzTimestamp]);
+    }, [room.answerRevealed, room.buzzedPlayerId, room.buzzTimestamp, serverNow]);
 
     const leaveRoom = async () => {
         onLeaveRoom();
@@ -622,9 +624,9 @@ export default function GameRoom({ room, roomCode, user, onLeaveRoom, showDefine
                     {/* Main Play Area */}
                     <main className="relative flex min-w-0 flex-1 flex-col overflow-x-hidden overflow-y-auto bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-blue-950 to-slate-900 p-3 md:overflow-hidden md:p-6">
                         {room.activeQuestionId ? (
-                            <ActiveQuestionView room={room} roomRef={roomRef} user={user} isHost={isHost} isSpectator={isSpectator} />
+                            <ActiveQuestionView room={room} roomRef={roomRef} user={user} isHost={isHost} isSpectator={isSpectator} serverNow={serverNow} />
                         ) : (
-                            <BoardView room={room} roomRef={roomRef} user={user} isHost={isHost} isSpectator={isSpectator} />
+                            <BoardView room={room} roomRef={roomRef} user={user} isHost={isHost} isSpectator={isSpectator} serverNow={serverNow} />
                         )}
                     </main>
                 </div>
