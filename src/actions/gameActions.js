@@ -1,4 +1,4 @@
-import { arrayUnion, updateDoc } from 'firebase/firestore';
+import { arrayUnion, deleteField, runTransaction, updateDoc } from 'firebase/firestore';
 import { generateId } from '../utils/ids';
 
 export const RPS_CHOICES = {
@@ -29,12 +29,32 @@ const createMatch = (playerAId, playerBId, tieBreaker) => ({
     startedAt: Date.now()
 });
 
-const getChoiceWinner = (playerAId, playerBId, choices) => {
+export const getChoiceWinner = (playerAId, playerBId, choices) => {
     const choiceA = choices[playerAId];
     const choiceB = choices[playerBId];
 
     if (!choiceA || !choiceB || choiceA === choiceB) return null;
     return RPS_CHOICES[choiceA]?.beats === choiceB ? playerAId : playerBId;
+};
+
+const createHostRps = (playerAId, playerBId, mode) => {
+    const normalizedMode = normalizeRpsMode(mode);
+
+    return {
+        id: generateId(),
+        status: 'active',
+        mode: normalizedMode,
+        targetWins: RPS_MODES[normalizedMode].targetWins,
+        playerIds: [playerAId, playerBId],
+        wins: {
+            [playerAId]: 0,
+            [playerBId]: 0
+        },
+        choices: {},
+        throws: [],
+        resultHistoryId: null,
+        startedAt: Date.now()
+    };
 };
 
 const advanceTieBreakerWinner = (tieBreaker, winnerId, loserId) => {
@@ -174,6 +194,129 @@ export const initializeTieBreaker = async (roomRef, playerIds, mode = 'one', his
     }
 
     await updateDoc(roomRef, update);
+};
+
+export const startHostRps = async (roomRef, playerIds, mode = 'one') => {
+    const normalizedMode = normalizeRpsMode(mode);
+    const uniquePlayerIds = [...new Set(playerIds)];
+    if (uniquePlayerIds.length !== 2) return;
+
+    await runTransaction(roomRef.firestore, async (transaction) => {
+        const roomSnap = await transaction.get(roomRef);
+        if (!roomSnap.exists()) return;
+
+        const room = roomSnap.data();
+        if (room.status !== 'playing' || room.activeQuestionId || room.hostRps?.status) return;
+
+        const [playerAId, playerBId] = uniquePlayerIds;
+        if (!room.players?.[playerAId] || !room.players?.[playerBId]) return;
+
+        transaction.update(roomRef, {
+            hostRps: createHostRps(playerAId, playerBId, normalizedMode)
+        });
+    });
+};
+
+export const submitHostRpsChoice = async (roomRef, hostRps, playerId, choice) => {
+    if (
+        hostRps?.status !== 'active'
+        || !hostRps.playerIds?.includes(playerId)
+        || !RPS_CHOICES[choice]
+        || hostRps.choices?.[playerId]
+    ) {
+        return;
+    }
+
+    await updateDoc(roomRef, {
+        [`hostRps.choices.${playerId}`]: choice
+    });
+};
+
+export const resolveHostRpsThrow = async (roomRef, actor, t) => {
+    await runTransaction(roomRef.firestore, async (transaction) => {
+        const roomSnap = await transaction.get(roomRef);
+        if (!roomSnap.exists()) return;
+
+        const room = roomSnap.data();
+        const hostRps = room.hostRps;
+        if (hostRps?.status !== 'active' || !hostRps.playerIds || hostRps.playerIds.length !== 2) return;
+
+        const [playerAId, playerBId] = hostRps.playerIds;
+        const choices = hostRps.choices || {};
+        if (!choices[playerAId] || !choices[playerBId]) return;
+
+        const throwWinnerId = getChoiceWinner(playerAId, playerBId, choices);
+        const throwItem = {
+            id: generateId(),
+            choices,
+            isTie: !throwWinnerId,
+            playedAt: Date.now()
+        };
+        const throws = [...(hostRps.throws || []), throwItem];
+
+        if (!throwWinnerId) {
+            transaction.update(roomRef, {
+                'hostRps.choices': {},
+                'hostRps.throws': throws
+            });
+            return;
+        }
+
+        const wins = {
+            ...(hostRps.wins || {}),
+            [throwWinnerId]: (hostRps.wins?.[throwWinnerId] || 0) + 1
+        };
+
+        if (wins[throwWinnerId] < hostRps.targetWins) {
+            transaction.update(roomRef, {
+                'hostRps.choices': {},
+                'hostRps.throws': throws,
+                'hostRps.wins': wins
+            });
+            return;
+        }
+
+        const winnerName = room.players?.[throwWinnerId]?.name || t('playerFallback');
+        const [opponentAId, opponentBId] = hostRps.playerIds;
+        const opponentAName = room.players?.[opponentAId]?.name || t('playerFallback');
+        const opponentBName = room.players?.[opponentBId]?.name || t('playerFallback');
+        const historyItem = createHistoryItem({
+            type: 'host_rps_completed',
+            actorId: actor.id,
+            actorName: actor.name,
+            message: t('historyHostRpsCompleted', {
+                actorName: actor.name,
+                winnerName,
+                playerAName: opponentAName,
+                playerBName: opponentBName
+            }),
+            details: {
+                actorName: actor.name,
+                winnerName,
+                playerAName: opponentAName,
+                playerBName: opponentBName,
+                mode: hostRps.mode
+            }
+        });
+
+        transaction.update(roomRef, {
+            'hostRps.status': 'complete',
+            'hostRps.choices': {},
+            'hostRps.throws': throws,
+            'hostRps.wins': wins,
+            'hostRps.resultHistoryId': historyItem.id,
+            'hostRps.completedAt': Date.now(),
+            history: arrayUnion(historyItem)
+        });
+    });
+};
+
+export const closeHostRps = async (roomRef, hostRps) => {
+    if (hostRps?.status !== 'complete') return;
+
+    await updateDoc(roomRef, {
+        hostRps: deleteField()
+    });
 };
 
 export const selectTieBreakerPair = async (roomRef, tieBreaker, playerAId, playerBId) => {

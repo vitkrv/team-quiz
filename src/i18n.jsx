@@ -210,6 +210,16 @@ const translations = {
         rpsChampion: 'Tie-breaker champion',
         rpsChampionBadge: 'RPS champion',
         rpsWaitingForFinalResults: 'Waiting for the host to show final results...',
+        hostRpsTitle: 'Rock-Paper-Scissors',
+        hostRpsSetupTitle: 'Start RPS mini game',
+        hostRpsSetupDescription: 'Choose any two room players and a match mode.',
+        hostRpsCloseSetup: 'Close RPS setup',
+        hostRpsPickPlayers: 'Match players',
+        hostRpsStart: 'Start mini game',
+        hostRpsWinnerTitle: 'Winner',
+        hostRpsWinnerBadge: 'Winner',
+        hostRpsCloseForEveryone: 'Close for everyone',
+        hostRpsWaitingForHostClose: 'Waiting for the host to close the mini game...',
         pointsShort: '{points} PTS',
         selectSurprisePlayer: 'Select Surprise Player',
         surpriseMaxPoints: 'Max points: {points}',
@@ -273,6 +283,7 @@ const translations = {
         historyScoreAdjusted: '{playerName}: {delta}, now {nextScore}',
         historyScoreSet: '{playerName}: {previousScore} to {nextScore}',
         historyTieBreakerStarted: '{actorName}: tie-breaker started',
+        historyHostRpsCompleted: '{actorName}: RPS winner {winnerName} ({playerAName} vs {playerBName})',
         historyViewCreatedRoom: 'created room',
         historyViewStartedGame: 'started game.',
         historyViewFirst: 'First:',
@@ -287,7 +298,9 @@ const translations = {
         historyViewWheelResult: 'wheel result',
         historyViewSkipped: 'Skipped',
         historyViewBackToBoard: 'Back to board',
-        historyViewScore: 'score'
+        historyViewScore: 'score',
+        historyViewHostRpsWon: 'won RPS between',
+        historyViewHostRpsVs: 'and'
     },
     uk: {
         signOut: 'Вийти',
@@ -493,6 +506,16 @@ const translations = {
         rpsChampion: 'Чемпіон тай-брейку',
         rpsChampionBadge: 'RPS чемпіон',
         rpsWaitingForFinalResults: 'Очікуємо, поки ведучий покаже фінальні результати...',
+        hostRpsTitle: 'Камінь-ножиці-папір',
+        hostRpsSetupTitle: 'Запустити RPS міні-гру',
+        hostRpsSetupDescription: 'Оберіть будь-яких двох учасників кімнати та режим матчу.',
+        hostRpsCloseSetup: 'Закрити налаштування RPS',
+        hostRpsPickPlayers: 'Учасники матчу',
+        hostRpsStart: 'Почати міні-гру',
+        hostRpsWinnerTitle: 'Переможець',
+        hostRpsWinnerBadge: 'Переможець',
+        hostRpsCloseForEveryone: 'Закрити для всіх',
+        hostRpsWaitingForHostClose: 'Очікуємо, поки ведучий закриє міні-гру...',
         pointsShort: '{points} БАЛІВ',
         selectSurprisePlayer: 'Виберіть гравця для сюрпризу',
         surpriseMaxPoints: 'Максимум балів: {points}',
@@ -556,6 +579,7 @@ const translations = {
         historyScoreAdjusted: '{playerName}: {delta}, тепер {nextScore}',
         historyScoreSet: '{playerName}: {previousScore} на {nextScore}',
         historyTieBreakerStarted: '{actorName}: тай-брейк почато',
+        historyHostRpsCompleted: '{actorName}: переможець RPS {winnerName} ({playerAName} проти {playerBName})',
         historyViewCreatedRoom: 'створив кімнату',
         historyViewStartedGame: 'почав гру.',
         historyViewFirst: 'Перший:',
@@ -570,7 +594,9 @@ const translations = {
         historyViewWheelResult: 'результат колеса',
         historyViewSkipped: 'Пропущено',
         historyViewBackToBoard: 'Назад до поля',
-        historyViewScore: 'рахунок'
+        historyViewScore: 'рахунок',
+        historyViewHostRpsWon: 'перемагає в RPS між',
+        historyViewHostRpsVs: 'та'
     }
 };
 

@@ -1,12 +1,13 @@
 import { useEffect, useState } from 'react';
 import { arrayUnion, doc, updateDoc } from 'firebase/firestore';
-import { ArrowLeft, Check, Copy, Link, Play, PlusCircle, MinusCircle, Users, SlidersHorizontal, ScrollText, Trophy, X } from 'lucide-react';
+import { ArrowLeft, Check, Copy, Link, Play, PlusCircle, MinusCircle, Users, SlidersHorizontal, ScrollText, Swords, Trophy, X } from 'lucide-react';
 import { HOST_AVATAR } from '../../constants';
 import { appId, db } from '../../firebase';
 import PackTitle from '../../components/PackTitle';
+import HostRpsModal from '../../components/HostRpsModal';
 import useServerClock from '../../hooks/useServerClock';
 import { useLanguage } from '../../useLanguage';
-import { adjustScore, createHistoryItem } from '../../actions/gameActions';
+import { adjustScore, closeHostRps, createHistoryItem, resolveHostRpsThrow, startHostRps, submitHostRpsChoice } from '../../actions/gameActions';
 import { hasDefinedFinalResults } from '../../utils/gameResults';
 import ActiveQuestionView from './ActiveQuestionView';
 import BoardView from './BoardView';
@@ -199,6 +200,8 @@ const renderHistoryMessage = (item, t) => {
             return <><PlayerName>{details.playerName || t('playerFallback')}</PlayerName> {t('historyViewScore')} <PointValue value={details.delta} showSign /> → {details.nextScore}</>;
         case 'score_set':
             return <><PlayerName>{details.playerName || t('playerFallback')}</PlayerName> {t('historyViewScore')} {details.previousScore} → {details.nextScore} (<PointValue value={details.delta} showSign />)</>;
+        case 'host_rps_completed':
+            return <><PlayerName>{details.winnerName || t('playerFallback')}</PlayerName> {t('historyViewHostRpsWon')} <PlayerName>{details.playerAName || t('playerFallback')}</PlayerName> {t('historyViewHostRpsVs')} <PlayerName>{details.playerBName || t('playerFallback')}</PlayerName></>;
         default:
             return item.message;
     }
@@ -341,8 +344,14 @@ export default function GameRoom({ room, roomCode, user, onLeaveRoom, showDefine
     const [isScoreEditorOpen, setIsScoreEditorOpen] = useState(false);
     const [isHistoryOpen, setIsHistoryOpen] = useState(false);
     const [isLeaderboardOpen, setIsLeaderboardOpen] = useState(false);
+    const [isHostRpsSetupOpen, setIsHostRpsSetupOpen] = useState(false);
     const hostName = room.players[user.uid]?.name || user.displayName || t('hostLabel');
     const host = { id: user.uid, name: hostName };
+    const canOpenHostRps = isHost
+        && !room.activeQuestionId
+        && !room.hostRps
+        && !room.tieBreaker?.status
+        && Object.keys(room.players || {}).length >= 2;
 
     useEffect(() => {
         if (!room.buzzedPlayerId || !room.buzzTimestamp || room.answerRevealed) {
@@ -353,6 +362,12 @@ export default function GameRoom({ room, roomCode, user, onLeaveRoom, showDefine
         const intervalId = window.setInterval(() => setNow(serverNow()), 100);
         return () => window.clearInterval(intervalId);
     }, [room.answerRevealed, room.buzzedPlayerId, room.buzzTimestamp, serverNow]);
+
+    useEffect(() => {
+        if (room.activeQuestionId || room.hostRps || room.tieBreaker?.status) {
+            setIsHostRpsSetupOpen(false);
+        }
+    }, [room.activeQuestionId, room.hostRps, room.tieBreaker?.status]);
 
     const leaveRoom = async () => {
         onLeaveRoom();
@@ -399,6 +414,11 @@ export default function GameRoom({ room, roomCode, user, onLeaveRoom, showDefine
             nextScore
         }
     });
+
+    const handleStartHostRps = async (playerIds, mode) => {
+        await startHostRps(roomRef, playerIds, mode);
+        setIsHostRpsSetupOpen(false);
+    };
 
     const handleCopyRoomCode = async () => {
         try {
@@ -539,6 +559,20 @@ export default function GameRoom({ room, roomCode, user, onLeaveRoom, showDefine
                     />
                 )}
                 {isHost && isHistoryOpen && <HistoryModal history={room.history} onClose={() => setIsHistoryOpen(false)} t={t} />}
+                <HostRpsModal
+                    players={room.players}
+                    hostRps={room.hostRps || null}
+                    userId={user.uid}
+                    isHost={isHost}
+                    isSpectator={isSpectator}
+                    isSetupOpen={isHost && isHostRpsSetupOpen}
+                    onCloseSetup={() => setIsHostRpsSetupOpen(false)}
+                    onStart={handleStartHostRps}
+                    onSubmitChoice={(choice) => submitHostRpsChoice(roomRef, room.hostRps, user.uid, choice)}
+                    onResolveThrow={() => resolveHostRpsThrow(roomRef, host, t)}
+                    onCloseResult={() => closeHostRps(roomRef, room.hostRps)}
+                    t={t}
+                />
                 {isLeaderboardOpen && (
                     <MobileLeaderboardDrawer
                         room={room}
@@ -586,6 +620,16 @@ export default function GameRoom({ room, roomCode, user, onLeaveRoom, showDefine
                         )}
                         {isHost && (
                             <div className="flex shrink-0 items-center gap-2">
+                                {canOpenHostRps && (
+                                    <button
+                                        onClick={() => setIsHostRpsSetupOpen(true)}
+                                        className="rounded-lg border border-slate-700 p-2 text-slate-300 hover:bg-slate-800"
+                                        title={t('hostRpsTitle')}
+                                        aria-label={t('hostRpsTitle')}
+                                    >
+                                        <Swords size={18} />
+                                    </button>
+                                )}
                                 <button
                                     onClick={() => setIsScoreEditorOpen(true)}
                                     className="rounded-lg border border-slate-700 p-2 text-slate-300 hover:bg-slate-800"
