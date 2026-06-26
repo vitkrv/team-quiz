@@ -8,11 +8,15 @@ import { useLanguage } from '../useLanguage';
 import { getFirestoreErrorMessage } from '../utils/errors';
 
 const getPackMedia = (pack) => (
-    (pack.categories || []).flatMap((category) => (
-        (category.questions || []).flatMap((question) => (
-            [question.questionMedia, question.answerMedia].filter((media) => media?.fileId)
+    [
+        pack.prize?.hiddenMedia,
+        pack.prize?.revealedMedia,
+        ...(pack.categories || []).flatMap((category) => (
+            (category.questions || []).flatMap((question) => (
+                [question.questionMedia, question.answerMedia]
+            ))
         ))
-    ))
+    ].filter((media) => media?.fileId)
 );
 
 export default function PackManager({ setView, user, setError, onCreatePack, onEditPack }) {

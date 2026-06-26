@@ -149,6 +149,7 @@ export const handlePickQuestion = async (roomRef, qId, historyItem, extraUpdate 
         buzzAttempts: {},
         incorrectBuzzedIds: [],
         mediaPlayback: null,
+        prizeModal: deleteField(),
         surpriseRound: null,
         ...extraUpdate
     };
@@ -161,13 +162,36 @@ export const handlePickQuestion = async (roomRef, qId, historyItem, extraUpdate 
 };
 
 export const handleEndGame = async (roomRef, historyItem, extraUpdate = {}) => {
-    const update = { status: 'finished', mediaPlayback: null, ...extraUpdate };
+    const update = { status: 'finished', mediaPlayback: null, prizeModal: deleteField(), ...extraUpdate };
 
     if (historyItem) {
         update.history = arrayUnion(historyItem);
     }
 
     await updateDoc(roomRef, update);
+};
+
+export const openPrizeModal = async (roomRef, actorId) => {
+    await updateDoc(roomRef, {
+        prizeModal: {
+            status: 'hidden',
+            openedAt: Date.now(),
+            openedBy: actorId
+        }
+    });
+};
+
+export const revealPrizeModal = async (roomRef) => {
+    await updateDoc(roomRef, {
+        'prizeModal.status': 'revealed',
+        'prizeModal.revealedAt': Date.now()
+    });
+};
+
+export const closePrizeModal = async (roomRef) => {
+    await updateDoc(roomRef, {
+        prizeModal: deleteField()
+    });
 };
 
 export const initializeTieBreaker = async (roomRef, playerIds, mode = 'one', historyItem) => {

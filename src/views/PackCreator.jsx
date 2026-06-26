@@ -6,7 +6,7 @@ import PackMediaAttachment from '../components/PackMediaAttachment';
 import HoldToConfirmButton from '../components/HoldToConfirmButton';
 import { normalizeSurpriseScoringMechanic, SURPRISE_SCORING_MECHANICS } from '../constants';
 import { appId, db } from '../firebase';
-import { deleteMedia, MEDIA_SLOTS, uploadMedia, getMediaKind } from '../services/imageStorage';
+import { deleteMedia, MEDIA_KINDS, MEDIA_SLOTS, PACK_PRIZE_MEDIA_ID, uploadMedia, getMediaKind } from '../services/imageStorage';
 import { useLanguage } from '../useLanguage';
 import { generateId } from '../utils/ids';
 import { getFirestoreErrorMessage } from '../utils/errors';
@@ -68,6 +68,17 @@ const cleanMediaForSave = (media) => {
     return savedMedia;
 };
 
+const cleanPrizeForSave = (prize) => {
+    const hiddenMedia = cleanMediaForSave(prize?.hiddenMedia);
+    const revealedMedia = cleanMediaForSave(prize?.revealedMedia);
+    if (!hiddenMedia && !revealedMedia) return null;
+
+    return {
+        ...(hiddenMedia ? { hiddenMedia } : {}),
+        ...(revealedMedia ? { revealedMedia } : {})
+    };
+};
+
 const normalizeQuestionText = (text = '') => text.replace(/\r\n?/g, '\n');
 
 const stripPendingCategories = (categories) => categories.map((category) => ({
@@ -117,6 +128,23 @@ const getSavedMediaFromQuestion = (question) => (
         .filter((media) => media?.fileId)
 );
 
+const getPrizeMediaField = (slot) => (
+    slot === MEDIA_SLOTS.PRIZE_HIDDEN ? 'hiddenMedia' : 'revealedMedia'
+);
+
+const setPrizeMedia = (prize, slot, media) => {
+    const field = getPrizeMediaField(slot);
+    const nextPrize = { ...(prize || {}) };
+
+    if (media) {
+        nextPrize[field] = media;
+    } else {
+        delete nextPrize[field];
+    }
+
+    return nextPrize;
+};
+
 const setQuestionMediaInCategories = (categories, catId, qId, field, media) => categories.map((category) => {
     if (category.id !== catId) return category;
 
@@ -135,7 +163,7 @@ const setQuestionMediaInCategories = (categories, catId, qId, field, media) => c
     };
 });
 
-const getPackSummary = (categories) => {
+const getPackSummary = (categories, prize) => {
     const sectionCount = categories.length;
     const questionCount = categories.reduce((total, category) => total + (category.questions?.length || 0), 0);
     const surpriseQuestionCount = categories.reduce((total, category) => (
@@ -145,7 +173,7 @@ const getPackSummary = (categories) => {
         total + (category.questions || []).reduce((questionTotal, question) => (
             questionTotal + (question.questionMedia ? 1 : 0) + (question.answerMedia ? 1 : 0)
         ), 0)
-    ), 0);
+    ), 0) + (prize?.hiddenMedia ? 1 : 0) + (prize?.revealedMedia ? 1 : 0);
     const totalPoints = categories.reduce((total, category) => (
         total + (category.questions || []).reduce((questionTotal, question) => questionTotal + getQuestionPointsForSummary(question), 0)
     ), 0);
@@ -254,6 +282,7 @@ export default function PackCreator({ pack, setView, user, setError, onSaved }) 
     const [surpriseScoringMechanic, setSurpriseScoringMechanic] = useState(() => (
         normalizeSurpriseScoringMechanic(pack?.surpriseScoringMechanic)
     ));
+    const [prize, setPrize] = useState(() => pack?.prize || {});
     const [categories, setCategories] = useState(pack?.categories || createDefaultCategories(t));
     const [isSaving, setIsSaving] = useState(false);
     const [isPreviewOpen, setIsPreviewOpen] = useState(false);
@@ -261,11 +290,13 @@ export default function PackCreator({ pack, setView, user, setError, onSaved }) 
     const [mediaProgress, setMediaProgress] = useState({});
     const [mediaErrors, setMediaErrors] = useState({});
     const categoriesRef = useRef(categories);
+    const prizeRef = useRef(prize);
     const categoryElementsRef = useRef({});
 
     categoriesRef.current = categories;
+    prizeRef.current = prize;
     const hasActiveMediaAction = Object.values(mediaProgress).some((value) => value > 0 && value < 100);
-    const packSummary = getPackSummary(categories);
+    const packSummary = getPackSummary(categories, prize);
     const previewCategories = getPreviewCategories(categories);
 
     useEffect(() => () => {
@@ -275,6 +306,9 @@ export default function PackCreator({ pack, setView, user, setError, onSaved }) 
                     if (media?.previewUrl) URL.revokeObjectURL(media.previewUrl);
                 });
             });
+        });
+        [prizeRef.current?.hiddenMedia, prizeRef.current?.revealedMedia].forEach((media) => {
+            if (media?.previewUrl) URL.revokeObjectURL(media.previewUrl);
         });
     }, []);
 
@@ -288,20 +322,21 @@ export default function PackCreator({ pack, setView, user, setError, onSaved }) 
 
     const getPackRef = (packId) => doc(db, 'artifacts', appId, 'public', 'data', 'packs', packId);
 
-    const getPackData = (sourceCategories, timestamp = Date.now()) => ({
+    const getPackData = (sourceCategories, timestamp = Date.now(), sourcePrize = prizeRef.current) => ({
         name: packName.trim() || t('untitledPack'),
         iconEmoji: packIconEmoji,
         ownerId: user.uid,
         ownerEmail: user.email || null,
         surpriseScoringMechanic,
+        prize: cleanPrizeForSave(sourcePrize),
         updatedAt: timestamp,
         categories: stripPendingCategories(sourceCategories)
     });
 
-    const ensurePackForMediaAction = async (sourceCategories = categories) => {
+    const ensurePackForMediaAction = async (sourceCategories = categories, sourcePrize = prizeRef.current) => {
         if (persistedPackId) {
             const timestamp = Date.now();
-            await updateDoc(getPackRef(persistedPackId), getPackData(sourceCategories, timestamp));
+            await updateDoc(getPackRef(persistedPackId), getPackData(sourceCategories, timestamp, sourcePrize));
             return persistedPackId;
         }
 
@@ -309,7 +344,7 @@ export default function PackCreator({ pack, setView, user, setError, onSaved }) 
         const newPackRef = doc(packsRef);
         const timestamp = Date.now();
         await setDoc(newPackRef, {
-            ...getPackData(sourceCategories, timestamp),
+            ...getPackData(sourceCategories, timestamp, sourcePrize),
             createdAt: timestamp
         });
         setPersistedPackId(newPackRef.id);
@@ -326,6 +361,14 @@ export default function PackCreator({ pack, setView, user, setError, onSaved }) 
         if (!persistedPackId) return;
         await updateDoc(getPackRef(persistedPackId), {
             categories: stripPendingCategories(nextCategories),
+            updatedAt: Date.now()
+        });
+    };
+
+    const persistPrizeIfNeeded = async (nextPrize) => {
+        if (!persistedPackId) return;
+        await updateDoc(getPackRef(persistedPackId), {
+            prize: cleanPrizeForSave(nextPrize),
             updatedAt: Date.now()
         });
     };
@@ -616,6 +659,78 @@ export default function PackCreator({ pack, setView, user, setError, onSaved }) 
         }
     };
 
+    const updatePrizeMedia = async (slot, file) => {
+        const previewUrl = URL.createObjectURL(file);
+        const progressKey = `${PACK_PRIZE_MEDIA_ID}:${slot}`;
+        const previousPrize = prizeRef.current || {};
+        const previousMedia = previousPrize[getPrizeMediaField(slot)];
+        const previewMedia = {
+            provider: 'imagekit',
+            kind: getMediaKind(file),
+            pendingFile: file,
+            previewUrl,
+            name: file.name,
+            size: file.size,
+            mimeType: file.type,
+            previousMedia
+        };
+        const previewPrize = setPrizeMedia(previousPrize, slot, previewMedia);
+
+        setMediaErrors((errors) => ({ ...errors, [progressKey]: '' }));
+        setMediaProgress((progress) => ({ ...progress, [progressKey]: 1 }));
+        setPrize(previewPrize);
+
+        try {
+            const packId = await ensurePackForMediaAction(stripPendingCategories(categoriesRef.current), previousPrize);
+            const uploadedMedia = await uploadMedia(file, {
+                packId,
+                questionId: PACK_PRIZE_MEDIA_ID,
+                slot,
+                onProgress: (value) => setMediaProgress((progress) => ({ ...progress, [progressKey]: value }))
+            });
+            const nextPrize = setPrizeMedia(prizeRef.current, slot, uploadedMedia);
+            setPrize(nextPrize);
+            await updateDoc(getPackRef(packId), {
+                prize: cleanPrizeForSave(nextPrize),
+                updatedAt: Date.now()
+            });
+            if (previousMedia?.fileId) {
+                await deleteMedia(previousMedia);
+            }
+            setMediaProgress((progress) => ({ ...progress, [progressKey]: 100 }));
+        } catch (err) {
+            console.error("Prize media upload error:", err);
+            setPrize(previousPrize);
+            setMediaProgress((progress) => ({ ...progress, [progressKey]: 0 }));
+            setMediaErrors((errors) => ({ ...errors, [progressKey]: err.messageKey ? t(err.messageKey) : err.message }));
+            setError(err.messageKey ? t(err.messageKey) : err.message);
+        } finally {
+            URL.revokeObjectURL(previewUrl);
+        }
+    };
+
+    const removePrizeMedia = async (slot) => {
+        const progressKey = `${PACK_PRIZE_MEDIA_ID}:${slot}`;
+        const previousPrize = prizeRef.current || {};
+        const previousMedia = previousPrize[getPrizeMediaField(slot)];
+        const nextPrize = setPrizeMedia(previousPrize, slot, null);
+
+        setMediaErrors((errors) => ({ ...errors, [progressKey]: '' }));
+        setPrize(nextPrize);
+
+        try {
+            await persistPrizeIfNeeded(nextPrize);
+            if (previousMedia?.fileId) {
+                await deleteMedia(previousMedia);
+            }
+        } catch (err) {
+            console.error("Prize media delete error:", err);
+            setPrize(previousPrize);
+            setMediaErrors((errors) => ({ ...errors, [progressKey]: err.messageKey ? t(err.messageKey) : err.message }));
+            setError(err.messageKey ? t(err.messageKey) : err.message);
+        }
+    };
+
     const validateQuestions = () => {
         for (const category of categories) {
             for (const question of category.questions) {
@@ -652,6 +767,7 @@ export default function PackCreator({ pack, setView, user, setError, onSaved }) 
                 ownerId: user.uid,
                 ownerEmail: user.email || null,
                 surpriseScoringMechanic,
+                prize: cleanPrizeForSave(prize),
                 updatedAt: Date.now(),
                 categories: finalCategories
             };
@@ -829,6 +945,47 @@ export default function PackCreator({ pack, setView, user, setError, onSaved }) 
                         >
                             <ChevronRight size={18} className="shrink-0" /> {t('collapseAllCategories')}
                         </button>
+                    </div>
+                </div>
+            </div>
+
+            <div className="mb-8 rounded-xl border border-slate-700 bg-slate-800/50 p-5">
+                <h3 className="mb-4 text-sm font-black uppercase tracking-widest text-slate-400">{t('prize')}</h3>
+                <div className="space-y-4">
+                    <p className="text-sm text-slate-400">{t('prizeHelp')}</p>
+                    <div className="grid gap-4 md:grid-cols-2">
+                        <div>
+                            <div className="mb-2 text-sm font-bold text-white">{t('prizeHiddenMedia')}</div>
+                            <PackMediaAttachment
+                                media={prize?.hiddenMedia}
+                                label={t('prizeHiddenMedia')}
+                                disabled={isSaving || Boolean(mediaProgress[`${PACK_PRIZE_MEDIA_ID}:${MEDIA_SLOTS.PRIZE_HIDDEN}`] > 0 && mediaProgress[`${PACK_PRIZE_MEDIA_ID}:${MEDIA_SLOTS.PRIZE_HIDDEN}`] < 100)}
+                                progress={mediaProgress[`${PACK_PRIZE_MEDIA_ID}:${MEDIA_SLOTS.PRIZE_HIDDEN}`] || 0}
+                                error={mediaErrors[`${PACK_PRIZE_MEDIA_ID}:${MEDIA_SLOTS.PRIZE_HIDDEN}`]}
+                                t={t}
+                                accept="image/*"
+                                allowedKinds={[MEDIA_KINDS.IMAGE]}
+                                hint={t('prizeImageUploadHint')}
+                                onChange={(file) => updatePrizeMedia(MEDIA_SLOTS.PRIZE_HIDDEN, file)}
+                                onRemove={() => removePrizeMedia(MEDIA_SLOTS.PRIZE_HIDDEN)}
+                            />
+                        </div>
+                        <div>
+                            <div className="mb-2 text-sm font-bold text-white">{t('prizeRevealedMedia')}</div>
+                            <PackMediaAttachment
+                                media={prize?.revealedMedia}
+                                label={t('prizeRevealedMedia')}
+                                disabled={isSaving || Boolean(mediaProgress[`${PACK_PRIZE_MEDIA_ID}:${MEDIA_SLOTS.PRIZE_REVEALED}`] > 0 && mediaProgress[`${PACK_PRIZE_MEDIA_ID}:${MEDIA_SLOTS.PRIZE_REVEALED}`] < 100)}
+                                progress={mediaProgress[`${PACK_PRIZE_MEDIA_ID}:${MEDIA_SLOTS.PRIZE_REVEALED}`] || 0}
+                                error={mediaErrors[`${PACK_PRIZE_MEDIA_ID}:${MEDIA_SLOTS.PRIZE_REVEALED}`]}
+                                t={t}
+                                accept="image/*"
+                                allowedKinds={[MEDIA_KINDS.IMAGE]}
+                                hint={t('prizeImageUploadHint')}
+                                onChange={(file) => updatePrizeMedia(MEDIA_SLOTS.PRIZE_REVEALED, file)}
+                                onRemove={() => removePrizeMedia(MEDIA_SLOTS.PRIZE_REVEALED)}
+                            />
+                        </div>
                     </div>
                 </div>
             </div>

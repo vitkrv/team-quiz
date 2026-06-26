@@ -6,8 +6,12 @@ const IMAGE_COMPRESSION_SKIP_BYTES = 200 * 1024;
 const IMAGE_COMPRESSION_MIN_SAVINGS_RATIO = 0.9;
 export const MEDIA_SLOTS = {
     QUESTION: 'questionMedia',
-    ANSWER: 'answerMedia'
+    ANSWER: 'answerMedia',
+    PRIZE_HIDDEN: 'prizeHiddenMedia',
+    PRIZE_REVEALED: 'prizeRevealedMedia'
 };
+
+export const PACK_PRIZE_MEDIA_ID = 'packPrize';
 export const MEDIA_KINDS = {
     IMAGE: 'image',
     AUDIO: 'audio',

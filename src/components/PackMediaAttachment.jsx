@@ -23,7 +23,19 @@ const getKindLabel = (kind, t) => {
     return t('imageMedia');
 };
 
-export default function PackMediaAttachment({ media, label, disabled, progress, error, t, onChange, onRemove }) {
+export default function PackMediaAttachment({
+    media,
+    label,
+    disabled,
+    progress,
+    error,
+    t,
+    onChange,
+    onRemove,
+    accept = 'image/*,audio/*,video/*',
+    allowedKinds = [MEDIA_KINDS.IMAGE, MEDIA_KINDS.AUDIO, MEDIA_KINDS.VIDEO],
+    hint
+}) {
     const inputRef = useRef(null);
     const [localError, setLocalError] = useState('');
     const kind = getMediaKind(media);
@@ -39,8 +51,8 @@ export default function PackMediaAttachment({ media, label, disabled, progress, 
         if (!file) return;
 
         const validation = validateMediaFile(file);
-        if (!validation.valid) {
-            setLocalError(t(validation.messageKey));
+        if (!validation.valid || !allowedKinds.includes(validation.kind)) {
+            setLocalError(t(validation.valid ? 'mediaInvalidType' : validation.messageKey));
             return;
         }
 
@@ -52,7 +64,7 @@ export default function PackMediaAttachment({ media, label, disabled, progress, 
 
     return (
         <div className="mt-2 rounded-lg border border-slate-800 bg-slate-950/40 p-3">
-            <input ref={inputRef} type="file" accept="image/*,audio/*,video/*" className="hidden" onChange={handleFileChange} disabled={disabled} />
+            <input ref={inputRef} type="file" accept={accept} className="hidden" onChange={handleFileChange} disabled={disabled} />
             {media ? (
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
                     <div className="flex w-fit flex-col gap-1">
@@ -96,7 +108,7 @@ export default function PackMediaAttachment({ media, label, disabled, progress, 
                 </div>
             )}
             {message && <div className="mt-2 text-xs font-medium text-red-300">{message}</div>}
-            <div className="mt-2 text-xs text-slate-500">{t('mediaUploadHint')}</div>
+            <div className="mt-2 text-xs text-slate-500">{hint || t('mediaUploadHint')}</div>
         </div>
     );
 }

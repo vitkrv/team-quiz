@@ -1,13 +1,14 @@
 import { useEffect, useState } from 'react';
 import { arrayUnion, doc, updateDoc } from 'firebase/firestore';
-import { ArrowLeft, Check, Copy, Link, Play, PlusCircle, MinusCircle, Users, SlidersHorizontal, ScrollText, Swords, Trophy, X } from 'lucide-react';
+import { ArrowLeft, Check, Copy, Gift, Link, Play, PlusCircle, MinusCircle, Users, SlidersHorizontal, ScrollText, Swords, Trophy, X } from 'lucide-react';
 import { HOST_AVATAR } from '../../constants';
 import { appId, db } from '../../firebase';
 import PackTitle from '../../components/PackTitle';
 import HostRpsModal from '../../components/HostRpsModal';
 import useServerClock from '../../hooks/useServerClock';
 import { useLanguage } from '../../useLanguage';
-import { adjustScore, closeHostRps, createHistoryItem, resolveHostRpsThrow, startHostRps, submitHostRpsChoice } from '../../actions/gameActions';
+import { adjustScore, closeHostRps, closePrizeModal, createHistoryItem, openPrizeModal, resolveHostRpsThrow, revealPrizeModal, startHostRps, submitHostRpsChoice } from '../../actions/gameActions';
+import { getMediaKind, getMediaUrl, MEDIA_KINDS } from '../../services/imageStorage';
 import { hasDefinedFinalResults } from '../../utils/gameResults';
 import ActiveQuestionView from './ActiveQuestionView';
 import BoardView from './BoardView';
@@ -17,6 +18,11 @@ const ANSWER_WINDOW_MS = 10000;
 const LATE_BUZZ_WINDOW_MS = 2000;
 
 const getPlayerEntries = (players) => Object.entries(players).filter(([, player]) => !player.isHost);
+
+const hasDefinedPrize = (prize) => (
+    getMediaKind(prize?.hiddenMedia) === MEDIA_KINDS.IMAGE
+    && getMediaKind(prize?.revealedMedia) === MEDIA_KINDS.IMAGE
+);
 
 const formatBuzzDelta = (deltaMs) => `+${(deltaMs / 1000).toFixed(2)}s`;
 
@@ -334,6 +340,53 @@ function MobileLeaderboardDrawer({ room, roomRef, isHost, now, createScoreAdjust
     );
 }
 
+function PrizeModal({ room, roomRef, isHost, t }) {
+    const prize = room.pack?.prize;
+    const modal = room.prizeModal;
+    if (!modal || !hasDefinedPrize(prize)) return null;
+
+    const isRevealed = modal.status === 'revealed';
+    const media = isRevealed ? prize.revealedMedia : prize.hiddenMedia;
+    const imageUrl = getMediaUrl(media, 'game');
+
+    return (
+        <div className="fixed inset-0 z-50 flex items-center justify-center overflow-hidden bg-black/40 p-4 backdrop-blur-sm md:p-8">
+            <div className="relative flex h-full max-h-[48rem] w-full max-w-5xl flex-col items-center justify-center gap-5 text-center">
+                <h2 className="relative z-10 text-5xl font-black uppercase tracking-wide text-yellow-300 drop-shadow-[0_5px_18px_rgba(0,0,0,0.75)] md:text-8xl">
+                    {t('prizeTitle')}
+                </h2>
+                <div className="relative flex min-h-0 w-full flex-1 items-center justify-center">
+                    <img
+                        src={imageUrl}
+                        alt={t('prizeTitle')}
+                        className={`relative z-10 max-h-full max-w-full rounded-lg object-contain ${isRevealed ? 'prize-image--revealed' : ''}`}
+                    />
+                </div>
+                {isHost && (
+                    <div className="relative z-10 flex flex-wrap items-center justify-center gap-3">
+                        {!isRevealed && (
+                            <button
+                                type="button"
+                                onClick={() => revealPrizeModal(roomRef)}
+                                className="rounded-xl bg-yellow-400 px-6 py-3 text-lg font-black text-slate-950 shadow-lg shadow-yellow-950/40 transition-colors hover:bg-yellow-300"
+                            >
+                                {t('revealPrize')}
+                            </button>
+                        )}
+                        <button
+                            type="button"
+                            onClick={() => closePrizeModal(roomRef)}
+                            className="rounded-xl border border-slate-500 bg-slate-950/80 px-6 py-3 text-lg font-black text-slate-100 shadow-lg shadow-black/40 transition-colors hover:bg-slate-800"
+                        >
+                            {t('closePrizeForEveryone')}
+                        </button>
+                    </div>
+                )}
+            </div>
+        </div>
+    );
+}
+
 export default function GameRoom({ room, roomCode, user, onLeaveRoom, showDefinedFinalResults = false }) {
     const { t } = useLanguage();
     const isHost = user.uid === room.hostId;
@@ -349,11 +402,18 @@ export default function GameRoom({ room, roomCode, user, onLeaveRoom, showDefine
     const [isHostRpsSetupOpen, setIsHostRpsSetupOpen] = useState(false);
     const hostName = room.players[user.uid]?.name || user.displayName || t('hostLabel');
     const host = { id: user.uid, name: hostName };
+    const hasPrize = hasDefinedPrize(room.pack?.prize);
     const canOpenHostRps = isHost
         && !room.activeQuestionId
         && !room.hostRps
         && !room.tieBreaker?.status
         && Object.keys(room.players || {}).length >= 2;
+    const canOpenPrize = isHost
+        && hasPrize
+        && !room.activeQuestionId
+        && !room.hostRps?.status
+        && !room.tieBreaker?.status
+        && !room.prizeModal;
 
     useEffect(() => {
         if (!room.buzzedPlayerId || !room.buzzTimestamp || room.answerRevealed) {
@@ -575,6 +635,7 @@ export default function GameRoom({ room, roomCode, user, onLeaveRoom, showDefine
                     onCloseResult={() => closeHostRps(roomRef, room.hostRps)}
                     t={t}
                 />
+                <PrizeModal room={room} roomRef={roomRef} isHost={isHost} t={t} />
                 {isLeaderboardOpen && (
                     <MobileLeaderboardDrawer
                         room={room}
@@ -622,6 +683,18 @@ export default function GameRoom({ room, roomCode, user, onLeaveRoom, showDefine
                         )}
                         {isHost && (
                             <div className="flex shrink-0 items-center gap-2">
+                                {hasPrize && (
+                                    <button
+                                        type="button"
+                                        onClick={() => openPrizeModal(roomRef, user.uid)}
+                                        disabled={!canOpenPrize}
+                                        className="rounded-lg border border-yellow-500/50 p-2 text-yellow-200 hover:bg-yellow-500/10 disabled:cursor-not-allowed disabled:border-slate-700 disabled:text-slate-600 disabled:hover:bg-transparent"
+                                        title={t('showPrize')}
+                                        aria-label={t('showPrize')}
+                                    >
+                                        <Gift size={18} />
+                                    </button>
+                                )}
                                 {canOpenHostRps && (
                                     <button
                                         onClick={() => setIsHostRpsSetupOpen(true)}

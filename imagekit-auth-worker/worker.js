@@ -1,4 +1,7 @@
-const VALID_SLOTS = new Set(['questionMedia', 'answerMedia']);
+const PACK_PRIZE_MEDIA_ID = 'packPrize';
+const QUESTION_SLOTS = new Set(['questionMedia', 'answerMedia']);
+const PACK_PRIZE_SLOTS = new Set(['prizeHiddenMedia', 'prizeRevealedMedia']);
+const VALID_SLOTS = new Set([...QUESTION_SLOTS, ...PACK_PRIZE_SLOTS]);
 const IMAGEKIT_FOLDER = '/TeamQuiz';
 
 const getSecret = (env, key) => {
@@ -95,10 +98,14 @@ const handleUploadAuth = async ({ request, env, body }) => {
     if (!VALID_SLOTS.has(slot)) throw new Error('Invalid media slot.');
 
     const { packDoc } = await assertPackOwner({ request, env, appId, packId });
-    const questionExists = getQuestions(packDoc).some((question) => (
-        question.mapValue?.fields?.id?.stringValue === questionId
-    ));
-    if (!questionExists) throw new Error('Question was not found in this pack.');
+    if (QUESTION_SLOTS.has(slot)) {
+        const questionExists = getQuestions(packDoc).some((question) => (
+            question.mapValue?.fields?.id?.stringValue === questionId
+        ));
+        if (!questionExists) throw new Error('Question was not found in this pack.');
+    } else if (questionId !== PACK_PRIZE_MEDIA_ID) {
+        throw new Error('Invalid prize media id.');
+    }
 
     const bytes = new Uint8Array(16);
     crypto.getRandomValues(bytes);
@@ -122,9 +129,12 @@ const handleDelete = async ({ request, env, body }) => {
     const packId = assertString(media.packId, 'media.packId');
     const fileId = assertString(media.fileId, 'media.fileId');
     const filePath = assertString(media.filePath, 'media.filePath');
-    assertString(media.questionId, 'media.questionId');
+    const questionId = assertString(media.questionId, 'media.questionId');
     const slot = assertString(media.slot, 'media.slot');
     if (!VALID_SLOTS.has(slot)) throw new Error('Invalid media slot.');
+    if (PACK_PRIZE_SLOTS.has(slot) && questionId !== PACK_PRIZE_MEDIA_ID) {
+        throw new Error('Invalid prize media id.');
+    }
 
     await assertPackOwner({ request, env, appId, packId });
 
