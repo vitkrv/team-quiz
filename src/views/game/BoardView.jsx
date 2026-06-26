@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { X } from 'lucide-react';
+import { Shuffle, X } from 'lucide-react';
 import {
     advanceTieBreakerMatch,
     createHistoryItem,
@@ -22,8 +22,23 @@ const getBoardPoints = (question) => (
         : question.points
 );
 
+const getSurprisePlayerEntries = (players = {}) => (
+    Object.entries(players).filter(([, player]) => !player.isHost)
+);
+
+const pickRandomPlayerId = (playerEntries) => {
+    if (!playerEntries.length) return null;
+
+    const randomIndex = Math.floor(Math.random() * playerEntries.length);
+    return playerEntries[randomIndex][0];
+};
+
 function SurprisePlayerModal({ players, question, onPick, onClose, t }) {
-    const playerEntries = Object.entries(players).filter(([, player]) => !player.isHost);
+    const playerEntries = getSurprisePlayerEntries(players);
+    const handleRandomPick = () => {
+        const playerId = pickRandomPlayerId(playerEntries);
+        if (playerId) onPick(playerId);
+    };
 
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-6">
@@ -38,6 +53,15 @@ function SurprisePlayerModal({ players, question, onPick, onClose, t }) {
                     <div className="rounded-lg border border-yellow-500/30 bg-yellow-950/20 p-3 text-sm font-bold text-yellow-200">
                         {t('surpriseMaxPoints', { points: question.points })}
                     </div>
+                    <button
+                        type="button"
+                        onClick={handleRandomPick}
+                        disabled={playerEntries.length === 0}
+                        className="flex w-full items-center justify-center gap-2 rounded-lg border border-yellow-500/50 bg-yellow-500 px-4 py-3 font-black text-slate-950 transition-colors hover:bg-yellow-300 disabled:cursor-not-allowed disabled:border-slate-700 disabled:bg-slate-800 disabled:text-slate-500"
+                    >
+                        <Shuffle size={18} />
+                        {t('surpriseRandomPlayer')}
+                    </button>
                     {playerEntries.map(([playerId, player]) => (
                         <button
                             key={playerId}
@@ -62,6 +86,7 @@ export default function BoardView({ room, roomRef, user, isHost, isSpectator = f
     const categories = room.pack.categories;
     const maxQuestionCount = Math.max(0, ...categories.map((cat) => cat.questions?.length || 0));
     const actorName = room.players[user.uid]?.name || user.displayName || t('playerFallback');
+    const surprisePlayerEntries = getSurprisePlayerEntries(room.players);
 
     // Check if all questions are done
     const allDone = areAllQuestionsDone(room.questionStates);
@@ -222,7 +247,11 @@ export default function BoardView({ room, roomRef, user, isHost, isSpectator = f
                                                         return;
                                                     }
 
-                                                    pickQuestion(cat, q, q.isSurpriseQuestion ? user.uid : null);
+                                                    pickQuestion(
+                                                        cat,
+                                                        q,
+                                                        q.isSurpriseQuestion ? pickRandomPlayerId(surprisePlayerEntries) : null
+                                                    );
                                                 }}
                                                 className={`
                                                     flex min-h-14 items-center justify-center rounded-lg font-mono text-xl font-black transition-all duration-200 md:min-h-0 md:text-4xl
