@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { arrayUnion, doc, updateDoc } from 'firebase/firestore';
 import { ArrowLeft, Check, Copy, Gift, Link, Play, PlusCircle, MinusCircle, Users, SlidersHorizontal, ScrollText, Swords, Trophy, X } from 'lucide-react';
 import { HOST_AVATAR } from '../../constants';
@@ -23,6 +23,97 @@ const hasDefinedPrize = (prize) => (
     getMediaKind(prize?.hiddenMedia) === MEDIA_KINDS.IMAGE
     && getMediaKind(prize?.revealedMedia) === MEDIA_KINDS.IMAGE
 );
+
+const CONFETTI_COLORS = ['#facc15', '#22c55e', '#38bdf8', '#fb7185', '#a78bfa', '#f97316', '#f8fafc'];
+
+function PrizeConfetti({ triggerKey }) {
+    const canvasRef = useRef(null);
+
+    useEffect(() => {
+        if (!triggerKey) return undefined;
+
+        const canvas = canvasRef.current;
+        const context = canvas?.getContext('2d');
+        if (!canvas || !context) return undefined;
+
+        let frameId = 0;
+        let isRunning = true;
+        const pixelRatio = window.devicePixelRatio || 1;
+        const resize = () => {
+            canvas.width = Math.floor(window.innerWidth * pixelRatio);
+            canvas.height = Math.floor(window.innerHeight * pixelRatio);
+            canvas.style.width = `${window.innerWidth}px`;
+            canvas.style.height = `${window.innerHeight}px`;
+            context.setTransform(pixelRatio, 0, 0, pixelRatio, 0, 0);
+        };
+
+        resize();
+        window.addEventListener('resize', resize);
+
+        const particles = Array.from({ length: 150 }, () => {
+            const angle = (-115 + Math.random() * 50) * (Math.PI / 180);
+            const speed = 9 + Math.random() * 13;
+            const drift = (Math.random() - 0.5) * 3.5;
+
+            return {
+                x: window.innerWidth / 2,
+                y: window.innerHeight + 8,
+                vx: (Math.cos(angle) * speed) + drift,
+                vy: Math.sin(angle) * speed,
+                width: 5 + Math.random() * 8,
+                height: 8 + Math.random() * 14,
+                color: CONFETTI_COLORS[Math.floor(Math.random() * CONFETTI_COLORS.length)],
+                rotation: Math.random() * Math.PI,
+                rotationSpeed: (Math.random() - 0.5) * 0.36,
+                gravity: 0.24 + Math.random() * 0.12,
+                drag: 0.988 + Math.random() * 0.006,
+                opacity: 1
+            };
+        });
+
+        const startedAt = performance.now();
+        const draw = (timestamp) => {
+            if (!isRunning) return;
+
+            const elapsed = timestamp - startedAt;
+            context.clearRect(0, 0, window.innerWidth, window.innerHeight);
+
+            particles.forEach((particle) => {
+                particle.vx *= particle.drag;
+                particle.vy = (particle.vy * particle.drag) + particle.gravity;
+                particle.x += particle.vx;
+                particle.y += particle.vy;
+                particle.rotation += particle.rotationSpeed;
+                particle.opacity = Math.max(0, 1 - Math.max(0, elapsed - 1800) / 1000);
+
+                context.save();
+                context.globalAlpha = particle.opacity;
+                context.translate(particle.x, particle.y);
+                context.rotate(particle.rotation);
+                context.fillStyle = particle.color;
+                context.fillRect(-particle.width / 2, -particle.height / 2, particle.width, particle.height);
+                context.restore();
+            });
+
+            if (elapsed < 3000 || particles.some((particle) => particle.y < window.innerHeight + 40 && particle.opacity > 0)) {
+                frameId = window.requestAnimationFrame(draw);
+            } else {
+                context.clearRect(0, 0, window.innerWidth, window.innerHeight);
+            }
+        };
+
+        frameId = window.requestAnimationFrame(draw);
+
+        return () => {
+            isRunning = false;
+            window.cancelAnimationFrame(frameId);
+            window.removeEventListener('resize', resize);
+            context.clearRect(0, 0, window.innerWidth, window.innerHeight);
+        };
+    }, [triggerKey]);
+
+    return <canvas ref={canvasRef} className="pointer-events-none fixed inset-0 z-[60]" aria-hidden="true" />;
+}
 
 const formatBuzzDelta = (deltaMs) => `+${(deltaMs / 1000).toFixed(2)}s`;
 
@@ -346,6 +437,7 @@ function PrizeModal({ room, roomRef, isHost, t }) {
     if (!modal || !hasDefinedPrize(prize)) return null;
 
     const isRevealed = modal.status === 'revealed';
+    const confettiKey = modal.revealedAt || 0;
     const media = isRevealed ? prize.revealedMedia : prize.hiddenMedia;
     const imageUrl = getMediaUrl(media, 'game');
 
@@ -355,6 +447,7 @@ function PrizeModal({ room, roomRef, isHost, t }) {
                 <h2 className="relative z-10 text-5xl font-black uppercase tracking-wide text-yellow-300 drop-shadow-[0_5px_18px_rgba(0,0,0,0.75)] md:text-8xl">
                     {t('prizeTitle')}
                 </h2>
+                {isRevealed && <PrizeConfetti key={confettiKey} triggerKey={confettiKey} />}
                 <div className="relative flex min-h-0 w-full flex-1 items-center justify-center">
                     <img
                         src={imageUrl}
