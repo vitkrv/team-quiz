@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { arrayUnion, increment, runTransaction, updateDoc } from 'firebase/firestore';
 import { Check, Play, RotateCw, X } from 'lucide-react';
+import { ANIMAL_AVATARS, normalizeSurpriseScoringMechanic, SURPRISE_SCORING_MECHANICS } from '../../constants';
 import { useLanguage } from '../../useLanguage';
 import { createHistoryItem } from '../../actions/gameActions';
 import FloatingEmojiBackground from '../../components/FloatingEmojiBackground';
@@ -8,6 +9,7 @@ import HoldToConfirmButton from '../../components/HoldToConfirmButton';
 import QuestionMedia from '../../components/QuestionMedia';
 import { getMediaKind, MEDIA_KINDS, MEDIA_SLOTS } from '../../services/imageStorage';
 import { createFloatingBackgroundItems } from '../../utils/floatingBackground';
+import { generateId } from '../../utils/ids';
 
 const POINT_STEP = 100;
 const SURPRISE_DEFAULT_MIN_POINTS = 100;
@@ -16,6 +18,8 @@ const WHEEL_ANIMATION_MS = 6000;
 const LATE_BUZZ_WINDOW_MS = 2000;
 const SURPRISE_BACKGROUND_EMOJIS = ['\u{1F37F}', '\u{1F389}', '\u{1F973}', '\u{1F381}', '\u{1F37E}', '\u{1F382}', '\u{2728}', '\u{1FA84}'];
 const SURPRISE_BACKGROUND_EMOJI_COUNT = 80;
+const TABLE_PICKED_BACKGROUND_EMOJIS = ['\u{1F4B8}'];
+const TABLE_PICKED_BACKGROUND_COUNT = 8;
 
 const normalizePoints = (value, fallback = POINT_STEP) => {
     const parsedValue = Number.parseInt(value, 10);
@@ -62,6 +66,22 @@ const pruneSurpriseWheelValues = (question, isCorrect) => {
     const removeCount = Math.min(valuesToPrune.length - 1, Math.floor(valuesToPrune.length * 0.8));
     const removedValues = new Set(valuesToPrune.slice(0, Math.max(0, removeCount)));
     return shuffleWheelValues(values.filter((value) => !removedValues.has(value)));
+};
+
+const createSurpriseTable = (values) => {
+    const columns = Math.max(1, Math.ceil(Math.sqrt(values.length)));
+    const rows = Math.max(1, Math.ceil(values.length / columns));
+    const shuffledValues = shuffleWheelValues(values);
+
+    return {
+        rows,
+        columns,
+        cells: shuffledValues.map((value, index) => ({
+            id: generateId(),
+            value,
+            icon: ANIMAL_AVATARS[index % ANIMAL_AVATARS.length]
+        }))
+    };
 };
 
 const polarToCartesian = (center, radius, angleInDegrees) => {
@@ -165,6 +185,64 @@ function PointsWheel({ values, result, rolledAt, t }) {
     );
 }
 
+function SurprisePointsTable({ cells, rows, columns, pickedCellId, canPick, onPick, t }) {
+    const isRevealed = Boolean(pickedCellId);
+    const trophyItems = useMemo(
+        () => createFloatingBackgroundItems({
+            seed: `surprise-table:${pickedCellId || 'pending'}`,
+            count: TABLE_PICKED_BACKGROUND_COUNT,
+            emojis: TABLE_PICKED_BACKGROUND_EMOJIS
+        }),
+        [pickedCellId]
+    );
+    const slots = Array.from({ length: rows * columns }, (_, index) => cells[index] || null);
+
+    return (
+        <div className="w-full max-w-3xl rounded-xl border-4 border-black bg-yellow-600 p-2 shadow-2xl shadow-yellow-950/50 md:p-3">
+            <div
+                className="grid gap-0 border-2 border-black bg-black"
+                style={{ gridTemplateColumns: `repeat(${columns}, minmax(0, 1fr))` }}
+            >
+                {slots.map((cell, index) => {
+                    if (!cell) {
+                        return (
+                            <div
+                                key={`blank-${index}`}
+                                className="min-h-16 border-2 border-black bg-yellow-900/30 md:min-h-20"
+                            />
+                        );
+                    }
+
+                    const isPicked = pickedCellId === cell.id;
+                    const valueClassName = cell.value >= 0 ? 'text-green-900' : 'text-red-900';
+                    const cellClassName = isPicked
+                        ? 'surprise-table-picked-cell relative z-10 overflow-hidden'
+                        : 'border-2 border-black bg-yellow-400';
+
+                    return (
+                        <button
+                            key={cell.id}
+                            type="button"
+                            onClick={() => onPick(cell.id)}
+                            disabled={!canPick || isRevealed}
+                            className={`relative flex min-h-16 items-center justify-center px-4 py-3 text-center font-black transition-colors duration-300 md:min-h-20 md:px-6 ${cellClassName} ${canPick && !isRevealed && !isPicked ? 'hover:bg-yellow-300' : ''} disabled:cursor-default`}
+                            title={!isRevealed && canPick ? t('pickTableCell') : undefined}
+                        >
+                            {isPicked && <FloatingEmojiBackground items={trophyItems} className="inset-0" />}
+                            <span className={`relative text-3xl transition-all duration-500 ease-out md:text-5xl ${isRevealed ? 'scale-75 opacity-0' : 'scale-100 opacity-100'}`}>
+                                {cell.icon}
+                            </span>
+                            <span className={`absolute inset-0 flex items-center justify-center font-mono text-2xl transition-all duration-500 ease-out md:text-4xl ${valueClassName} ${isRevealed ? 'scale-100 opacity-100' : 'scale-75 opacity-0'}`}>
+                                {cell.value > 0 ? `+${cell.value}` : cell.value}
+                            </span>
+                        </button>
+                    );
+                })}
+            </div>
+        </div>
+    );
+}
+
 function SpaceBuzzHandler({ enabled, onBuzz }) {
     useEffect(() => {
         if (!enabled) return undefined;
@@ -250,20 +328,39 @@ export default function ActiveQuestionView({ room, roomRef, user, isHost, isSpec
     if (!activeQ) return null;
 
     const isSurpriseQuestion = Boolean(activeQ.isSurpriseQuestion);
+    const surpriseScoringMechanic = normalizeSurpriseScoringMechanic(room.pack?.surpriseScoringMechanic);
+    const isSurpriseTableMechanic = surpriseScoringMechanic === SURPRISE_SCORING_MECHANICS.table;
+    const isSurpriseWheelMechanic = surpriseScoringMechanic === SURPRISE_SCORING_MECHANICS.wheel;
     const surpriseRound = room.surpriseRound?.questionId === activeQ.id ? room.surpriseRound : null;
     const surpriseAnswererId = surpriseRound?.answererId || null;
     const surpriseAnswerer = surpriseAnswererId ? room.players[surpriseAnswererId] : null;
     const surpriseWheelValues = surpriseRound?.wheelValues || [];
+    const surpriseTableCells = surpriseRound?.tableCells || [];
+    const surpriseTableRows = Number(surpriseRound?.tableRows) || 0;
+    const surpriseTableColumns = Number(surpriseRound?.tableColumns) || 0;
+    const surpriseTablePickedCellId = surpriseRound?.tablePickedCellId || null;
     const isSurpriseJudged = Boolean(surpriseRound?.judgeResult);
     const isSurpriseRolled = surpriseRound?.rollResult !== null && surpriseRound?.rollResult !== undefined;
+    const isSurpriseTablePicked = Boolean(surpriseTablePickedCellId);
     const isSurpriseScoreApplied = Boolean(surpriseRound?.scoreAppliedAt);
-    const canContinueQuestion = !isSurpriseQuestion || !isSurpriseJudged || (isSurpriseRolled && isSurpriseScoreApplied);
+    const isSurpriseScoringComplete = isSurpriseWheelMechanic
+        ? isSurpriseRolled && isSurpriseScoreApplied
+        : isSurpriseTablePicked && isSurpriseScoreApplied;
+    const canContinueQuestion = !isSurpriseQuestion || !isSurpriseJudged || isSurpriseScoringComplete;
     const isAnswerRevealed = Boolean(room.answerRevealed);
     const canRollSurpriseWheel = isSurpriseQuestion
+        && isSurpriseWheelMechanic
         && isAnswerRevealed
         && isSurpriseJudged
         && !isSurpriseRolled
         && !isRolling
+        && !isSpectator
+        && (user.uid === surpriseAnswererId || isHost);
+    const canPickSurpriseTableCell = isSurpriseQuestion
+        && isSurpriseTableMechanic
+        && isAnswerRevealed
+        && isSurpriseJudged
+        && !isSurpriseTablePicked
         && !isSpectator
         && (user.uid === surpriseAnswererId || isHost);
     const hasBuzzed = !!room.buzzedPlayerId;
@@ -365,6 +462,35 @@ export default function ActiveQuestionView({ room, roomRef, user, isHost, isSpec
             if (!surpriseAnswererId) return;
 
             const playerName = room.players[surpriseAnswererId]?.name || t('playerFallback');
+            const pointValues = pruneSurpriseWheelValues(activeQ, isCorrect);
+            const surpriseTable = createSurpriseTable(pointValues);
+            const surpriseScoringUpdate = isSurpriseTableMechanic
+                ? {
+                    wheelValues: null,
+                    rollResult: null,
+                    rolledAt: null,
+                    rolledBy: null,
+                    tableRows: surpriseTable.rows,
+                    tableColumns: surpriseTable.columns,
+                    tableCells: surpriseTable.cells,
+                    tablePickedCellId: null,
+                    tablePickedAt: null,
+                    tablePickedBy: null,
+                    scoreAppliedAt: null
+                }
+                : {
+                    wheelValues: pointValues,
+                    rollResult: null,
+                    rolledAt: null,
+                    rolledBy: null,
+                    tableRows: null,
+                    tableColumns: null,
+                    tableCells: null,
+                    tablePickedCellId: null,
+                    tablePickedAt: null,
+                    tablePickedBy: null,
+                    scoreAppliedAt: null
+                };
             await updateDoc(roomRef, {
                 answerRevealed: true,
                 buzzedPlayerId: null,
@@ -375,11 +501,8 @@ export default function ActiveQuestionView({ room, roomRef, user, isHost, isSpec
                 surpriseRound: {
                     ...surpriseRound,
                     judgeResult: isCorrect ? 'correct' : 'incorrect',
-                    wheelValues: pruneSurpriseWheelValues(activeQ, isCorrect),
-                    rollResult: null,
-                    rolledAt: null,
-                    rolledBy: null,
-                    scoreAppliedAt: null
+                    scoringMechanic: surpriseScoringMechanic,
+                    ...surpriseScoringUpdate
                 },
                 history: arrayUnion(createHistoryItem({
                     type: isCorrect ? 'surprise_answer_correct' : 'surprise_answer_incorrect',
@@ -538,6 +661,60 @@ export default function ActiveQuestionView({ room, roomRef, user, isHost, isSpec
         }
     };
 
+    const handlePickSurpriseTableCell = async (cellId) => {
+        if (!canPickSurpriseTableCell || !cellId || !surpriseAnswererId) return;
+
+        await runTransaction(roomRef.firestore, async (transaction) => {
+            const roomSnap = await transaction.get(roomRef);
+            if (!roomSnap.exists()) return;
+
+            const latestRoom = roomSnap.data();
+            const latestRound = latestRoom.surpriseRound;
+            if (
+                latestRoom.activeQuestionId !== activeQ.id
+                || !latestRoom.answerRevealed
+                || latestRound?.questionId !== activeQ.id
+                || latestRound.scoringMechanic !== SURPRISE_SCORING_MECHANICS.table
+                || !latestRound.judgeResult
+                || latestRound.tablePickedCellId
+                || latestRound.scoreAppliedAt
+                || latestRound.answererId !== surpriseAnswererId
+                || (user.uid !== surpriseAnswererId && user.uid !== latestRoom.hostId)
+            ) {
+                return;
+            }
+
+            const pickedCell = (latestRound.tableCells || []).find((cell) => cell.id === cellId);
+            if (!pickedCell || typeof pickedCell.value !== 'number') return;
+
+            const player = latestRoom.players?.[surpriseAnswererId];
+            const pickedAt = Date.now();
+            const historyItem = createHistoryItem({
+                type: 'surprise_table_picked',
+                actorId: user.uid,
+                actorName,
+                message: t('historySurpriseTablePicked', {
+                    playerName: player?.name || t('playerFallback'),
+                    points: pickedCell.value > 0 ? `+${pickedCell.value}` : pickedCell.value
+                }),
+                details: {
+                    playerName: player?.name || t('playerFallback'),
+                    points: pickedCell.value
+                }
+            });
+
+            transaction.update(roomRef, {
+                [`players.${surpriseAnswererId}.score`]: increment(pickedCell.value),
+                currentTurn: surpriseAnswererId,
+                'surpriseRound.tablePickedCellId': cellId,
+                'surpriseRound.tablePickedAt': pickedAt,
+                'surpriseRound.tablePickedBy': user.uid,
+                'surpriseRound.scoreAppliedAt': pickedAt,
+                history: arrayUnion(historyItem)
+            });
+        });
+    };
+
     const handleStartQuestionMedia = async () => {
         if (!isHost || !hasGatedQuestionMedia || isQuestionMediaStarted) return;
         await updateDoc(roomRef, {
@@ -624,11 +801,22 @@ export default function ActiveQuestionView({ room, roomRef, user, isHost, isSpec
 
             {isAnswerRevealed && (
                 <div className="mt-4 flex w-full flex-col items-center gap-4 md:mt-6">
-                    {isSurpriseQuestion && isSurpriseJudged && surpriseWheelValues.length > 0 && (
+                    {isSurpriseQuestion && isSurpriseJudged && isSurpriseWheelMechanic && surpriseWheelValues.length > 0 && (
                         <PointsWheel
                             values={surpriseWheelValues}
                             result={surpriseRound.rollResult}
                             rolledAt={surpriseRound.rolledAt}
+                            t={t}
+                        />
+                    )}
+                    {isSurpriseQuestion && isSurpriseJudged && isSurpriseTableMechanic && surpriseTableCells.length > 0 && (
+                        <SurprisePointsTable
+                            cells={surpriseTableCells}
+                            rows={surpriseTableRows}
+                            columns={surpriseTableColumns}
+                            pickedCellId={surpriseTablePickedCellId}
+                            canPick={canPickSurpriseTableCell}
+                            onPick={handlePickSurpriseTableCell}
                             t={t}
                         />
                     )}
@@ -641,9 +829,14 @@ export default function ActiveQuestionView({ room, roomRef, user, isHost, isSpec
                             <RotateCw size={24} /> {isHost && user.uid !== surpriseAnswererId ? t('forceRollWheel') : t('rollTheWheel')}
                         </button>
                     )}
-                    {!canRollSurpriseWheel && isSurpriseQuestion && isSurpriseJudged && !isSurpriseRolled && (
+                    {!canRollSurpriseWheel && isSurpriseQuestion && isSurpriseWheelMechanic && isSurpriseJudged && !isSurpriseRolled && (
                         <div className="text-base font-bold text-slate-400 md:text-lg">
                             {t('waitingForWheelRoll', { playerName: surpriseAnswerer?.name || t('playerFallback') })}
+                        </div>
+                    )}
+                    {!canPickSurpriseTableCell && isSurpriseQuestion && isSurpriseTableMechanic && isSurpriseJudged && !isSurpriseTablePicked && (
+                        <div className="text-base font-bold text-slate-400 md:text-lg">
+                            {t('waitingForTablePick', { playerName: surpriseAnswerer?.name || t('playerFallback') })}
                         </div>
                     )}
                     {!isHost && canContinueQuestion && (

@@ -4,6 +4,7 @@ import { ArrowDown, ArrowLeft, ArrowUp, Check, ChevronDown, ChevronRight, Eye, P
 import EmojiPicker from '../components/EmojiPicker';
 import PackMediaAttachment from '../components/PackMediaAttachment';
 import HoldToConfirmButton from '../components/HoldToConfirmButton';
+import { normalizeSurpriseScoringMechanic, SURPRISE_SCORING_MECHANICS } from '../constants';
 import { appId, db } from '../firebase';
 import { deleteMedia, MEDIA_SLOTS, uploadMedia, getMediaKind } from '../services/imageStorage';
 import { useLanguage } from '../useLanguage';
@@ -250,6 +251,9 @@ export default function PackCreator({ pack, setView, user, setError, onSaved }) 
     const [packName, setPackName] = useState(pack?.name || '');
     const [packIconEmoji, setPackIconEmoji] = useState(pack?.iconEmoji || '');
     const [isPublic, setIsPublic] = useState(Boolean(pack?.isPublic));
+    const [surpriseScoringMechanic, setSurpriseScoringMechanic] = useState(() => (
+        normalizeSurpriseScoringMechanic(pack?.surpriseScoringMechanic)
+    ));
     const [categories, setCategories] = useState(pack?.categories || createDefaultCategories(t));
     const [isSaving, setIsSaving] = useState(false);
     const [isPreviewOpen, setIsPreviewOpen] = useState(false);
@@ -289,6 +293,7 @@ export default function PackCreator({ pack, setView, user, setError, onSaved }) 
         iconEmoji: packIconEmoji,
         ownerId: user.uid,
         ownerEmail: user.email || null,
+        surpriseScoringMechanic,
         updatedAt: timestamp,
         categories: stripPendingCategories(sourceCategories)
     });
@@ -646,6 +651,7 @@ export default function PackCreator({ pack, setView, user, setError, onSaved }) 
                 isPublic,
                 ownerId: user.uid,
                 ownerEmail: user.email || null,
+                surpriseScoringMechanic,
                 updatedAt: Date.now(),
                 categories: finalCategories
             };
@@ -768,6 +774,46 @@ export default function PackCreator({ pack, setView, user, setError, onSaved }) 
                             <span className="absolute left-1 h-5 w-5 rounded-full bg-white transition-transform peer-checked:translate-x-5 peer-disabled:opacity-80" />
                         </span>
                     </label>
+                    <div className="rounded-lg border border-slate-700 bg-slate-900 p-4">
+                        <div className="mb-3 font-bold text-white">{t('surpriseScoringMechanic')}</div>
+                        <div className="grid gap-3 md:grid-cols-2">
+                            {[
+                                {
+                                    value: SURPRISE_SCORING_MECHANICS.wheel,
+                                    label: t('surpriseMechanicWheel'),
+                                    hint: t('surpriseMechanicWheelHint')
+                                },
+                                {
+                                    value: SURPRISE_SCORING_MECHANICS.table,
+                                    label: t('surpriseMechanicTable'),
+                                    hint: t('surpriseMechanicTableHint')
+                                }
+                            ].map((option) => {
+                                const isSelected = surpriseScoringMechanic === option.value;
+
+                                return (
+                                    <label
+                                        key={option.value}
+                                        className={`flex cursor-pointer gap-3 rounded-lg border p-4 transition-colors ${isSelected ? 'border-yellow-400 bg-yellow-950/30' : 'border-slate-700 bg-slate-950 hover:border-slate-600'}`}
+                                    >
+                                        <input
+                                            type="radio"
+                                            name="surpriseScoringMechanic"
+                                            value={option.value}
+                                            checked={isSelected}
+                                            onChange={(event) => setSurpriseScoringMechanic(event.target.value)}
+                                            disabled={isSaving || hasActiveMediaAction}
+                                            className="mt-1 h-4 w-4 shrink-0 accent-yellow-400"
+                                        />
+                                        <span className="min-w-0">
+                                            <span className="block font-black text-slate-100">{option.label}</span>
+                                            <span className="mt-1 block text-sm leading-relaxed text-slate-400">{option.hint}</span>
+                                        </span>
+                                    </label>
+                                );
+                            })}
+                        </div>
+                    </div>
                     <div className="flex flex-wrap gap-3">
                         <button
                             type="button"
