@@ -1,5 +1,7 @@
 import { forwardRef, useEffect, useRef, useState } from 'react';
 import { Pause, Play, Volume2, VolumeX } from 'lucide-react';
+import MediaVolumeControl from './MediaVolumeControl';
+import useLocalMediaVolume from '../hooks/useLocalMediaVolume';
 
 const formatTime = (seconds) => {
     if (!Number.isFinite(seconds) || seconds < 0) return '0:00';
@@ -25,10 +27,12 @@ const AudioControls = forwardRef(function AudioControls({
     preload = 'metadata',
     disabled = false,
     compact = false,
+    showVolume = true,
     className = '',
     t
 }, forwardedRef) {
     const audioRef = useRef(null);
+    const [volume] = useLocalMediaVolume();
     const [duration, setDuration] = useState(0);
     const [currentTime, setCurrentTime] = useState(0);
     const [isPlaying, setIsPlaying] = useState(false);
@@ -40,6 +44,13 @@ const AudioControls = forwardRef(function AudioControls({
         setIsPlaying(false);
         setIsMuted(false);
     }, [src]);
+
+    useEffect(() => {
+        const audio = audioRef.current;
+        if (!audio) return;
+
+        audio.volume = volume;
+    }, [volume]);
 
     const togglePlayback = async () => {
         const audio = audioRef.current;
@@ -127,6 +138,7 @@ const AudioControls = forwardRef(function AudioControls({
                         {isMuted ? <VolumeX size={compact ? 18 : 20} /> : <Volume2 size={compact ? 18 : 20} />}
                     </button>
                 </div>
+                {showVolume && <MediaVolumeControl compact={compact} t={t} />}
             </div>
         </div>
     );

@@ -1,7 +1,9 @@
 import { useEffect, useRef, useState } from 'react';
 import { Image, Lock, Music, Play, Video } from 'lucide-react';
 import AudioControls from './AudioControls';
+import MediaVolumeControl from './MediaVolumeControl';
 import MediaLightbox from './MediaLightbox';
+import useLocalMediaVolume from '../hooks/useLocalMediaVolume';
 import { getMediaKind, getMediaUrl, MEDIA_KINDS } from '../services/imageStorage';
 
 const variantClasses = {
@@ -39,6 +41,7 @@ export default function QuestionMedia({
     const [isBlocked, setIsBlocked] = useState(false);
     const mediaRef = useRef(null);
     const startedKeyRef = useRef('');
+    const [volume] = useLocalMediaVolume();
 
     const kind = getMediaKind(media);
     const url = getMediaUrl(media, variant === 'thumbnail' ? 'thumbnail' : variant === 'host' ? 'host' : 'game');
@@ -72,6 +75,13 @@ export default function QuestionMedia({
         element.pause();
     }, [kind, pauseSignal]);
 
+    useEffect(() => {
+        const element = mediaRef.current;
+        if (!element || kind !== MEDIA_KINDS.VIDEO) return;
+
+        element.volume = volume;
+    }, [kind, volume]);
+
     if (!media) return null;
 
     if (kind === MEDIA_KINDS.IMAGE) {
@@ -97,7 +107,7 @@ export default function QuestionMedia({
         if (kind === MEDIA_KINDS.AUDIO) {
             return (
                 <div className={`${frameClasses.thumbnail} h-auto min-h-28 w-64 max-w-full flex items-center justify-center p-3`}>
-                    <AudioControls src={url} preload="none" compact t={t} />
+                    <AudioControls src={url} preload="none" compact showVolume={false} t={t} />
                 </div>
             );
         }
@@ -142,7 +152,10 @@ export default function QuestionMedia({
                     t={t}
                 />
             ) : (
-                <video {...videoProps} playsInline />
+                <div className="w-full max-w-4xl">
+                    <video {...videoProps} playsInline />
+                    <MediaVolumeControl t={t} />
+                </div>
             )}
             {locked && (
                 <div className="inline-flex items-center gap-2 rounded-lg border border-slate-700 bg-slate-950/80 px-3 py-2 text-sm font-bold text-slate-300">
