@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Shuffle, X } from 'lucide-react';
 import {
     advanceTieBreakerMatch,
@@ -13,6 +13,7 @@ import {
 } from '../../actions/gameActions';
 import HoldToConfirmButton from '../../components/HoldToConfirmButton';
 import RockPaperScissorsManager from '../../components/RockPaperScissorsManager';
+import { preloadMediaImage } from '../../hooks/useRetryableImage';
 import { useLanguage } from '../../useLanguage';
 import { areAllQuestionsDone, getTopTiedPlayerIds } from '../../utils/gameResults';
 
@@ -84,6 +85,7 @@ export default function BoardView({ room, roomRef, user, isHost, isSpectator = f
     const [isTieBreakerSetupOpen, setIsTieBreakerSetupOpen] = useState(false);
     const isMyTurn = room.currentTurn === user.uid;
     const categories = room.pack.categories;
+    const questionImagePreloadVariant = isHost ? 'host' : 'game';
     const maxQuestionCount = Math.max(0, ...categories.map((cat) => cat.questions?.length || 0));
     const actorName = room.players[user.uid]?.name || user.displayName || t('playerFallback');
     const surprisePlayerEntries = getSurprisePlayerEntries(room.players);
@@ -93,6 +95,17 @@ export default function BoardView({ room, roomRef, user, isHost, isSpectator = f
     const topTiedPlayerIds = getTopTiedPlayerIds(room.players);
     const hasTopScoreTie = topTiedPlayerIds.length > 1;
     const shouldShowTieBreaker = Boolean(room.tieBreaker?.status) || isTieBreakerSetupOpen;
+
+    useEffect(() => {
+        categories.forEach((category) => {
+            (category.questions || []).forEach((question) => {
+                if (room.questionStates?.[question.id] === 'available') {
+                    preloadMediaImage(question.questionMedia, questionImagePreloadVariant).catch(() => {});
+                }
+            });
+        });
+    }, [categories, questionImagePreloadVariant, room.questionStates]);
+
     const handleHostEndGame = () => handleEndGame(roomRef, createHistoryItem({
         type: 'game_finished',
         actorId: user.uid,

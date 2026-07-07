@@ -1,6 +1,7 @@
 import { X } from 'lucide-react';
 import { useLanguage } from '../useLanguage';
 import { getMediaUrl } from '../services/imageStorage';
+import RetryableImage from './RetryableImage';
 
 export default function MediaLightbox({ media, alt, onClose }) {
     const { t } = useLanguage();
@@ -23,10 +24,11 @@ export default function MediaLightbox({ media, alt, onClose }) {
                 >
                     <X size={22} strokeWidth={3} />
                 </button>
-                <img
+                <RetryableImage
                     src={getMediaUrl(media, 'full')}
                     alt={alt}
-                    className="max-h-[90vh] max-w-[92vw] rounded-xl object-contain shadow-2xl"
+                    imageClassName="max-h-[90vh] max-w-[92vw] rounded-xl object-contain shadow-2xl"
+                    fallbackClassName="h-[60vh] max-h-[90vh] w-[92vw] max-w-5xl rounded-xl shadow-2xl"
                 />
             </div>
         </div>

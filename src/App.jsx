@@ -1,6 +1,6 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { GoogleAuthProvider, onAuthStateChanged, signInWithPopup, signOut } from 'firebase/auth';
-import { doc, onSnapshot, setDoc } from 'firebase/firestore';
+import { doc, getDocFromServer, onSnapshot, setDoc } from 'firebase/firestore';
 import { X } from 'lucide-react';
 import FirebaseSetupMissing from './components/FirebaseSetupMissing';
 import { appId, auth, db, hasFirebaseConfig } from './firebase';
@@ -19,6 +19,8 @@ import GameRoom from './views/game/GameRoom';
 
 const LAST_ROOM_CODE_KEY = 'cortex-rush:lastRoomCode';
 const LANGUAGE_CACHE_KEY = 'cortex-rush:language';
+const ROOM_STALE_SNAPSHOT_MS = 5000;
+const ROOM_RECONCILE_INTERVAL_MS = 10000;
 const getRoomCodeFromUrl = () => new URLSearchParams(window.location.search).get('room')?.trim().toUpperCase() || '';
 const getGameCodeFromUrl = () => new URLSearchParams(window.location.search).get('game')?.trim().toUpperCase() || '';
 const replaceUrl = (url) => {
@@ -65,6 +67,8 @@ export default function App() {
     const [roomData, setRoomData] = useState(null);
     const [editingPack, setEditingPack] = useState(null);
     const [error, setError] = useState('');
+    const roomSnapshotReceivedAtRef = useRef(0);
+    const roomReconcilePromiseRef = useRef(null);
 
     useEffect(() => {
         if (!hasFirebaseConfig) return undefined;
@@ -236,10 +240,15 @@ export default function App() {
 
     // --- 2. Room Listener ---
     useEffect(() => {
-        if (!hasFirebaseConfig || !user || !currentRoomCode) return undefined;
+        if (!hasFirebaseConfig || !user || !currentRoomCode) {
+            roomSnapshotReceivedAtRef.current = 0;
+            roomReconcilePromiseRef.current = null;
+            return undefined;
+        }
 
         const roomRef = doc(db, 'artifacts', appId, 'public', 'data', 'rooms', currentRoomCode);
-        const unsubscribe = onSnapshot(roomRef, (snapshot) => {
+        let isRoomListenerActive = true;
+        const applyRoomSnapshot = (snapshot) => {
             if (snapshot.exists()) {
                 const room = snapshot.data();
                 const isParticipant = Boolean(room.players?.[user.uid]);
@@ -288,12 +297,61 @@ export default function App() {
                 clearGameCodeFromUrl();
                 setView('menu');
             }
+        };
+        const reconcileRoomFromServer = async ({ force = false } = {}) => {
+            if (document.hidden) return;
+
+            const elapsedMs = Date.now() - roomSnapshotReceivedAtRef.current;
+            if (!force && roomSnapshotReceivedAtRef.current && elapsedMs < ROOM_STALE_SNAPSHOT_MS) return;
+            if (roomReconcilePromiseRef.current) return;
+
+            const reconcilePromise = getDocFromServer(roomRef)
+                .then((serverSnapshot) => {
+                    if (!isRoomListenerActive) return;
+
+                    roomSnapshotReceivedAtRef.current = Date.now();
+                    applyRoomSnapshot(serverSnapshot);
+                })
+                .catch((err) => {
+                    console.error("Room server reconcile error:", err);
+                })
+                .finally(() => {
+                    if (roomReconcilePromiseRef.current === reconcilePromise) {
+                        roomReconcilePromiseRef.current = null;
+                    }
+                });
+            roomReconcilePromiseRef.current = reconcilePromise;
+
+            await roomReconcilePromiseRef.current;
+        };
+        const reconcileOnVisible = () => {
+            if (!document.hidden) {
+                reconcileRoomFromServer({ force: true });
+            }
+        };
+        const unsubscribe = onSnapshot(roomRef, (snapshot) => {
+            roomSnapshotReceivedAtRef.current = Date.now();
+            applyRoomSnapshot(snapshot);
         }, (err) => {
             console.error("Room sync error:", err);
             setError(translate(language, 'roomSyncLost'));
         });
+        const intervalId = window.setInterval(() => reconcileRoomFromServer(), ROOM_RECONCILE_INTERVAL_MS);
 
-        return () => unsubscribe();
+        document.addEventListener('visibilitychange', reconcileOnVisible);
+        window.addEventListener('focus', reconcileOnVisible);
+        window.addEventListener('online', reconcileOnVisible);
+        window.addEventListener('pageshow', reconcileOnVisible);
+
+        return () => {
+            isRoomListenerActive = false;
+            unsubscribe();
+            window.clearInterval(intervalId);
+            document.removeEventListener('visibilitychange', reconcileOnVisible);
+            window.removeEventListener('focus', reconcileOnVisible);
+            window.removeEventListener('online', reconcileOnVisible);
+            window.removeEventListener('pageshow', reconcileOnVisible);
+        };
     }, [user, currentRoomCode, language, view, linkedGameRoomCode]);
 
     if (!hasFirebaseConfig) {

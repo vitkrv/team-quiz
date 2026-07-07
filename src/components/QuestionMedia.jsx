@@ -3,6 +3,7 @@ import { Image, Lock, Music, Play, Video } from 'lucide-react';
 import AudioControls from './AudioControls';
 import MediaVolumeControl from './MediaVolumeControl';
 import MediaLightbox from './MediaLightbox';
+import RetryableImage from './RetryableImage';
 import useLocalMediaVolume from '../hooks/useLocalMediaVolume';
 import { getMediaKind, getMediaUrl, MEDIA_KINDS } from '../services/imageStorage';
 
@@ -92,10 +93,11 @@ export default function QuestionMedia({
                     onClick={() => setIsOpen(true)}
                     className={`${frameClasses[variant]} ${variantClasses[variant]} ${className}`}
                 >
-                    <img
+                    <RetryableImage
                         src={url}
                         alt={alt}
-                        className="h-full w-full object-contain"
+                        imageClassName="h-full w-full object-contain"
+                        fallbackClassName="h-full w-full"
                     />
                 </button>
                 {isOpen && <MediaLightbox media={media} alt={alt} onClose={() => setIsOpen(false)} />}

@@ -5,6 +5,7 @@ import { HOST_AVATAR } from '../../constants';
 import { appId, db } from '../../firebase';
 import PackTitle from '../../components/PackTitle';
 import HostRpsModal from '../../components/HostRpsModal';
+import RetryableImage from '../../components/RetryableImage';
 import useServerClock from '../../hooks/useServerClock';
 import { useLanguage } from '../../useLanguage';
 import { adjustScore, closeHostRps, closePrizeModal, createHistoryItem, openPrizeModal, resolveHostRpsThrow, revealPrizeModal, startHostRps, submitHostRpsChoice } from '../../actions/gameActions';
@@ -16,6 +17,7 @@ import ResultsView from './ResultsView';
 
 const ANSWER_WINDOW_MS = 10000;
 const LATE_BUZZ_WINDOW_MS = 2000;
+const BOARD_CLOCK_RESYNC_INTERVAL_MS = 2 * 60 * 1000;
 
 const getPlayerEntries = (players) => Object.entries(players).filter(([, player]) => !player.isHost);
 
@@ -449,10 +451,11 @@ function PrizeModal({ room, roomRef, isHost, t }) {
                 </h2>
                 {isRevealed && <PrizeConfetti key={confettiKey} triggerKey={confettiKey} />}
                 <div className="relative flex min-h-0 w-full flex-1 items-center justify-center">
-                    <img
+                    <RetryableImage
                         src={imageUrl}
                         alt={t('prizeTitle')}
-                        className={`relative z-10 max-h-full max-w-full rounded-lg object-contain ${isRevealed ? 'prize-image--revealed' : ''}`}
+                        imageClassName={`relative z-10 max-h-full max-w-full rounded-lg object-contain ${isRevealed ? 'prize-image--revealed' : ''}`}
+                        fallbackClassName="relative z-10 h-full w-full max-w-3xl rounded-lg"
                     />
                 </div>
                 {isHost && (
@@ -485,8 +488,9 @@ export default function GameRoom({ room, roomCode, user, onLeaveRoom, showDefine
     const isHost = user.uid === room.hostId;
     const isSpectator = !isHost && !room.players?.[user.uid];
     const roomRef = doc(db, 'artifacts', appId, 'public', 'data', 'rooms', roomCode);
-    const { serverNow } = useServerClock(user.uid);
+    const { serverNow, syncClock } = useServerClock(user.uid);
     const [now, setNow] = useState(() => serverNow());
+    const wasBoardViewRef = useRef(false);
     const [copiedRoomCode, setCopiedRoomCode] = useState(false);
     const [copiedJoinLink, setCopiedJoinLink] = useState(false);
     const [isScoreEditorOpen, setIsScoreEditorOpen] = useState(false);
@@ -517,6 +521,16 @@ export default function GameRoom({ room, roomCode, user, onLeaveRoom, showDefine
         const intervalId = window.setInterval(() => setNow(serverNow()), 100);
         return () => window.clearInterval(intervalId);
     }, [room.answerRevealed, room.buzzedPlayerId, room.buzzTimestamp, serverNow]);
+
+    useEffect(() => {
+        const isBoardView = room.status === 'playing' && !room.activeQuestionId;
+
+        if (isBoardView && !wasBoardViewRef.current && !isHost && !isSpectator) {
+            syncClock({ minIntervalMs: BOARD_CLOCK_RESYNC_INTERVAL_MS });
+        }
+
+        wasBoardViewRef.current = isBoardView;
+    }, [isHost, isSpectator, room.activeQuestionId, room.status, syncClock]);
 
     useEffect(() => {
         if (room.activeQuestionId || room.hostRps || room.tieBreaker?.status) {

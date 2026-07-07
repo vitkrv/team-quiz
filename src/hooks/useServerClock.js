@@ -17,13 +17,18 @@ export default function useServerClock(userId) {
     const [lastSyncedAt, setLastSyncedAt] = useState(null);
     const offsetRef = useRef(0);
     const syncPromiseRef = useRef(null);
+    const lastSyncStartedAtRef = useRef(0);
 
     const serverNow = useCallback(() => Date.now() + offsetRef.current, []);
 
-    const syncClock = useCallback(async () => {
+    const syncClock = useCallback(async ({ minIntervalMs = 0 } = {}) => {
         if (!db || !userId) return null;
+        if (minIntervalMs > 0 && Date.now() - lastSyncStartedAtRef.current < minIntervalMs) {
+            return offsetRef.current;
+        }
         if (syncPromiseRef.current) return syncPromiseRef.current;
 
+        lastSyncStartedAtRef.current = Date.now();
         syncPromiseRef.current = (async () => {
             const syncRef = doc(db, 'artifacts', appId, 'users', userId, 'clockSync', 'current');
             const samples = [];
@@ -75,6 +80,7 @@ export default function useServerClock(userId) {
     useEffect(() => {
         if (!userId) {
             offsetRef.current = 0;
+            lastSyncStartedAtRef.current = 0;
             setOffsetMs(0);
             setReady(false);
             setLastSyncedAt(null);
@@ -102,6 +108,7 @@ export default function useServerClock(userId) {
         offsetMs,
         ready,
         lastSyncedAt,
-        serverNow
+        serverNow,
+        syncClock
     };
 }

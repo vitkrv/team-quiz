@@ -7,6 +7,7 @@ import { createHistoryItem } from '../../actions/gameActions';
 import FloatingEmojiBackground from '../../components/FloatingEmojiBackground';
 import HoldToConfirmButton from '../../components/HoldToConfirmButton';
 import QuestionMedia from '../../components/QuestionMedia';
+import { preloadMediaImage } from '../../hooks/useRetryableImage';
 import { getMediaKind, MEDIA_KINDS, MEDIA_SLOTS } from '../../services/imageStorage';
 import { createFloatingBackgroundItems } from '../../utils/floatingBackground';
 import { generateId } from '../../utils/ids';
@@ -324,6 +325,12 @@ export default function ActiveQuestionView({ room, roomRef, user, isHost, isSpec
         const timeoutId = window.setTimeout(() => setBuzzUnlockNow(serverNow()), remainingMs);
         return () => window.clearTimeout(timeoutId);
     }, [buzzUnlockAt, room.activeQuestionId, room.answerRevealed, room.buzzedPlayerId, serverNow]);
+
+    useEffect(() => {
+        if (!activeQ?.answerMedia) return;
+
+        preloadMediaImage(activeQ.answerMedia, isHost ? 'host' : 'game').catch(() => {});
+    }, [activeQ?.answerMedia, isHost]);
 
     if (!activeQ) return null;
 
