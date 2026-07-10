@@ -5,6 +5,7 @@ import { X } from 'lucide-react';
 import FirebaseSetupMissing from './components/FirebaseSetupMissing';
 import { appId, auth, db, hasFirebaseConfig } from './firebase';
 import LanguageProvider from './LanguageProvider';
+import { setAnalyticsUserContext, trackEvent, trackPageView } from './services/analytics';
 import { clearImageKitAuthSession } from './services/imageStorage';
 import { normalizeLanguage, translate } from './i18n';
 import { getAuthErrorMessage } from './utils/errors';
@@ -71,6 +72,18 @@ export default function App() {
     const roomReconcilePromiseRef = useRef(null);
 
     useEffect(() => {
+        if (!authReady) return;
+
+        setAnalyticsUserContext({ signedIn: Boolean(user) });
+    }, [authReady, user]);
+
+    useEffect(() => {
+        if (!authReady) return;
+
+        trackPageView(user ? view : 'login');
+    }, [authReady, user, view]);
+
+    useEffect(() => {
         if (!hasFirebaseConfig) return undefined;
 
         const unsubscribe = onAuthStateChanged(auth, (u) => {
@@ -133,6 +146,7 @@ export default function App() {
             provider.setCustomParameters({ prompt: 'select_account' });
             const loginLanguage = normalizeLanguage(localStorage.getItem(LANGUAGE_CACHE_KEY) || language);
             const credential = await signInWithPopup(auth, provider);
+            trackEvent('login', { method: 'google' });
             try {
                 await saveUserLanguagePreference(credential.user.uid, loginLanguage);
             } catch (err) {
@@ -149,6 +163,7 @@ export default function App() {
         try {
             clearImageKitAuthSession();
             await signOut(auth);
+            trackEvent('sign_out');
             handleSetCurrentRoomCode(null);
             setRoomData(null);
             setEditingPack(null);

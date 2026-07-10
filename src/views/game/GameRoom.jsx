@@ -7,6 +7,7 @@ import PackTitle from '../../components/PackTitle';
 import HostRpsModal from '../../components/HostRpsModal';
 import RetryableImage from '../../components/RetryableImage';
 import useServerClock from '../../hooks/useServerClock';
+import { getRoomAnalyticsSummary, trackEvent } from '../../services/analytics';
 import { useLanguage } from '../../useLanguage';
 import { adjustScore, closeHostRps, closePrizeModal, createHistoryItem, openPrizeModal, resolveHostRpsThrow, revealPrizeModal, startHostRps, submitHostRpsChoice } from '../../actions/gameActions';
 import { getMediaKind, getMediaUrl, MEDIA_KINDS } from '../../services/imageStorage';
@@ -571,6 +572,7 @@ export default function GameRoom({ room, roomCode, user, onLeaveRoom, showDefine
                 }
             }))
         });
+        trackEvent('game_started', getRoomAnalyticsSummary(room));
     };
 
     const createScoreAdjustmentHistory = (player, delta, nextScore) => createHistoryItem({

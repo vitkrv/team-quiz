@@ -14,6 +14,7 @@ import {
 import HoldToConfirmButton from '../../components/HoldToConfirmButton';
 import RockPaperScissorsManager from '../../components/RockPaperScissorsManager';
 import { preloadMediaImage } from '../../hooks/useRetryableImage';
+import { getRoomAnalyticsSummary, trackEvent } from '../../services/analytics';
 import { useLanguage } from '../../useLanguage';
 import { areAllQuestionsDone, getTopTiedPlayerIds } from '../../utils/gameResults';
 
@@ -106,23 +107,29 @@ export default function BoardView({ room, roomRef, user, isHost, isSpectator = f
         });
     }, [categories, questionImagePreloadVariant, room.questionStates]);
 
-    const handleHostEndGame = () => handleEndGame(roomRef, createHistoryItem({
-        type: 'game_finished',
-        actorId: user.uid,
-        actorName,
-        message: t('historyGameEnded', { actorName }),
-        details: { actorName }
-    }));
-    const handleFinishTieBreakerGame = () => handleEndGame(roomRef, createHistoryItem({
-        type: 'game_finished',
-        actorId: user.uid,
-        actorName,
-        message: t('historyGameEnded', { actorName }),
-        details: {
+    const handleHostEndGame = async () => {
+        await handleEndGame(roomRef, createHistoryItem({
+            type: 'game_finished',
+            actorId: user.uid,
             actorName,
-            tieBreakerChampionName: room.players[room.tieBreaker?.championId]?.name || t('playerFallback')
-        }
-    }));
+            message: t('historyGameEnded', { actorName }),
+            details: { actorName }
+        }));
+        trackEvent('game_finished', getRoomAnalyticsSummary(room));
+    };
+    const handleFinishTieBreakerGame = async () => {
+        await handleEndGame(roomRef, createHistoryItem({
+            type: 'game_finished',
+            actorId: user.uid,
+            actorName,
+            message: t('historyGameEnded', { actorName }),
+            details: {
+                actorName,
+                tieBreakerChampionName: room.players[room.tieBreaker?.championId]?.name || t('playerFallback')
+            }
+        }));
+        trackEvent('game_finished', getRoomAnalyticsSummary(room));
+    };
     const handleStartTieBreaker = async (mode) => {
         await initializeTieBreaker(roomRef, topTiedPlayerIds, mode, createHistoryItem({
             type: 'tie_breaker_started',

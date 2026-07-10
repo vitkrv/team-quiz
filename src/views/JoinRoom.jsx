@@ -4,6 +4,7 @@ import { ArrowLeft } from 'lucide-react';
 import PackTitle from '../components/PackTitle';
 import { ANIMAL_AVATARS, HOST_AVATAR } from '../constants';
 import { appId, db } from '../firebase';
+import { trackEvent } from '../services/analytics';
 import { useLanguage } from '../useLanguage';
 
 export default function JoinRoom({ initialCode = '', setView, user, setCurrentRoomCode, setError, onCodeConsumed }) {
@@ -119,6 +120,7 @@ export default function JoinRoom({ initialCode = '', setView, user, setCurrentRo
             }
 
             setCurrentRoomCode(normalizedCode, { remember: !joinResult.spectating });
+            trackEvent('room_joined', { spectating: joinResult.spectating ? 'yes' : 'no' });
             onCodeConsumed?.();
             setView('room');
         } catch (err) {

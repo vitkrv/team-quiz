@@ -12,7 +12,9 @@ Question packs are owner-only by default. Authors can mark a pack as available t
    npm install
    ```
 
-2. Create `.env` from `.env.example` and fill it with your Firebase web app config.
+2. Create `.env.local` from `.env.example` and fill it with your Firebase web app config.
+   For production builds, put production-only values in `.env.production.local` so Firebase and Analytics config stays out of the public repository.
+   Keep `VITE_FIREBASE_MEASUREMENT_ID` empty in committed example files and set the real value only in ignored local env files.
 
 3. In Firebase Console, open Authentication, click Get started if Auth has not been initialized yet, then enable the Google provider under Sign-in method.
 
@@ -42,7 +44,7 @@ Question packs are owner-only by default. Authors can mark a pack as available t
 ## Scripts
 
 - `npm run dev` starts the Vite dev server.
-- `npm run build` creates a production build in `dist`.
+- `npm run build` creates a production-mode Vite build in `dist` for Firebase Hosting.
 - `npm run preview` previews the production build.
 - `npm run lint` runs ESLint.
 

@@ -7,6 +7,7 @@ import HoldToConfirmButton from '../components/HoldToConfirmButton';
 import { normalizeSurpriseScoringMechanic, SURPRISE_SCORING_MECHANICS } from '../constants';
 import { appId, db } from '../firebase';
 import { deleteMedia, MEDIA_KINDS, MEDIA_SLOTS, PACK_PRIZE_MEDIA_ID, uploadMedia, getMediaKind } from '../services/imageStorage';
+import { getPackAnalyticsSummary, trackEvent } from '../services/analytics';
 import { useLanguage } from '../useLanguage';
 import { generateId } from '../utils/ids';
 import { getFirestoreErrorMessage } from '../utils/errors';
@@ -783,6 +784,7 @@ export default function PackCreator({ pack, setView, user, setError, onSaved }) 
                 setPersistedPackId(createdDoc.id);
             }
 
+            trackEvent(isEditMode ? 'pack_updated' : 'pack_created', getPackAnalyticsSummary(packData));
             onSaved();
         } catch (err) {
             console.error("Save error:", err);

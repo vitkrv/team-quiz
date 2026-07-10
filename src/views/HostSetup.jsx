@@ -4,6 +4,7 @@ import { ArrowLeft, ChevronDown, ChevronRight, Play } from 'lucide-react';
 import { HOST_AVATAR } from '../constants';
 import PackTitle from '../components/PackTitle';
 import { appId, db } from '../firebase';
+import { getPackAnalyticsSummary, trackEvent } from '../services/analytics';
 import { useLanguage } from '../useLanguage';
 import { generateRoomCode } from '../utils/ids';
 import { createHistoryItem } from '../actions/gameActions';
@@ -180,6 +181,7 @@ export default function HostSetup({ setView, user, setCurrentRoomCode, onCreateP
 
         try {
             await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'rooms', code), roomData);
+            trackEvent('room_created', getPackAnalyticsSummary(pack));
             setCurrentRoomCode(code);
             setView('room');
         } catch (err) {
