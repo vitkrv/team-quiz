@@ -32,7 +32,7 @@ export default function PackManager({ setView, user, setError, onCreatePack, onE
                 const snapshot = await getDocs(query(packsRef, where('ownerId', '==', user.uid)));
                 const loadedPacks = [];
                 snapshot.forEach((packDoc) => loadedPacks.push({ id: packDoc.id, ...packDoc.data() }));
-                setPacks(loadedPacks.sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0)));
+                setPacks(loadedPacks.sort((a, b) => (b.createdAt || b.updatedAt || 0) - (a.createdAt || a.updatedAt || 0)));
             } catch (err) {
                 console.error("Error fetching owned packs", err);
                 setError(getFirestoreErrorMessage(err, t('loadPacksAction'), language));
