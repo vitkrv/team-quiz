@@ -7,6 +7,7 @@ import {
     handleEndGame,
     handlePickQuestion,
     initializeTieBreaker,
+    pulseQuestionSelection,
     resolveTieBreakerThrow,
     selectTieBreakerPair,
     submitTieBreakerChoice
@@ -169,8 +170,13 @@ export default function BoardView({ room, roomRef, user, isHost, isSpectator = f
             }
         } : {};
 
-        await handlePickQuestion(roomRef, q.id, createQuestionPickedHistory(cat, q, pickerName), extraUpdate, serverNow);
+        await handlePickQuestion(roomRef, q.id, user.uid, createQuestionPickedHistory(cat, q, pickerName), extraUpdate, serverNow);
         setPendingSurpriseQuestion(null);
+    };
+
+    const pulseQuestion = async (q) => {
+        if (!isMyTurn) return;
+        await pulseQuestionSelection(roomRef, q.id, user.uid);
     };
 
     return (
@@ -255,13 +261,22 @@ export default function BoardView({ room, roomRef, user, isHost, isSpectator = f
                                     {(cat.questions || []).map((q) => {
                                         const state = room.questionStates[q.id];
                                         const isAvailable = state === 'available';
-                                        const canPick = isAvailable && !isSpectator && (isMyTurn || isHost); // Host can force pick
+                                        const canClickAvailableQuestion = isAvailable && !isSpectator;
+                                        const pulseId = room.questionPulse?.questionId === q.id ? room.questionPulse.id : 'idle';
+                                        const isPulsed = pulseId !== 'idle';
 
                                         return (
                                             <button
-                                                key={q.id}
-                                                disabled={!canPick}
+                                                key={`${q.id}:${pulseId}`}
+                                                disabled={!canClickAvailableQuestion}
                                                 onClick={() => {
+                                                    if (!isAvailable || isSpectator) return;
+
+                                                    if (!isHost) {
+                                                        pulseQuestion(q);
+                                                        return;
+                                                    }
+
                                                     if (q.isSurpriseQuestion && isHost) {
                                                         setPendingSurpriseQuestion({ cat, q });
                                                         return;
@@ -276,8 +291,8 @@ export default function BoardView({ room, roomRef, user, isHost, isSpectator = f
                                                 className={`
                                                     flex min-h-14 items-center justify-center rounded-lg font-mono text-xl font-black transition-all duration-200 md:min-h-0 md:text-4xl
                                                     ${isAvailable
-                                                        ? (canPick
-                                                            ? 'bg-blue-800 hover:bg-blue-700 text-yellow-400 cursor-pointer shadow-[inset_0_-4px_0_0_rgba(0,0,0,0.3)] shadow-black hover:shadow-[0_0_18px_3px_rgba(59,130,246,0.55),inset_0_-4px_0_0_rgba(0,0,0,0.3)]'
+                                                        ? (canClickAvailableQuestion
+                                                            ? `bg-blue-800 hover:bg-blue-700 text-yellow-400 cursor-pointer shadow-[inset_0_-4px_0_0_rgba(0,0,0,0.3)] shadow-black hover:shadow-[0_0_18px_3px_rgba(59,130,246,0.55),inset_0_-4px_0_0_rgba(0,0,0,0.3)] ${isPulsed ? 'question-tile-pulse' : ''}`
                                                             : 'bg-blue-900/50 text-yellow-500/50 cursor-not-allowed border border-blue-800/30')
                                                         : 'bg-gray-400/10 border-2 border-slate-500/10 text-transparent cursor-default'
                                                     }

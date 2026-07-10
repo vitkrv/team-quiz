@@ -139,26 +139,81 @@ export const setPlayerScore = async (roomRef, playerId, score, historyItem) => {
     });
 };
 
-export const handlePickQuestion = async (roomRef, qId, historyItem, extraUpdate = {}, now = Date.now) => {
-    const update = {
-        activeQuestionId: qId,
-        answerRevealed: false,
-        buzzedPlayerId: null,
-        buzzTimestamp: null,
-        buzzUnlockAt: now() + 2000,
-        buzzAttempts: {},
-        incorrectBuzzedIds: [],
-        mediaPlayback: null,
-        prizeModal: deleteField(),
-        surpriseRound: null,
-        ...extraUpdate
-    };
+export const handlePickQuestion = async (roomRef, qId, actorId, historyItem, extraUpdate = {}, now = Date.now) => {
+    let didPickQuestion = false;
 
-    if (historyItem) {
-        update.history = arrayUnion(historyItem);
-    }
+    await runTransaction(roomRef.firestore, async (transaction) => {
+        const roomSnap = await transaction.get(roomRef);
+        if (!roomSnap.exists()) return;
 
-    await updateDoc(roomRef, update);
+        const room = roomSnap.data();
+        if (
+            room.status !== 'playing'
+            || room.activeQuestionId
+            || room.hostId !== actorId
+            || room.questionStates?.[qId] !== 'available'
+        ) {
+            return;
+        }
+
+        const update = {
+            activeQuestionId: qId,
+            answerRevealed: false,
+            buzzedPlayerId: null,
+            buzzTimestamp: null,
+            buzzUnlockAt: now() + 2000,
+            buzzAttempts: {},
+            incorrectBuzzedIds: [],
+            mediaPlayback: null,
+            prizeModal: deleteField(),
+            questionPulse: deleteField(),
+            surpriseRound: null,
+            ...extraUpdate
+        };
+
+        if (historyItem) {
+            update.history = arrayUnion(historyItem);
+        }
+
+        transaction.update(roomRef, update);
+        didPickQuestion = true;
+    });
+
+    return didPickQuestion;
+};
+
+export const pulseQuestionSelection = async (roomRef, qId, actorId) => {
+    let didPulseQuestion = false;
+
+    await runTransaction(roomRef.firestore, async (transaction) => {
+        const roomSnap = await transaction.get(roomRef);
+        if (!roomSnap.exists()) return;
+
+        const room = roomSnap.data();
+        const actor = room.players?.[actorId];
+        if (
+            room.status !== 'playing'
+            || room.activeQuestionId
+            || room.currentTurn !== actorId
+            || !actor
+            || actor.isHost
+            || room.questionStates?.[qId] !== 'available'
+        ) {
+            return;
+        }
+
+        transaction.update(roomRef, {
+            questionPulse: {
+                id: generateId(),
+                questionId: qId,
+                actorId,
+                pulsedAt: Date.now()
+            }
+        });
+        didPulseQuestion = true;
+    });
+
+    return didPulseQuestion;
 };
 
 export const handleEndGame = async (roomRef, historyItem, extraUpdate = {}) => {

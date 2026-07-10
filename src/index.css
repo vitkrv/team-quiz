@@ -116,6 +116,56 @@ input {
     }
 }
 
+.question-tile-pulse {
+    animation: question-tile-pulse 2s ease-in-out;
+}
+
+@keyframes question-tile-pulse {
+    0% {
+        background-color: #1e40af;
+    }
+
+    10% {
+        background-color: #172554;
+    }
+
+    20% {
+        background-color: #1e40af;
+    }
+
+    30% {
+        background-color: #172554;
+    }
+
+    40% {
+        background-color: #1e40af;
+    }
+
+    50% {
+        background-color: #172554;
+    }
+
+    60% {
+        background-color: #1e40af;
+    }
+
+    70% {
+        background-color: #172554;
+    }
+
+    80% {
+        background-color: #1e40af;
+    }
+
+    90% {
+        background-color: #172554;
+    }
+
+    100% {
+        background-color: #1e40af;
+    }
+}
+
 .surprise-table-picked-cell {
     border: 2px solid transparent;
     background:
