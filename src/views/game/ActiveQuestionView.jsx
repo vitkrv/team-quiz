@@ -17,6 +17,7 @@ const SURPRISE_DEFAULT_MIN_POINTS = 100;
 const SURPRISE_DEFAULT_MAX_POINTS = 500;
 const WHEEL_ANIMATION_MS = 6000;
 const LATE_BUZZ_WINDOW_MS = 2000;
+const ACTIVE_QUESTION_ENTRANCE_MS = 750;
 const SURPRISE_BACKGROUND_EMOJIS = ['\u{1F37F}', '\u{1F389}', '\u{1F973}', '\u{1F381}', '\u{1F37E}', '\u{1F382}', '\u{2728}', '\u{1FA84}'];
 const SURPRISE_BACKGROUND_EMOJI_COUNT = 80;
 const TABLE_PICKED_BACKGROUND_EMOJIS = ['\u{1F4B8}'];
@@ -269,6 +270,7 @@ export default function ActiveQuestionView({ room, roomRef, user, isHost, isSpec
     const [buzzUnlockNow, setBuzzUnlockNow] = useState(() => serverNow());
     const [isRolling, setIsRolling] = useState(false);
     const [buzzMediaPauseSignal, setBuzzMediaPauseSignal] = useState(0);
+    const [isEntranceContentVisible, setIsEntranceContentVisible] = useState(false);
     const surpriseBackgroundItems = useMemo(
         () => createFloatingBackgroundItems({
             seed: room.activeQuestionId || 'question',
@@ -309,6 +311,15 @@ export default function ActiveQuestionView({ room, roomRef, user, isHost, isSpec
         }
         return () => clearInterval(interval);
     }, [room.buzzedPlayerId, room.buzzTimestamp, serverNow]);
+
+    useEffect(() => {
+        setIsEntranceContentVisible(false);
+        const timeoutId = window.setTimeout(() => {
+            setIsEntranceContentVisible(true);
+        }, ACTIVE_QUESTION_ENTRANCE_MS);
+
+        return () => window.clearTimeout(timeoutId);
+    }, [room.activeQuestionId]);
 
     useEffect(() => {
         if (!room.activeQuestionId || !buzzUnlockAt || room.buzzedPlayerId || room.answerRevealed) {
@@ -736,7 +747,10 @@ export default function ActiveQuestionView({ room, roomRef, user, isHost, isSpec
     };
 
     return (
-        <div className="relative z-10 mx-auto flex min-h-0 w-full max-w-4xl flex-1 flex-col items-center justify-start pb-4 text-center">
+        <div
+            key={room.activeQuestionId}
+            className="active-question-enter-shell relative z-10 mx-auto flex min-h-0 w-full max-w-4xl flex-1 flex-col items-center justify-start pb-4 text-center"
+        >
             <SpaceBuzzHandler enabled={canIBuzz} onBuzz={handleBuzzIn} />
             {isSurpriseQuestion && (
                 <FloatingEmojiBackground
@@ -745,6 +759,7 @@ export default function ActiveQuestionView({ room, roomRef, user, isHost, isSpec
                 />
             )}
 
+            <div className={`active-question-enter-content relative z-10 flex min-h-0 w-full flex-1 flex-col items-center justify-start ${isEntranceContentVisible ? 'active-question-enter-content--visible' : ''}`}>
             {shouldShowQuestionContext && (
                 <div className="absolute top-0 flex w-full justify-between gap-3 text-xs font-bold uppercase tracking-widest text-slate-400 md:text-sm">
                     <span className="min-w-0 truncate text-left">{activeCatName}</span>
@@ -993,6 +1008,7 @@ export default function ActiveQuestionView({ room, roomRef, user, isHost, isSpec
                 </div>
             )}
 
+            </div>
         </div>
     );
 }
