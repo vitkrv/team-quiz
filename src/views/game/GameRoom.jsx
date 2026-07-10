@@ -488,7 +488,7 @@ export default function GameRoom({ room, roomCode, user, onLeaveRoom, showDefine
     const isHost = user.uid === room.hostId;
     const isSpectator = !isHost && !room.players?.[user.uid];
     const roomRef = doc(db, 'artifacts', appId, 'public', 'data', 'rooms', roomCode);
-    const { serverNow, syncClock } = useServerClock(user.uid);
+    const { offsetMs, lastSyncedAt, serverNow, syncClock } = useServerClock(user.uid);
     const [now, setNow] = useState(() => serverNow());
     const wasBoardViewRef = useRef(false);
     const [copiedRoomCode, setCopiedRoomCode] = useState(false);
@@ -511,6 +511,7 @@ export default function GameRoom({ room, roomCode, user, onLeaveRoom, showDefine
         && !room.hostRps?.status
         && !room.tieBreaker?.status
         && !room.prizeModal;
+    const clockSyncKey = lastSyncedAt ?? offsetMs;
 
     useEffect(() => {
         if (!room.buzzedPlayerId || !room.buzzTimestamp || room.answerRevealed) {
@@ -530,6 +531,12 @@ export default function GameRoom({ room, roomCode, user, onLeaveRoom, showDefine
         }
 
         wasBoardViewRef.current = isBoardView;
+    }, [isHost, isSpectator, room.activeQuestionId, room.status, syncClock]);
+
+    useEffect(() => {
+        if (room.status === 'playing' && room.activeQuestionId && !isHost && !isSpectator) {
+            syncClock();
+        }
     }, [isHost, isSpectator, room.activeQuestionId, room.status, syncClock]);
 
     useEffect(() => {
@@ -850,7 +857,7 @@ export default function GameRoom({ room, roomCode, user, onLeaveRoom, showDefine
                     {/* Main Play Area */}
                     <main className="relative flex min-w-0 flex-1 flex-col overflow-x-hidden overflow-y-auto bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-blue-950 to-slate-900 p-3 md:overflow-hidden md:p-6">
                         {room.activeQuestionId ? (
-                            <ActiveQuestionView room={room} roomRef={roomRef} user={user} isHost={isHost} isSpectator={isSpectator} serverNow={serverNow} />
+                            <ActiveQuestionView room={room} roomRef={roomRef} user={user} isHost={isHost} isSpectator={isSpectator} serverNow={serverNow} clockSyncKey={clockSyncKey} />
                         ) : (
                             <BoardView room={room} roomRef={roomRef} user={user} isHost={isHost} isSpectator={isSpectator} serverNow={serverNow} />
                         )}

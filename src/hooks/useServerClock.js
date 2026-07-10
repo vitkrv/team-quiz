@@ -4,6 +4,7 @@ import { appId, db } from '../firebase';
 
 const CLOCK_SYNC_SAMPLE_COUNT = 5;
 const CLOCK_RESYNC_INTERVAL_MS = 5 * 60 * 1000;
+const MAX_CLOCK_SYNC_DELAY_MS = 750;
 
 const getTimestampMillis = (value) => (
     value && typeof value.toMillis === 'function'
@@ -46,11 +47,13 @@ export default function useServerClock(userId) {
                 const clientEndMs = Date.now();
                 const snapshot = await getDocFromServer(syncRef);
                 const serverReceivedAtMs = getTimestampMillis(snapshot.data()?.serverReceivedAt);
+                const actualRoundTripMs = clientEndMs - clientStartMs;
+                const effectiveRoundTripMs = Math.min(actualRoundTripMs, MAX_CLOCK_SYNC_DELAY_MS);
 
                 if (serverReceivedAtMs) {
                     samples.push({
-                        offsetMs: serverReceivedAtMs - ((clientStartMs + clientEndMs) / 2),
-                        roundTripMs: clientEndMs - clientStartMs
+                        offsetMs: serverReceivedAtMs - (clientStartMs + (effectiveRoundTripMs / 2)),
+                        roundTripMs: actualRoundTripMs
                     });
                 }
             }

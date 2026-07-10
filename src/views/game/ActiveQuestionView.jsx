@@ -263,7 +263,7 @@ function SpaceBuzzHandler({ enabled, onBuzz }) {
     return null;
 }
 
-export default function ActiveQuestionView({ room, roomRef, user, isHost, isSpectator = false, serverNow = Date.now }) {
+export default function ActiveQuestionView({ room, roomRef, user, isHost, isSpectator = false, serverNow = Date.now, clockSyncKey = 0 }) {
     const { t } = useLanguage();
     const [timeLeft, setTimeLeft] = useState(10);
     const [buzzUnlockNow, setBuzzUnlockNow] = useState(() => serverNow());
@@ -324,7 +324,7 @@ export default function ActiveQuestionView({ room, roomRef, user, isHost, isSpec
 
         const timeoutId = window.setTimeout(() => setBuzzUnlockNow(serverNow()), remainingMs);
         return () => window.clearTimeout(timeoutId);
-    }, [buzzUnlockAt, room.activeQuestionId, room.answerRevealed, room.buzzedPlayerId, serverNow]);
+    }, [buzzUnlockAt, clockSyncKey, room.activeQuestionId, room.answerRevealed, room.buzzedPlayerId, serverNow]);
 
     useEffect(() => {
         if (!activeQ?.answerMedia) return;
