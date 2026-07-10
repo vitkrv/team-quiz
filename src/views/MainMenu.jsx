@@ -1,4 +1,5 @@
 import { FolderOpen, LogOut, RotateCcw } from 'lucide-react';
+import packageJson from '../../package.json';
 import { useLanguage } from '../useLanguage';
 import LanguagePicker from '../components/LanguagePicker';
 
@@ -72,6 +73,9 @@ export default function MainMenu({ setView, user, lastRoomCode, onCreatePack, on
             </div>
 
             <LanguagePicker className="absolute bottom-6 left-1/2 -translate-x-1/2" />
+            <div className="absolute bottom-2 left-1/2 -translate-x-1/2 text-[10px] leading-none text-slate-500/60">
+                {packageJson.version}
+            </div>
         </div>
     );
 }
