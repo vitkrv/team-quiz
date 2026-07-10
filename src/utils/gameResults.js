@@ -21,7 +21,14 @@ export const areAllQuestionsDone = (questionStates = {}) => (
 export const hasDefinedFinalResults = (room) => {
     if (!room) return false;
     if (room.status === 'finished') return true;
-    if (room.status !== 'playing' || !areAllQuestionsDone(room.questionStates)) return false;
+    if (
+        room.status !== 'playing'
+        || room.activeQuestionId
+        || room.answerRevealed
+        || !areAllQuestionsDone(room.questionStates)
+    ) {
+        return false;
+    }
 
     const topTiedPlayerIds = getTopTiedPlayerIds(room.players);
     return topTiedPlayerIds.length <= 1 || Boolean(room.tieBreaker?.championId);

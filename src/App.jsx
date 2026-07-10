@@ -267,9 +267,12 @@ export default function App() {
             if (snapshot.exists()) {
                 const room = snapshot.data();
                 const isParticipant = Boolean(room.players?.[user.uid]);
+                const hasLinkedDefinedFinalResults = linkedGameRoomCode === currentRoomCode
+                    && !isParticipant
+                    && hasDefinedFinalResults(room);
                 const canSpectate = room.status === 'playing'
                     || room.status === 'finished'
-                    || (linkedGameRoomCode === currentRoomCode && hasDefinedFinalResults(room));
+                    || hasLinkedDefinedFinalResults;
 
                 if (!isParticipant && !canSpectate) {
                     setError(translate(language, 'notGameParticipant'));
@@ -285,7 +288,7 @@ export default function App() {
 
                 setRoomData(room);
 
-                if (room.status === 'finished' || (linkedGameRoomCode === currentRoomCode && hasDefinedFinalResults(room))) {
+                if (room.status === 'finished' || hasLinkedDefinedFinalResults) {
                     localStorage.removeItem(LAST_ROOM_CODE_KEY);
                     setLatestActiveRoomCode(null);
                     return;

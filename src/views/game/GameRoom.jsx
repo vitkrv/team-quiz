@@ -720,7 +720,7 @@ export default function GameRoom({ room, roomCode, user, onLeaveRoom, showDefine
         );
     }
 
-    if (room.status === 'finished' || (showDefinedFinalResults && hasDefinedFinalResults(room))) {
+    if (room.status === 'finished' || (isSpectator && showDefinedFinalResults && hasDefinedFinalResults(room))) {
         return <ResultsView room={room} leaveRoom={leaveRoom} />;
     }
 
