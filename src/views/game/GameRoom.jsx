@@ -503,12 +503,14 @@ export default function GameRoom({ room, roomCode, user, onLeaveRoom, showDefine
     const hasPrize = hasDefinedPrize(room.pack?.prize);
     const canOpenHostRps = isHost
         && !room.activeQuestionId
+        && !room.surprisePlayerDraw
         && !room.hostRps
         && !room.tieBreaker?.status
         && Object.keys(room.players || {}).length >= 2;
     const canOpenPrize = isHost
         && hasPrize
         && !room.activeQuestionId
+        && !room.surprisePlayerDraw
         && !room.hostRps?.status
         && !room.tieBreaker?.status
         && !room.prizeModal;

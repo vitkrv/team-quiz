@@ -12,7 +12,31 @@ export const RPS_MODES = {
     three: { targetWins: 3 }
 };
 
+export const SURPRISE_PLAYER_DRAW_MS = 4000;
+export const SURPRISE_PLAYER_DRAW_RESULT_HOLD_MS = 1400;
+
 const normalizeRpsMode = (mode) => (RPS_MODES[mode] ? mode : 'one');
+
+const getQuestionFromRoomPack = (room, questionId) => {
+    for (const category of room.pack?.categories || []) {
+        const question = (category.questions || []).find((item) => item.id === questionId);
+        if (question) return question;
+    }
+
+    return null;
+};
+
+const getSurpriseCandidatePlayerIds = (players = {}) => (
+    Object.entries(players)
+        .filter(([, player]) => !player.isHost)
+        .map(([playerId]) => playerId)
+);
+
+const pickRandomPlayerId = (playerIds) => {
+    if (!playerIds.length) return null;
+
+    return playerIds[Math.floor(Math.random() * playerIds.length)];
+};
 
 const createMatch = (playerAId, playerBId, tieBreaker) => ({
     id: generateId(),
@@ -167,6 +191,7 @@ export const handlePickQuestion = async (roomRef, qId, actorId, historyItem, ext
             mediaPlayback: null,
             prizeModal: deleteField(),
             questionPulse: deleteField(),
+            surprisePlayerDraw: null,
             surpriseRound: null,
             ...extraUpdate
         };
@@ -180,6 +205,114 @@ export const handlePickQuestion = async (roomRef, qId, actorId, historyItem, ext
     });
 
     return didPickQuestion;
+};
+
+export const beginSurprisePlayerDraw = async (roomRef, qId, actorId, requestedPlayerId = null, now = Date.now) => {
+    let didBeginDraw = false;
+
+    await runTransaction(roomRef.firestore, async (transaction) => {
+        const roomSnap = await transaction.get(roomRef);
+        if (!roomSnap.exists()) return;
+
+        const room = roomSnap.data();
+        const question = getQuestionFromRoomPack(room, qId);
+        const candidatePlayerIds = getSurpriseCandidatePlayerIds(room.players);
+        const isSpecificPick = Boolean(requestedPlayerId);
+        const answererId = isSpecificPick
+            ? (candidatePlayerIds.includes(requestedPlayerId) ? requestedPlayerId : null)
+            : pickRandomPlayerId(candidatePlayerIds);
+
+        if (
+            room.status !== 'playing'
+            || room.activeQuestionId
+            || room.hostId !== actorId
+            || room.questionStates?.[qId] !== 'available'
+            || room.surprisePlayerDraw
+            || !question?.isSurpriseQuestion
+            || !answererId
+        ) {
+            return;
+        }
+
+        transaction.update(roomRef, {
+            surprisePlayerDraw: {
+                id: generateId(),
+                questionId: qId,
+                pickerId: actorId,
+                pickerMode: isSpecificPick ? 'specific' : 'random',
+                requestedPlayerId: isSpecificPick ? requestedPlayerId : null,
+                answererId,
+                candidatePlayerIds,
+                startedAt: now(),
+                durationMs: SURPRISE_PLAYER_DRAW_MS,
+                resultHoldMs: SURPRISE_PLAYER_DRAW_RESULT_HOLD_MS
+            },
+            prizeModal: deleteField(),
+            questionPulse: deleteField()
+        });
+        didBeginDraw = true;
+    });
+
+    return didBeginDraw;
+};
+
+export const completeSurprisePlayerDraw = async (roomRef, drawId, actorId, historyItem, now = Date.now) => {
+    let didCompleteDraw = false;
+
+    await runTransaction(roomRef.firestore, async (transaction) => {
+        const roomSnap = await transaction.get(roomRef);
+        if (!roomSnap.exists()) return;
+
+        const room = roomSnap.data();
+        const draw = room.surprisePlayerDraw;
+        const question = getQuestionFromRoomPack(room, draw?.questionId);
+
+        if (
+            room.status !== 'playing'
+            || room.activeQuestionId
+            || room.hostId !== actorId
+            || !draw
+            || draw.id !== drawId
+            || room.questionStates?.[draw.questionId] !== 'available'
+            || !question?.isSurpriseQuestion
+            || !room.players?.[draw.answererId]
+            || room.players[draw.answererId].isHost
+        ) {
+            return;
+        }
+
+        const update = {
+            activeQuestionId: draw.questionId,
+            answerRevealed: false,
+            buzzedPlayerId: null,
+            buzzTimestamp: null,
+            buzzUnlockAt: now() + 2000,
+            buzzAttempts: {},
+            incorrectBuzzedIds: [],
+            mediaPlayback: null,
+            prizeModal: deleteField(),
+            questionPulse: deleteField(),
+            surprisePlayerDraw: null,
+            surpriseRound: {
+                questionId: draw.questionId,
+                pickerId: draw.pickerId,
+                answererId: draw.answererId,
+                judgeResult: null,
+                wheelValues: null,
+                rollResult: null,
+                rolledAt: null
+            }
+        };
+
+        if (historyItem) {
+            update.history = arrayUnion(historyItem);
+        }
+
+        transaction.update(roomRef, update);
+        didCompleteDraw = true;
+    });
+
+    return didCompleteDraw;
 };
 
 export const pulseQuestionSelection = async (roomRef, qId, actorId) => {
@@ -217,7 +350,7 @@ export const pulseQuestionSelection = async (roomRef, qId, actorId) => {
 };
 
 export const handleEndGame = async (roomRef, historyItem, extraUpdate = {}) => {
-    const update = { status: 'finished', mediaPlayback: null, prizeModal: deleteField(), ...extraUpdate };
+    const update = { status: 'finished', mediaPlayback: null, prizeModal: deleteField(), surprisePlayerDraw: null, ...extraUpdate };
 
     if (historyItem) {
         update.history = arrayUnion(historyItem);

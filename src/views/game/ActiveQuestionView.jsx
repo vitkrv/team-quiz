@@ -592,6 +592,7 @@ export default function ActiveQuestionView({ room, roomRef, user, isHost, isSpec
             buzzUnlockAt: null,
             buzzAttempts: {},
             mediaPlayback: null,
+            surprisePlayerDraw: null,
             [`questionStates.${activeQ.id}`]: 'done',
             history: arrayUnion(createHistoryItem({
                 type: 'question_skipped',
@@ -620,6 +621,7 @@ export default function ActiveQuestionView({ room, roomRef, user, isHost, isSpec
             buzzAttempts: {},
             incorrectBuzzedIds: [],
             mediaPlayback: null,
+            surprisePlayerDraw: null,
             surpriseRound: null,
             history: arrayUnion(createHistoryItem({
                 type: 'board_resumed',

@@ -1,7 +1,9 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Shuffle, X } from 'lucide-react';
 import {
     advanceTieBreakerMatch,
+    beginSurprisePlayerDraw,
+    completeSurprisePlayerDraw,
     createHistoryItem,
     grantTieBreakerBye,
     handleEndGame,
@@ -29,19 +31,19 @@ const getSurprisePlayerEntries = (players = {}) => (
     Object.entries(players).filter(([, player]) => !player.isHost)
 );
 
-const pickRandomPlayerId = (playerEntries) => {
-    if (!playerEntries.length) return null;
+const BALL_COLORS = ['#facc15', '#38bdf8', '#fb7185', '#22c55e', '#a78bfa', '#f97316', '#f8fafc', '#f472b6'];
 
-    const randomIndex = Math.floor(Math.random() * playerEntries.length);
-    return playerEntries[randomIndex][0];
+const findQuestionContext = (categories, questionId) => {
+    for (const category of categories || []) {
+        const question = (category.questions || []).find((item) => item.id === questionId);
+        if (question) return { category, question };
+    }
+
+    return { category: null, question: null };
 };
 
 function SurprisePlayerModal({ players, question, onPick, onClose, t }) {
     const playerEntries = getSurprisePlayerEntries(players);
-    const handleRandomPick = () => {
-        const playerId = pickRandomPlayerId(playerEntries);
-        if (playerId) onPick(playerId);
-    };
 
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-6">
@@ -58,7 +60,7 @@ function SurprisePlayerModal({ players, question, onPick, onClose, t }) {
                     </div>
                     <button
                         type="button"
-                        onClick={handleRandomPick}
+                        onClick={() => onPick(null)}
                         disabled={playerEntries.length === 0}
                         className="flex w-full items-center justify-center gap-2 rounded-lg border border-yellow-500/50 bg-yellow-500 px-4 py-3 font-black text-slate-950 transition-colors hover:bg-yellow-300 disabled:cursor-not-allowed disabled:border-slate-700 disabled:bg-slate-800 disabled:text-slate-500"
                     >
@@ -81,6 +83,83 @@ function SurprisePlayerModal({ players, question, onPick, onClose, t }) {
     );
 }
 
+function SurprisePlayerDrawModal({ draw, players, serverNow, t }) {
+    const [now, setNow] = useState(() => serverNow());
+    const candidatePlayers = useMemo(() => (
+        (draw?.candidatePlayerIds || [])
+            .map((playerId) => [playerId, players[playerId]])
+            .filter(([, player]) => player)
+    ), [draw?.candidatePlayerIds, players]);
+    const selectedPlayer = players[draw?.answererId];
+    const durationMs = Number(draw?.durationMs) || 4000;
+    const elapsedMs = Math.max(0, now - (Number(draw?.startedAt) || now));
+    const isResultVisible = elapsedMs >= durationMs;
+
+    useEffect(() => {
+        const intervalId = window.setInterval(() => setNow(serverNow()), 80);
+        return () => window.clearInterval(intervalId);
+    }, [serverNow]);
+
+    return (
+        <div className="fixed inset-0 z-[55] flex items-center justify-center bg-black/80 p-4 backdrop-blur-sm">
+            <div className="flex w-full max-w-3xl flex-col items-center bg-transparent text-center">
+                <div className="mb-5 text-sm font-black uppercase tracking-[0.24em] text-yellow-200 md:text-base">
+                    {isResultVisible ? t('surpriseDrawPickedTitle') : t('surpriseDrawTitle')}
+                </div>
+
+                <div className={`surprise-draw-machine ${isResultVisible ? 'surprise-draw-machine--result' : ''}`} aria-live="polite">
+                    <div className="surprise-draw-machine__top" />
+                    <div className="surprise-draw-machine__glass">
+                        {!isResultVisible && (
+                            <div className="surprise-draw-machine__rotor">
+                                {candidatePlayers.length === 0 ? (
+                                    <div className="surprise-draw-machine__empty">{t('surpriseDrawNoPlayers')}</div>
+                                ) : candidatePlayers.map(([playerId, player], index) => (
+                                    <div
+                                        key={playerId}
+                                        className="surprise-draw-ball surprise-draw-ball--spinning"
+                                        style={{
+                                            '--ball-color': BALL_COLORS[index % BALL_COLORS.length],
+                                            '--ball-index': index,
+                                            '--ball-angle': `${(360 / Math.max(candidatePlayers.length, 1)) * index}deg`
+                                        }}
+                                        title={player.name}
+                                    >
+                                        <span>{player.avatar}</span>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+                        {isResultVisible && selectedPlayer && (
+                            <div
+                                className="surprise-draw-ball surprise-draw-ball--winner"
+                                style={{ '--ball-color': BALL_COLORS[Math.max(0, (draw?.candidatePlayerIds || []).indexOf(draw.answererId)) % BALL_COLORS.length] }}
+                                title={selectedPlayer.name}
+                            >
+                                <span>{selectedPlayer.avatar}</span>
+                            </div>
+                        )}
+                    </div>
+                    <div className="surprise-draw-machine__base" />
+                </div>
+
+                <div className="mt-5 min-h-16">
+                    {isResultVisible && selectedPlayer ? (
+                        <>
+                            <div className="text-sm font-bold uppercase tracking-[0.18em] text-slate-300">{t('surpriseDrawPickedLabel')}</div>
+                            <div className="mt-2 max-w-[90vw] break-words text-3xl font-black leading-tight text-yellow-300 md:text-5xl">
+                                {selectedPlayer.name || t('playerFallback')}
+                            </div>
+                        </>
+                    ) : (
+                        <div className="text-lg font-bold text-slate-200 md:text-2xl">{t('surpriseDrawInProgress')}</div>
+                    )}
+                </div>
+            </div>
+        </div>
+    );
+}
+
 export default function BoardView({ room, roomRef, user, isHost, isSpectator = false, serverNow = Date.now }) {
     const { t } = useLanguage();
     const [pendingSurpriseQuestion, setPendingSurpriseQuestion] = useState(null);
@@ -90,7 +169,7 @@ export default function BoardView({ room, roomRef, user, isHost, isSpectator = f
     const questionImagePreloadVariant = isHost ? 'host' : 'game';
     const maxQuestionCount = Math.max(0, ...categories.map((cat) => cat.questions?.length || 0));
     const actorName = room.players[user.uid]?.name || user.displayName || t('playerFallback');
-    const surprisePlayerEntries = getSurprisePlayerEntries(room.players);
+    const surprisePlayerDraw = room.surprisePlayerDraw || null;
 
     // Check if all questions are done
     const allDone = areAllQuestionsDone(room.questionStates);
@@ -141,7 +220,7 @@ export default function BoardView({ room, roomRef, user, isHost, isSpectator = f
         }));
         setIsTieBreakerSetupOpen(false);
     };
-    const createQuestionPickedHistory = (cat, q, pickerName) => createHistoryItem({
+    const createQuestionPickedHistory = useCallback((cat, q, pickerName) => createHistoryItem({
         type: 'question_picked',
         actorId: user.uid,
         actorName: pickerName,
@@ -155,22 +234,16 @@ export default function BoardView({ room, roomRef, user, isHost, isSpectator = f
             categoryName: cat.name,
             points: q.points
         }
-    });
-    const pickQuestion = async (cat, q, answererId = null) => {
+    }), [t, user.uid]);
+    const pickQuestion = async (cat, q) => {
         const pickerName = room.players[user.uid]?.name || actorName;
-        const extraUpdate = q.isSurpriseQuestion ? {
-            surpriseRound: {
-                questionId: q.id,
-                pickerId: user.uid,
-                answererId,
-                judgeResult: null,
-                wheelValues: null,
-                rollResult: null,
-                rolledAt: null
-            }
-        } : {};
 
-        await handlePickQuestion(roomRef, q.id, user.uid, createQuestionPickedHistory(cat, q, pickerName), extraUpdate, serverNow);
+        await handlePickQuestion(roomRef, q.id, user.uid, createQuestionPickedHistory(cat, q, pickerName), {}, serverNow);
+        setPendingSurpriseQuestion(null);
+    };
+
+    const beginSurpriseDraw = async (q, requestedPlayerId = null) => {
+        await beginSurprisePlayerDraw(roomRef, q.id, user.uid, requestedPlayerId, serverNow);
         setPendingSurpriseQuestion(null);
     };
 
@@ -179,8 +252,40 @@ export default function BoardView({ room, roomRef, user, isHost, isSpectator = f
         await pulseQuestionSelection(roomRef, q.id, user.uid);
     };
 
+    useEffect(() => {
+        if (!isHost || !surprisePlayerDraw?.id) return undefined;
+
+        const completeAt = (Number(surprisePlayerDraw.startedAt) || serverNow())
+            + (Number(surprisePlayerDraw.durationMs) || 4000)
+            + (Number(surprisePlayerDraw.resultHoldMs) || 1400);
+        const delayMs = Math.max(0, completeAt - serverNow());
+        const timeoutId = window.setTimeout(() => {
+            const { category, question } = findQuestionContext(categories, surprisePlayerDraw.questionId);
+            if (!category || !question) return;
+
+            const pickerName = room.players[surprisePlayerDraw.pickerId]?.name || actorName;
+            completeSurprisePlayerDraw(
+                roomRef,
+                surprisePlayerDraw.id,
+                user.uid,
+                createQuestionPickedHistory(category, question, pickerName),
+                serverNow
+            );
+        }, delayMs);
+
+        return () => window.clearTimeout(timeoutId);
+    }, [actorName, categories, createQuestionPickedHistory, isHost, room.players, roomRef, serverNow, surprisePlayerDraw, user.uid]);
+
     return (
         <div className="flex h-full min-h-0 flex-1 flex-col">
+            {surprisePlayerDraw && (
+                <SurprisePlayerDrawModal
+                    draw={surprisePlayerDraw}
+                    players={room.players}
+                    serverNow={serverNow}
+                    t={t}
+                />
+            )}
             {shouldShowTieBreaker && (
                 <RockPaperScissorsManager
                     players={room.players}
@@ -206,7 +311,7 @@ export default function BoardView({ room, roomRef, user, isHost, isSpectator = f
                     question={pendingSurpriseQuestion.q}
                     t={t}
                     onClose={() => setPendingSurpriseQuestion(null)}
-                    onPick={(playerId) => pickQuestion(pendingSurpriseQuestion.cat, pendingSurpriseQuestion.q, playerId)}
+                    onPick={(playerId) => beginSurpriseDraw(pendingSurpriseQuestion.q, playerId)}
                 />
             )}
             {!allDone && (
@@ -261,7 +366,7 @@ export default function BoardView({ room, roomRef, user, isHost, isSpectator = f
                                     {(cat.questions || []).map((q) => {
                                         const state = room.questionStates[q.id];
                                         const isAvailable = state === 'available';
-                                        const canClickAvailableQuestion = isAvailable && !isSpectator;
+                                        const canClickAvailableQuestion = isAvailable && !isSpectator && !surprisePlayerDraw;
                                         const pulseId = room.questionPulse?.questionId === q.id ? room.questionPulse.id : 'idle';
                                         const isPulsed = pulseId !== 'idle';
 
@@ -282,11 +387,7 @@ export default function BoardView({ room, roomRef, user, isHost, isSpectator = f
                                                         return;
                                                     }
 
-                                                    pickQuestion(
-                                                        cat,
-                                                        q,
-                                                        q.isSurpriseQuestion ? pickRandomPlayerId(surprisePlayerEntries) : null
-                                                    );
+                                                    pickQuestion(cat, q);
                                                 }}
                                                 className={`
                                                     flex min-h-14 items-center justify-center rounded-lg font-mono text-xl font-black transition-all duration-200 md:min-h-0 md:text-4xl

@@ -167,6 +167,7 @@ export default function HostSetup({ setView, user, setCurrentRoomCode, onCreateP
             incorrectBuzzedIds: [],
             mediaPlayback: null,
             prizeModal: null,
+            surprisePlayerDraw: null,
             surpriseRound: null,
             history: [
                 createHistoryItem({

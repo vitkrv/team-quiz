@@ -279,3 +279,245 @@ input {
         transform: scale(1.045);
     }
 }
+
+.surprise-draw-machine {
+    --glass-size: clamp(16rem, 34vw, 21.75rem);
+    --glass-top: clamp(2.85rem, 5.6vw, 3.35rem);
+    --cap-width: calc(var(--glass-size) * 0.34);
+    --cap-height: calc(var(--glass-size) * 0.14);
+    --base-width: calc(var(--glass-size) * 1.03);
+    --base-height: calc(var(--glass-size) * 0.17);
+    --base-overlap: calc(var(--glass-size) * 0.045);
+    position: relative;
+    width: max(var(--glass-size), var(--base-width));
+    height: calc(var(--glass-top) + var(--glass-size) + var(--base-height) - var(--base-overlap) + 1.25rem);
+    isolation: isolate;
+}
+
+.surprise-draw-machine__top {
+    position: absolute;
+    left: 50%;
+    top: calc(var(--glass-top) - (var(--cap-height) * 0.78));
+    z-index: 5;
+    width: var(--cap-width);
+    height: var(--cap-height);
+    border-radius: 999px 999px 0.35rem 0.35rem;
+    background:
+        linear-gradient(180deg, rgba(255, 255, 255, 0.2), transparent 38%),
+        linear-gradient(180deg, #fb5a5a 0%, #ef4444 42%, #b91c1c 100%);
+    box-shadow:
+        inset 0 0.45rem 0 rgba(255, 255, 255, 0.2),
+        inset 0 -0.25rem 0 rgba(69, 10, 10, 0.36),
+        0 0.8rem 1.5rem rgba(0, 0, 0, 0.28);
+    transform: translateX(-50%);
+}
+
+.surprise-draw-machine__top::before {
+    content: "";
+    position: absolute;
+    left: 50%;
+    bottom: calc(var(--cap-height) * -0.18);
+    width: 72%;
+    height: calc(var(--cap-height) * 0.34);
+    border-radius: 0 0 999px 999px;
+    background: linear-gradient(180deg, #dc2626, #7f1d1d);
+    box-shadow: inset 0 0.18rem 0 rgba(255, 255, 255, 0.14);
+    transform: translateX(-50%);
+}
+
+.surprise-draw-machine__glass {
+    position: absolute;
+    left: 50%;
+    top: var(--glass-top);
+    z-index: 2;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: var(--glass-size);
+    height: var(--glass-size);
+    overflow: hidden;
+    border-radius: 50%;
+    background:
+        radial-gradient(circle at 34% 24%, rgba(255, 255, 255, 0.22), transparent 0 18%),
+        radial-gradient(circle at 50% 58%, rgba(14, 165, 233, 0.08), rgba(15, 23, 42, 0.26) 64%, rgba(15, 23, 42, 0.58) 100%);
+    box-shadow:
+        inset 0 0 2.2rem rgba(255, 255, 255, 0.26),
+        inset 0 -1.6rem 2.4rem rgba(8, 13, 32, 0.6),
+        0 0 0 0.42rem rgba(226, 232, 240, 0.14),
+        0 0 0 0.62rem rgba(15, 23, 42, 0.3),
+        0 1.25rem 3rem rgba(0, 0, 0, 0.42);
+    transform: translateX(-50%);
+}
+
+.surprise-draw-machine__glass::before,
+.surprise-draw-machine__glass::after {
+    content: "";
+    position: absolute;
+    pointer-events: none;
+    border-radius: 50%;
+}
+
+.surprise-draw-machine__glass::before {
+    inset: 9%;
+    border-left: 0.22rem solid rgba(255, 255, 255, 0.12);
+    border-top: 0.18rem solid rgba(255, 255, 255, 0.08);
+    filter: blur(0.4px);
+    transform: rotate(-18deg);
+}
+
+.surprise-draw-machine__glass::after {
+    left: 22%;
+    top: 14%;
+    width: 30%;
+    height: 13%;
+    border-top: 0.24rem solid rgba(255, 255, 255, 0.16);
+    opacity: 0.72;
+    transform: rotate(-26deg);
+}
+
+.surprise-draw-machine__rotor {
+    position: absolute;
+    inset: 13%;
+    border-radius: 50%;
+    animation: surprise-draw-rotor 1.05s linear infinite;
+}
+
+.surprise-draw-machine__empty {
+    display: flex;
+    height: 100%;
+    align-items: center;
+    justify-content: center;
+    padding: 1.5rem;
+    text-align: center;
+    font-weight: 800;
+    color: #cbd5e1;
+}
+
+.surprise-draw-ball {
+    --ball-color: #facc15;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    background:
+        radial-gradient(circle at 32% 24%, rgba(255, 255, 255, 0.96), transparent 0 18%, rgba(255, 255, 255, 0.2) 19%, transparent 36%),
+        radial-gradient(circle at 50% 56%, var(--ball-color), color-mix(in srgb, var(--ball-color) 72%, #0f172a));
+    box-shadow:
+        inset -0.35rem -0.5rem 0.85rem rgba(15, 23, 42, 0.34),
+        inset 0.2rem 0.2rem 0.55rem rgba(255, 255, 255, 0.46),
+        0 0.7rem 1.2rem rgba(0, 0, 0, 0.3);
+}
+
+.surprise-draw-ball span {
+    display: grid;
+    align-items: center;
+    justify-content: center;
+    place-items: center;
+    width: 68%;
+    height: 68%;
+    border-radius: 50%;
+    background: rgba(15, 23, 42, 0.86);
+    font-family: "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji", sans-serif;
+    font-size: clamp(1.35rem, 5.8vw, 2.55rem);
+    line-height: 1;
+    box-shadow: inset 0 0 0 0.12rem rgba(255, 255, 255, 0.22);
+}
+
+.surprise-draw-ball span::first-letter {
+    line-height: 1;
+}
+
+.surprise-draw-ball span {
+    transform: translateY(-0.02em);
+}
+
+.surprise-draw-ball--spinning {
+    position: absolute;
+    left: 50%;
+    top: 48%;
+    width: clamp(3.2rem, 7.4vw, 4.35rem);
+    height: clamp(3.2rem, 7.4vw, 4.35rem);
+    animation: surprise-draw-ball-orbit 1.65s cubic-bezier(0.42, 0, 0.58, 1) infinite;
+    animation-delay: calc(var(--ball-index) * -0.17s);
+}
+
+.surprise-draw-ball--winner {
+    position: relative;
+    z-index: 4;
+    width: clamp(6.3rem, 27vw, 9.5rem);
+    height: clamp(6.3rem, 27vw, 9.5rem);
+    animation: surprise-draw-winner-pop 520ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.surprise-draw-ball--winner span {
+    font-size: clamp(2.8rem, 12vw, 5.2rem);
+}
+
+.surprise-draw-machine__base {
+    position: absolute;
+    left: 50%;
+    top: calc(var(--glass-top) + var(--glass-size) - var(--base-overlap));
+    z-index: 5;
+    width: var(--base-width);
+    height: var(--base-height);
+    border-radius: 1.1rem 1.1rem 1.8rem 1.8rem;
+    background: linear-gradient(180deg, #fb4d4d 0%, #dc2626 38%, #991b1b 100%);
+    box-shadow:
+        inset 0 0.6rem 0 rgba(255, 255, 255, 0.18),
+        inset 0 -0.35rem 0 rgba(69, 10, 10, 0.34),
+        0 1rem 2.2rem rgba(0, 0, 0, 0.32);
+    transform: translateX(-50%);
+}
+
+@keyframes surprise-draw-rotor {
+    from {
+        transform: rotate(0deg);
+    }
+
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+@keyframes surprise-draw-ball-orbit {
+    0% {
+        transform: translate(-50%, -50%) rotate(var(--ball-angle)) translateX(calc(var(--glass-size) * 0.23)) rotate(0deg) scale(0.92);
+    }
+
+    35% {
+        transform: translate(-50%, -50%) rotate(calc(var(--ball-angle) + 105deg)) translateX(calc(var(--glass-size) * 0.28)) rotate(-120deg) scale(1.06);
+    }
+
+    70% {
+        transform: translate(-50%, -50%) rotate(calc(var(--ball-angle) + 250deg)) translateX(calc(var(--glass-size) * 0.21)) rotate(-260deg) scale(0.98);
+    }
+
+    100% {
+        transform: translate(-50%, -50%) rotate(calc(var(--ball-angle) + 360deg)) translateX(calc(var(--glass-size) * 0.23)) rotate(-360deg) scale(0.92);
+    }
+}
+
+@keyframes surprise-draw-winner-pop {
+    0% {
+        opacity: 0;
+        transform: translateY(2.5rem) scale(0.42) rotate(-16deg);
+    }
+
+    65% {
+        opacity: 1;
+        transform: translateY(-0.25rem) scale(1.08) rotate(5deg);
+    }
+
+    100% {
+        opacity: 1;
+        transform: translateY(0) scale(1) rotate(0);
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .surprise-draw-machine__rotor,
+    .surprise-draw-ball--spinning,
+    .surprise-draw-ball--winner {
+        animation: none;
+    }
+}
