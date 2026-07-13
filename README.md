@@ -48,6 +48,10 @@ Question packs are owner-only by default. Authors can mark a pack as available t
 - `npm run preview` previews the production build.
 - `npm run lint` runs ESLint.
 
+## AI / Agent Guide
+
+Repository operating guidance for AI tools lives in `AGENTS.md`. Update it when build, test, run, verification, or deployment workflows change.
+
 ## Firebase Auth Troubleshooting
 
 `auth/configuration-not-found` means the Firebase project in `.env.local` does not have Authentication configured for the requested sign-in method. Enable Google sign-in for that same project, verify the `VITE_FIREBASE_PROJECT_ID` value matches it, and restart the Vite dev server after changing `.env.local`.
