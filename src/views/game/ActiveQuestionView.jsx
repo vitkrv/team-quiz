@@ -48,15 +48,15 @@ const getFullSurpriseWheelValues = (question) => {
     return values;
 };
 
-const shuffleWheelValues = (values) => {
-    const shuffledValues = [...values];
+const shuffleItems = (items) => {
+    const shuffledItems = [...items];
 
-    for (let index = shuffledValues.length - 1; index > 0; index -= 1) {
+    for (let index = shuffledItems.length - 1; index > 0; index -= 1) {
         const swapIndex = Math.floor(Math.random() * (index + 1));
-        [shuffledValues[index], shuffledValues[swapIndex]] = [shuffledValues[swapIndex], shuffledValues[index]];
+        [shuffledItems[index], shuffledItems[swapIndex]] = [shuffledItems[swapIndex], shuffledItems[index]];
     }
 
-    return shuffledValues;
+    return shuffledItems;
 };
 
 const pruneSurpriseWheelValues = (question, isCorrect) => {
@@ -67,13 +67,14 @@ const pruneSurpriseWheelValues = (question, isCorrect) => {
         .sort((a, b) => Math.abs(b) - Math.abs(a));
     const removeCount = Math.min(valuesToPrune.length - 1, Math.floor(valuesToPrune.length * 0.8));
     const removedValues = new Set(valuesToPrune.slice(0, Math.max(0, removeCount)));
-    return shuffleWheelValues(values.filter((value) => !removedValues.has(value)));
+    return shuffleItems(values.filter((value) => !removedValues.has(value)));
 };
 
 const createSurpriseTable = (values) => {
     const columns = Math.max(1, Math.ceil(Math.sqrt(values.length)));
     const rows = Math.max(1, Math.ceil(values.length / columns));
-    const shuffledValues = shuffleWheelValues(values);
+    const shuffledValues = shuffleItems(values);
+    const shuffledAnimalAvatars = shuffleItems(ANIMAL_AVATARS);
 
     return {
         rows,
@@ -81,7 +82,7 @@ const createSurpriseTable = (values) => {
         cells: shuffledValues.map((value, index) => ({
             id: generateId(),
             value,
-            icon: ANIMAL_AVATARS[index % ANIMAL_AVATARS.length]
+            icon: shuffledAnimalAvatars[index % shuffledAnimalAvatars.length]
         }))
     };
 };
