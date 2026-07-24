@@ -45,6 +45,28 @@ const createDefaultCategories = (t) => [
         ]}
 ];
 
+const ensureEditableCategoryIds = (sourceCategories, t) => {
+    const categories = sourceCategories || createDefaultCategories(t);
+    const categoryIds = new Set();
+    const questionIds = new Set();
+
+    return categories.map((category) => {
+        const categoryId = category.id && !categoryIds.has(category.id) ? category.id : generateId();
+        categoryIds.add(categoryId);
+
+        return {
+            ...category,
+            id: categoryId,
+            questions: (category.questions || []).map((question) => {
+                const questionId = question.id && !questionIds.has(question.id) ? question.id : generateId();
+                questionIds.add(questionId);
+
+                return { ...question, id: questionId };
+            })
+        };
+    });
+};
+
 const reorderItem = (items, fromIndex, toIndex) => {
     if (fromIndex < 0 || toIndex < 0 || fromIndex >= items.length || toIndex >= items.length) {
         return items;
@@ -284,7 +306,7 @@ export default function PackCreator({ pack, setView, user, setError, onSaved }) 
         normalizeSurpriseScoringMechanic(pack?.surpriseScoringMechanic)
     ));
     const [prize, setPrize] = useState(() => pack?.prize || {});
-    const [categories, setCategories] = useState(pack?.categories || createDefaultCategories(t));
+    const [categories, setCategories] = useState(() => ensureEditableCategoryIds(pack?.categories, t));
     const [isSaving, setIsSaving] = useState(false);
     const [isPreviewOpen, setIsPreviewOpen] = useState(false);
     const [collapsedCategoryIds, setCollapsedCategoryIds] = useState(() => new Set());
@@ -318,7 +340,10 @@ export default function PackCreator({ pack, setView, user, setError, onSaved }) 
     };
 
     const addCategory = () => {
-        setCategories([...categories, { id: generateId(), name: t('newCategory'), questions: [createEmptyQuestion(100)] }]);
+        setCategories((currentCategories) => [
+            ...currentCategories,
+            { id: generateId(), name: t('newCategory'), questions: [createEmptyQuestion(100)] }
+        ]);
     };
 
     const getPackRef = (packId) => doc(db, 'artifacts', appId, 'public', 'data', 'packs', packId);
@@ -393,7 +418,9 @@ export default function PackCreator({ pack, setView, user, setError, onSaved }) 
     };
 
     const updateCategoryName = (catId, name) => {
-        setCategories(categories.map(c => c.id === catId ? { ...c, name } : c));
+        setCategories((currentCategories) => (
+            currentCategories.map(c => c.id === catId ? { ...c, name } : c)
+        ));
     };
 
     const moveCategory = (catId, direction) => {
@@ -443,7 +470,7 @@ export default function PackCreator({ pack, setView, user, setError, onSaved }) 
     };
 
     const addQuestion = (catId) => {
-        setCategories(categories.map(c => {
+        setCategories((currentCategories) => currentCategories.map(c => {
             if (c.id === catId) {
                 const lastPoints = c.questions.length > 0 ? normalizePoints(c.questions[c.questions.length - 1].points, 0) : 0;
                 return { ...c, questions: [...c.questions, createEmptyQuestion(lastPoints + 100)] };
@@ -466,7 +493,7 @@ export default function PackCreator({ pack, setView, user, setError, onSaved }) 
     };
 
     const updateQuestion = (catId, qId, field, value) => {
-        setCategories(categories.map(c => {
+        setCategories((currentCategories) => currentCategories.map(c => {
             if (c.id === catId) {
                 return {
                     ...c,
@@ -517,7 +544,7 @@ export default function PackCreator({ pack, setView, user, setError, onSaved }) 
     };
 
     const validateQuestionPoints = (catId, qId, field) => {
-        setCategories(categories.map(c => {
+        setCategories((currentCategories) => currentCategories.map(c => {
             if (c.id !== catId) return c;
 
             return {
