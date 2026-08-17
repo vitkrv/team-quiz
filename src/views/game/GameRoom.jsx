@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { arrayUnion, doc, updateDoc } from 'firebase/firestore';
-import { ArrowLeft, Check, Copy, Gift, Link, Play, PlusCircle, MinusCircle, Users, SlidersHorizontal, ScrollText, Swords, Trophy, X } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Check, Copy, Gift, Link, Play, PlusCircle, MinusCircle, Users, SlidersHorizontal, ScrollText, Swords, Trophy, X } from 'lucide-react';
 import { HOST_AVATAR } from '../../constants';
 import { appId, db } from '../../firebase';
 import PackTitle from '../../components/PackTitle';
@@ -484,6 +484,72 @@ function PrizeModal({ room, roomRef, isHost, t }) {
     );
 }
 
+function CategoryPreviewView({ room, roomRef, isHost, t }) {
+    const categories = room.pack?.categories || [];
+    const roomIndex = Math.min(Math.max(Number(room.categoryPreviewIndex) || 0, 0), Math.max(categories.length - 1, 0));
+    const [displayedIndex, setDisplayedIndex] = useState(roomIndex);
+    const [isLeaving, setIsLeaving] = useState(false);
+    const [isSaving, setIsSaving] = useState(false);
+    const category = categories[displayedIndex] || categories[0];
+    const isLastCategory = roomIndex >= categories.length - 1;
+
+    useEffect(() => {
+        if (roomIndex === displayedIndex) return undefined;
+
+        setIsLeaving(true);
+        const timeoutId = window.setTimeout(() => {
+            setDisplayedIndex(roomIndex);
+            setIsLeaving(false);
+        }, 280);
+
+        return () => window.clearTimeout(timeoutId);
+    }, [displayedIndex, roomIndex]);
+
+    const handleAdvance = async () => {
+        try {
+            setIsSaving(true);
+            await updateDoc(roomRef, isLastCategory
+                ? { status: 'playing' }
+                : { categoryPreviewIndex: roomIndex + 1 }
+            );
+        } finally {
+            setIsSaving(false);
+        }
+    };
+
+    return (
+        <div className="flex h-full min-h-[24rem] flex-1 items-center justify-center p-4 text-center">
+            <div className="flex max-w-5xl flex-col items-center gap-10">
+                <div
+                    key={category?.id || displayedIndex}
+                    className={`category-preview-name ${isLeaving ? 'category-preview-name--leaving' : ''}`}
+                    aria-live="polite"
+                >
+                    {category?.name || t('categoryFallback')}
+                </div>
+                {isHost && (
+                    <button
+                        type="button"
+                        onClick={handleAdvance}
+                        disabled={isSaving}
+                        className="inline-flex items-center justify-center gap-3 rounded-xl bg-yellow-400 px-6 py-3 text-lg font-black text-slate-950 shadow-lg shadow-yellow-950/40 transition-colors hover:bg-yellow-300 disabled:cursor-wait disabled:bg-slate-700 disabled:text-slate-500 md:px-8 md:py-4 md:text-2xl"
+                    >
+                        {isLastCategory ? (
+                            <>
+                                <Play size={22} /> {t('showGameField')}
+                            </>
+                        ) : (
+                            <>
+                                <ArrowRight size={22} /> {t('nextCategory')}
+                            </>
+                        )}
+                    </button>
+                )}
+            </div>
+        </div>
+    );
+}
+
 export default function GameRoom({ room, roomCode, user, onLeaveRoom, showDefinedFinalResults = false }) {
     const { t } = useLanguage();
     const isHost = user.uid === room.hostId;
@@ -502,12 +568,14 @@ export default function GameRoom({ room, roomCode, user, onLeaveRoom, showDefine
     const host = { id: user.uid, name: hostName };
     const hasPrize = hasDefinedPrize(room.pack?.prize);
     const canOpenHostRps = isHost
+        && room.status === 'playing'
         && !room.activeQuestionId
         && !room.surprisePlayerDraw
         && !room.hostRps
         && !room.tieBreaker?.status
         && Object.keys(room.players || {}).length >= 2;
     const canOpenPrize = isHost
+        && room.status === 'playing'
         && hasPrize
         && !room.activeQuestionId
         && !room.surprisePlayerDraw
@@ -558,7 +626,8 @@ export default function GameRoom({ room, roomCode, user, onLeaveRoom, showDefine
         const starterId = playerIds.length > 0 ? playerIds[Math.floor(Math.random() * playerIds.length)] : user.uid;
 
         await updateDoc(roomRef, {
-            status: 'playing',
+            status: (room.pack?.categories || []).length > 0 ? 'category_preview' : 'playing',
+            categoryPreviewIndex: 0,
             currentTurn: starterId,
             history: arrayUnion(createHistoryItem({
                 type: 'game_started',
@@ -726,7 +795,7 @@ export default function GameRoom({ room, roomCode, user, onLeaveRoom, showDefine
         return <ResultsView room={room} leaveRoom={leaveRoom} />;
     }
 
-    if (room.status === 'playing') {
+    if (room.status === 'category_preview' || room.status === 'playing') {
         return (
             <div className="min-h-screen flex flex-col bg-slate-900 overflow-hidden">
                 {isHost && isScoreEditorOpen && (
@@ -860,7 +929,9 @@ export default function GameRoom({ room, roomCode, user, onLeaveRoom, showDefine
 
                     {/* Main Play Area */}
                     <main className="relative flex min-w-0 flex-1 flex-col overflow-x-hidden overflow-y-auto bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-blue-950 to-slate-900 p-3 md:overflow-hidden md:p-6">
-                        {room.activeQuestionId ? (
+                        {room.status === 'category_preview' ? (
+                            <CategoryPreviewView room={room} roomRef={roomRef} isHost={isHost} t={t} />
+                        ) : room.activeQuestionId ? (
                             <ActiveQuestionView room={room} roomRef={roomRef} user={user} isHost={isHost} isSpectator={isSpectator} serverNow={serverNow} clockSyncKey={clockSyncKey} />
                         ) : (
                             <BoardView room={room} roomRef={roomRef} user={user} isHost={isHost} isSpectator={isSpectator} serverNow={serverNow} />

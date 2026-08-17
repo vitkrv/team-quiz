@@ -157,6 +157,7 @@ export default function HostSetup({ setView, user, setCurrentRoomCode, onCreateP
                 [user.uid]: { name: hostName, score: 0, isHost: true, avatar: HOST_AVATAR }
             },
             questionStates: qStates,
+            categoryPreviewIndex: 0,
             currentTurn: null,
             activeQuestionId: null,
             answerRevealed: false,
