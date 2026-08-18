@@ -961,7 +961,7 @@ export default function GameRoom({ room, roomCode, user, onLeaveRoom, showDefine
                         {room.status === 'category_preview' ? (
                             <CategoryPreviewView room={room} roomRef={roomRef} isHost={isHost} t={t} />
                         ) : room.activeQuestionId ? (
-                            <ActiveQuestionView room={room} roomRef={roomRef} user={user} isHost={isHost} isSpectator={isSpectator} serverNow={serverNow} clockSyncKey={clockSyncKey} />
+                            <ActiveQuestionView room={room} roomCode={roomCode} roomRef={roomRef} user={user} isHost={isHost} isSpectator={isSpectator} serverNow={serverNow} clockSyncKey={clockSyncKey} />
                         ) : (
                             <BoardView room={room} roomRef={roomRef} user={user} isHost={isHost} isSpectator={isSpectator} serverNow={serverNow} />
                         )}

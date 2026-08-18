@@ -17,11 +17,36 @@ const SURPRISE_DEFAULT_MIN_POINTS = 100;
 const SURPRISE_DEFAULT_MAX_POINTS = 500;
 const WHEEL_ANIMATION_MS = 6000;
 const LATE_BUZZ_WINDOW_MS = 2000;
+const EARLY_BUZZ_DELAY_MS = 2500;
 const ACTIVE_QUESTION_ENTRANCE_MS = 750;
 const SURPRISE_BACKGROUND_EMOJIS = ['\u{1F37F}', '\u{1F389}', '\u{1F973}', '\u{1F381}', '\u{1F37E}', '\u{1F382}', '\u{2728}', '\u{1FA84}'];
 const SURPRISE_BACKGROUND_EMOJI_COUNT = 80;
 const TABLE_PICKED_BACKGROUND_EMOJIS = ['\u{1F4B8}'];
 const TABLE_PICKED_BACKGROUND_COUNT = 8;
+
+const getStoredEarlyBuzzUnlockAt = (storageKey) => {
+    try {
+        return Number(window.localStorage.getItem(storageKey)) || 0;
+    } catch {
+        return 0;
+    }
+};
+
+const setStoredEarlyBuzzUnlockAt = (storageKey, unlockAt) => {
+    try {
+        window.localStorage.setItem(storageKey, String(unlockAt));
+    } catch {
+        // localStorage can be unavailable; in-memory state still handles this tab.
+    }
+};
+
+const clearStoredEarlyBuzzUnlockAt = (storageKey) => {
+    try {
+        window.localStorage.removeItem(storageKey);
+    } catch {
+        // Ignore storage cleanup failures.
+    }
+};
 
 const normalizePoints = (value, fallback = POINT_STEP) => {
     const parsedValue = Number.parseInt(value, 10);
@@ -265,13 +290,16 @@ function SpaceBuzzHandler({ enabled, onBuzz }) {
     return null;
 }
 
-export default function ActiveQuestionView({ room, roomRef, user, isHost, isSpectator = false, serverNow = Date.now, clockSyncKey = 0 }) {
+export default function ActiveQuestionView({ room, roomCode, roomRef, user, isHost, isSpectator = false, serverNow = Date.now, clockSyncKey = 0 }) {
     const { t } = useLanguage();
+    const earlyBuzzDelayStorageKey = `cortex-rush:early-buzz:${roomCode || 'room'}:${room.activeQuestionId || 'question'}:${user.uid}`;
     const [timeLeft, setTimeLeft] = useState(10);
     const [buzzUnlockNow, setBuzzUnlockNow] = useState(() => serverNow());
+    const [earlyBuzzDelayUnlockAt, setEarlyBuzzDelayUnlockAt] = useState(() => getStoredEarlyBuzzUnlockAt(earlyBuzzDelayStorageKey));
     const [isRolling, setIsRolling] = useState(false);
     const [buzzMediaPauseSignal, setBuzzMediaPauseSignal] = useState(0);
     const [isEntranceContentVisible, setIsEntranceContentVisible] = useState(false);
+    const [earlyBuzzNoticeQuestionId, setEarlyBuzzNoticeQuestionId] = useState(null);
     const surpriseBackgroundItems = useMemo(
         () => createFloatingBackgroundItems({
             seed: room.activeQuestionId || 'question',
@@ -285,6 +313,7 @@ export default function ActiveQuestionView({ room, roomRef, user, isHost, isSpec
         [room.activeQuestionId]
     );
     const buzzUnlockAt = Number(room.buzzUnlockAt) || 0;
+    const effectiveBuzzUnlockAt = Math.max(buzzUnlockAt, earlyBuzzDelayUnlockAt);
 
     // Find the active question data
     let activeQ = null;
@@ -315,28 +344,36 @@ export default function ActiveQuestionView({ room, roomRef, user, isHost, isSpec
 
     useEffect(() => {
         setIsEntranceContentVisible(false);
+        setEarlyBuzzNoticeQuestionId(null);
+        const storedUnlockAt = getStoredEarlyBuzzUnlockAt(earlyBuzzDelayStorageKey);
+        if (storedUnlockAt > serverNow()) {
+            setEarlyBuzzDelayUnlockAt(storedUnlockAt);
+        } else {
+            setEarlyBuzzDelayUnlockAt(0);
+            clearStoredEarlyBuzzUnlockAt(earlyBuzzDelayStorageKey);
+        }
         const timeoutId = window.setTimeout(() => {
             setIsEntranceContentVisible(true);
         }, ACTIVE_QUESTION_ENTRANCE_MS);
 
         return () => window.clearTimeout(timeoutId);
-    }, [room.activeQuestionId]);
+    }, [earlyBuzzDelayStorageKey, room.activeQuestionId, serverNow]);
 
     useEffect(() => {
-        if (!room.activeQuestionId || !buzzUnlockAt || room.buzzedPlayerId || room.answerRevealed) {
+        if (!room.activeQuestionId || !effectiveBuzzUnlockAt || room.buzzedPlayerId || room.answerRevealed) {
             setBuzzUnlockNow(serverNow());
             return undefined;
         }
 
-        const remainingMs = buzzUnlockAt - serverNow();
+        const remainingMs = effectiveBuzzUnlockAt - serverNow();
         if (remainingMs <= 0) {
             setBuzzUnlockNow(serverNow());
             return undefined;
         }
 
-        const timeoutId = window.setTimeout(() => setBuzzUnlockNow(serverNow()), remainingMs);
+        const timeoutId = window.setTimeout(() => setBuzzUnlockNow(Math.max(serverNow(), effectiveBuzzUnlockAt)), remainingMs);
         return () => window.clearTimeout(timeoutId);
-    }, [buzzUnlockAt, clockSyncKey, room.activeQuestionId, room.answerRevealed, room.buzzedPlayerId, serverNow]);
+    }, [clockSyncKey, effectiveBuzzUnlockAt, room.activeQuestionId, room.answerRevealed, room.buzzedPlayerId, serverNow]);
 
     useEffect(() => {
         if (!activeQ?.answerMedia) return;
@@ -384,8 +421,10 @@ export default function ActiveQuestionView({ room, roomRef, user, isHost, isSpec
         && (user.uid === surpriseAnswererId || isHost);
     const hasBuzzed = !!room.buzzedPlayerId;
     const amIIncorrect = (room.incorrectBuzzedIds || []).includes(user.uid);
-    const isBuzzUnlocked = !buzzUnlockAt || buzzUnlockNow >= buzzUnlockAt;
-    const canIBuzz = !isSurpriseQuestion && !isHost && !isSpectator && !hasBuzzed && !amIIncorrect && isBuzzUnlocked;
+    const isBuzzUnlocked = !effectiveBuzzUnlockAt || buzzUnlockNow >= effectiveBuzzUnlockAt;
+    const canAttemptBuzz = !isSurpriseQuestion && !isHost && !isSpectator && !hasBuzzed && !amIIncorrect;
+    const canIBuzz = canAttemptBuzz && isBuzzUnlocked;
+    const canClickBuzzButton = canIBuzz || (room.trueCompetitiveMode && canAttemptBuzz);
     const shouldShowBuzzButton = !isHost && !isSpectator && !amIIncorrect;
     const didIBuzz = room.buzzedPlayerId === user.uid;
     const buzzedPlayer = room.buzzedPlayerId ? room.players[room.buzzedPlayerId] : null;
@@ -410,9 +449,19 @@ export default function ActiveQuestionView({ room, roomRef, user, isHost, isSpec
     const questionMediaStartAt = mediaPlayback?.startedAt || 0;
 
     const handleBuzzIn = async () => {
-        if (!canIBuzz) return;
+        if (!canClickBuzzButton) return;
         const clickedAt = serverNow();
-        setBuzzMediaPauseSignal((signal) => signal + 1);
+        let didRegisterBuzzAttempt = false;
+
+        if (!isBuzzUnlocked) {
+            if (room.trueCompetitiveMode && !earlyBuzzDelayUnlockAt && buzzUnlockAt) {
+                const nextEarlyBuzzDelayUnlockAt = buzzUnlockAt + EARLY_BUZZ_DELAY_MS;
+                setEarlyBuzzDelayUnlockAt(nextEarlyBuzzDelayUnlockAt);
+                setStoredEarlyBuzzUnlockAt(earlyBuzzDelayStorageKey, nextEarlyBuzzDelayUnlockAt);
+                setEarlyBuzzNoticeQuestionId(activeQ.id);
+            }
+            return;
+        }
 
         await runTransaction(roomRef.firestore, async (transaction) => {
             const roomSnap = await transaction.get(roomRef);
@@ -451,6 +500,7 @@ export default function ActiveQuestionView({ room, roomRef, user, isHost, isSpec
                         details: { actorName }
                     }))
                 });
+                didRegisterBuzzAttempt = true;
                 return;
             }
 
@@ -470,8 +520,13 @@ export default function ActiveQuestionView({ room, roomRef, user, isHost, isSpec
                         [user.uid]: { clickedAt, questionId: activeQ.id }
                     }
                 });
+                didRegisterBuzzAttempt = true;
             }
         });
+
+        if (didRegisterBuzzAttempt) {
+            setBuzzMediaPauseSignal((signal) => signal + 1);
+        }
     };
 
     const handleJudge = async (isCorrect) => {
@@ -762,10 +817,16 @@ export default function ActiveQuestionView({ room, roomRef, user, isHost, isSpec
     };
 
     return (
-        <div
-            key={room.activeQuestionId}
-            className="active-question-enter-shell relative z-10 mx-auto flex min-h-0 w-full max-w-4xl flex-1 flex-col items-center justify-start pb-4 text-center"
-        >
+        <>
+            {earlyBuzzNoticeQuestionId === activeQ.id && !isBuzzUnlocked && (
+                <div className="pointer-events-none fixed left-1/2 top-4 z-50 w-[calc(100%-2rem)] max-w-md -translate-x-1/2 rounded-xl border border-red-500/40 bg-red-950/95 px-4 py-3 text-sm font-bold text-red-100 shadow-2xl shadow-black/40">
+                    {t('buzzClickedTooEarly')}
+                </div>
+            )}
+            <div
+                key={room.activeQuestionId}
+                className="active-question-enter-shell relative z-10 mx-auto flex min-h-0 w-full max-w-4xl flex-1 flex-col items-center justify-start pb-4 text-center"
+            >
             <SpaceBuzzHandler enabled={canIBuzz} onBuzz={handleBuzzIn} />
             {isSurpriseQuestion && (
                 <FloatingEmojiBackground
@@ -992,12 +1053,13 @@ export default function ActiveQuestionView({ room, roomRef, user, isHost, isSpec
                     ) : (
                         shouldShowBuzzButton ? (
                             <button
+                                type="button"
                                 onClick={handleBuzzIn}
-                                disabled={!canIBuzz}
+                                disabled={!canClickBuzzButton}
                                 className={`h-36 w-36 rounded-full border-[6px] text-2xl font-black transition-all md:h-48 md:w-48 md:border-8 md:text-4xl ${
                                     canIBuzz
                                         ? 'border-red-800 bg-red-600 text-white shadow-[0_8px_0_0_#7f1d1d,inset_0_10px_20px_rgba(255,255,255,0.3)] hover:bg-red-500 active:translate-y-[8px] active:shadow-[0_0px_0_0_#7f1d1d,inset_0_10px_20px_rgba(255,255,255,0.3)] md:shadow-[0_10px_0_0_#7f1d1d,inset_0_10px_20px_rgba(255,255,255,0.3)] md:active:translate-y-[10px]'
-                                        : 'cursor-not-allowed border-slate-700 bg-slate-600 text-slate-300 shadow-[0_8px_0_0_#334155,inset_0_10px_20px_rgba(255,255,255,0.08)] md:shadow-[0_10px_0_0_#334155,inset_0_10px_20px_rgba(255,255,255,0.08)]'
+                                        : `${canClickBuzzButton ? '' : 'cursor-not-allowed '}border-slate-700 bg-slate-600 text-slate-300 shadow-[0_8px_0_0_#334155,inset_0_10px_20px_rgba(255,255,255,0.08)] md:shadow-[0_10px_0_0_#334155,inset_0_10px_20px_rgba(255,255,255,0.08)]`
                                 }`}
                             >
                                 {t('buzz')}
@@ -1025,5 +1087,6 @@ export default function ActiveQuestionView({ room, roomRef, user, isHost, isSpec
 
             </div>
         </div>
+        </>
     );
 }
