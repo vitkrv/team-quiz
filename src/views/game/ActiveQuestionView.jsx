@@ -564,7 +564,12 @@ export default function ActiveQuestionView({ room, roomRef, user, isHost, isSpec
             });
         } else {
             // Mark incorrect, reset buzz
-            await updateDoc(roomRef, {
+            const penalty = room.trueCompetitiveMode ? Number(activeQ.points) || 0 : 0;
+            const historyDetails = { playerName: buzzedPlayerName || t('playerFallback') };
+            if (penalty) {
+                historyDetails.points = -penalty;
+            }
+            const update = {
                 buzzedPlayerId: null,
                 buzzTimestamp: null,
                 buzzAttempts: {},
@@ -573,14 +578,21 @@ export default function ActiveQuestionView({ room, roomRef, user, isHost, isSpec
                     type: 'answer_incorrect',
                     actorId: user.uid,
                     actorName,
-                    message: t('historyAnswerIncorrect', {
-                        playerName: buzzedPlayerName || t('playerFallback')
-                    }),
-                    details: {
-                        playerName: buzzedPlayerName || t('playerFallback')
-                    }
+                    message: penalty
+                        ? t('historyAnswerIncorrectPenalty', {
+                            playerName: buzzedPlayerName || t('playerFallback'),
+                            points: -penalty
+                        })
+                        : t('historyAnswerIncorrect', {
+                            playerName: buzzedPlayerName || t('playerFallback')
+                        }),
+                    details: historyDetails
                 }))
-            });
+            };
+            if (penalty) {
+                update[`players.${room.buzzedPlayerId}.score`] = increment(-penalty);
+            }
+            await updateDoc(roomRef, update);
         }
     };
 

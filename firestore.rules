@@ -25,7 +25,10 @@ service cloud.firestore {
         && canHostPack(appId, request.resource.data.packId, request.auth.uid);
       allow update: if isGoogleUser()
         && (
-          roomParticipantOrHost(resource.data, request.auth.uid)
+          (
+            roomParticipantOrHost(resource.data, request.auth.uid)
+            && validTrueCompetitiveModeUpdate(resource.data, request.resource.data, request.auth.uid)
+          )
           || canJoinLobby(resource.data, request.resource.data, request.auth.uid)
         );
       allow delete: if false;
@@ -68,6 +71,16 @@ service cloud.firestore {
         && uid in after.players
         && after.players[uid].isHost == false
         && after.diff(before).changedKeys().hasOnly(['players']);
+    }
+
+    function validTrueCompetitiveModeUpdate(before, after, uid) {
+      return !after.diff(before).affectedKeys().hasAny(['trueCompetitiveMode'])
+        || (
+          before.hostId == uid
+          && before.status == 'lobby'
+          && after.status == 'lobby'
+          && after.trueCompetitiveMode is bool
+        );
     }
 
     function canHostPack(appId, packId, uid) {

@@ -285,7 +285,7 @@ const renderHistoryMessage = (item, t) => {
         case 'answer_correct':
             return <><PlayerName>{details.playerName || t('playerFallback')}</PlayerName> {t('historyViewCorrect')}, <PointValue value={details.points} showSign /></>;
         case 'answer_incorrect':
-            return <><PlayerName>{details.playerName || t('playerFallback')}</PlayerName> {t('historyViewIncorrect')}</>;
+            return <><PlayerName>{details.playerName || t('playerFallback')}</PlayerName> {t('historyViewIncorrect')}{details.points ? <>, <PointValue value={details.points} showSign /></> : null}</>;
         case 'surprise_answer_correct':
             return <><PlayerName>{details.playerName || t('playerFallback')}</PlayerName> {t('historyViewSurpriseCorrect')}</>;
         case 'surprise_answer_incorrect':
@@ -669,6 +669,11 @@ export default function GameRoom({ room, roomCode, user, onLeaveRoom, showDefine
         setIsHostRpsSetupOpen(false);
     };
 
+    const handleTrueCompetitiveModeChange = async (event) => {
+        if (!isHost || room.status !== 'lobby') return;
+        await updateDoc(roomRef, { trueCompetitiveMode: event.target.checked });
+    };
+
     const handleCopyRoomCode = async () => {
         try {
             await navigator.clipboard.writeText(roomCode);
@@ -748,6 +753,29 @@ export default function GameRoom({ room, roomCode, user, onLeaveRoom, showDefine
                     <div className="text-lg font-bold text-blue-300">
                         <PackTitle pack={room.pack} iconClassName="text-xl" />
                     </div>
+                </div>
+
+                <div className="mb-6 w-full max-w-2xl rounded-2xl border border-slate-700 bg-slate-800/50 p-6 backdrop-blur-sm">
+                    <h3 className="mb-4 flex items-center gap-2 text-xl font-bold">
+                        <Swords className="text-red-400" /> {t('gameMode')}
+                    </h3>
+                    <label className={`flex flex-col gap-3 rounded-lg border border-slate-700 bg-slate-900 p-4 sm:flex-row sm:items-center ${isHost ? 'cursor-pointer hover:border-slate-600' : 'cursor-default'}`}>
+                        <span className="min-w-0 flex-1">
+                            <span className="block font-bold text-white">{t('trueCompetitiveMode')}</span>
+                            <span className="mt-1 block text-sm text-slate-400">{t('trueCompetitiveModeDescription')}</span>
+                        </span>
+                        <span className="relative inline-flex h-7 w-12 shrink-0 items-center">
+                            <input
+                                type="checkbox"
+                                checked={Boolean(room.trueCompetitiveMode)}
+                                onChange={handleTrueCompetitiveModeChange}
+                                disabled={!isHost}
+                                className="peer sr-only"
+                            />
+                            <span className="absolute inset-0 rounded-full bg-slate-700 transition-colors peer-checked:bg-red-600 peer-disabled:opacity-50" />
+                            <span className="absolute left-1 h-5 w-5 rounded-full bg-white transition-transform peer-checked:translate-x-5 peer-disabled:opacity-80" />
+                        </span>
+                    </label>
                 </div>
 
                 <div className="w-full max-w-2xl bg-slate-800/50 p-6 rounded-2xl border border-slate-700 backdrop-blur-sm">

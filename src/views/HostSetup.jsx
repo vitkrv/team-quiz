@@ -152,6 +152,7 @@ export default function HostSetup({ setView, user, setCurrentRoomCode, onCreateP
             hostId: user.uid,
             packId: pack.id,
             status: 'lobby',
+            trueCompetitiveMode: false,
             pack: pack,
             players: {
                 [user.uid]: { name: hostName, score: 0, isHost: true, avatar: HOST_AVATAR }
