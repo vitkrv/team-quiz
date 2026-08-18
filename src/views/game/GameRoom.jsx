@@ -709,14 +709,6 @@ export default function GameRoom({ room, roomCode, user, onLeaveRoom, showDefine
                             {roomCode}
                         </div>
                     </div>
-                    <div className="mx-auto mt-5 max-w-md rounded-xl border border-slate-700 bg-slate-900/70 p-4">
-                        <div className="mb-1 text-xs font-black uppercase tracking-widest text-slate-500">
-                            {t('pickedQuestionPack')}
-                        </div>
-                        <div className="text-lg font-bold text-blue-300">
-                            <PackTitle pack={room.pack} iconClassName="text-xl" />
-                        </div>
-                    </div>
                     <div className="mt-4 flex flex-col sm:flex-row items-center justify-center gap-4 sm:gap-8">
                         <button
                             onClick={handleCopyRoomCode}
@@ -746,6 +738,15 @@ export default function GameRoom({ room, roomCode, user, onLeaveRoom, showDefine
                                 </>
                             )}
                         </button>
+                    </div>
+                </div>
+
+                <div className="mb-6 w-full max-w-2xl rounded-xl border border-slate-700 bg-slate-900/70 p-4 text-center">
+                    <div className="mb-1 text-xs font-black uppercase tracking-widest text-slate-500">
+                        {t('pickedQuestionPack')}
+                    </div>
+                    <div className="text-lg font-bold text-blue-300">
+                        <PackTitle pack={room.pack} iconClassName="text-xl" />
                     </div>
                 </div>
 
