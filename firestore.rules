@@ -3,10 +3,13 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
     match /artifacts/{appId}/public/data/packs/{packId} {
-      allow read: if isGoogleUser()
-        && (
-          resource.data.ownerId == request.auth.uid
-          || resource.data.isPublic == true
+      allow read: if isAdmin(appId)
+        || (
+          isGoogleUser()
+          && (
+            resource.data.ownerId == request.auth.uid
+            || resource.data.isPublic == true
+          )
         );
       allow create: if isGoogleUser()
         && request.resource.data.ownerId == request.auth.uid;
@@ -18,7 +21,7 @@ service cloud.firestore {
     }
 
     match /artifacts/{appId}/public/data/rooms/{roomCode} {
-      allow read: if isGoogleUser();
+      allow read: if isAdmin(appId) || isGoogleUser();
       allow create: if isGoogleUser()
         && request.resource.data.hostId == request.auth.uid
         && request.resource.data.packId is string
@@ -35,16 +38,27 @@ service cloud.firestore {
     }
 
     match /artifacts/{appId}/users/{userId} {
-      allow read: if isGoogleUser()
-        && request.auth.uid == userId;
+      allow read: if isAdmin(appId)
+        || (
+          isGoogleUser()
+          && request.auth.uid == userId
+        );
       allow create: if isGoogleUser()
         && request.auth.uid == userId
         && request.resource.data.keys().hasOnly(['language', 'updatedAt'])
         && request.resource.data.language in ['en', 'uk'];
       allow update: if isGoogleUser()
         && request.auth.uid == userId
-        && request.resource.data.diff(resource.data).changedKeys().hasOnly(['language', 'updatedAt'])
-        && request.resource.data.language in ['en', 'uk'];
+        && (
+          (
+            request.resource.data.diff(resource.data).changedKeys().hasOnly(['language', 'updatedAt'])
+            && request.resource.data.language in ['en', 'uk']
+          )
+          || (
+            isAdmin(appId)
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['adminTableColumns', 'updatedAt'])
+          )
+        );
       allow delete: if false;
     }
 
@@ -86,6 +100,11 @@ service cloud.firestore {
     function canHostPack(appId, packId, uid) {
       let pack = get(/databases/$(database)/documents/artifacts/$(appId)/public/data/packs/$(packId)).data;
       return pack.ownerId == uid || pack.isPublic == true;
+    }
+
+    function isAdmin(appId) {
+      return request.auth != null
+        && get(/databases/$(database)/documents/artifacts/$(appId)/users/$(request.auth.uid)).data.admin == true;
     }
 
     function isGoogleUser() {
