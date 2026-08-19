@@ -1,4 +1,4 @@
-import { FolderOpen, LogOut, RotateCcw } from 'lucide-react';
+import { FolderOpen, LogOut, RotateCcw, Send } from 'lucide-react';
 import packageJson from '../../package.json';
 import { useLanguage } from '../useLanguage';
 import LanguagePicker from '../components/LanguagePicker';
@@ -7,7 +7,7 @@ export default function MainMenu({ setView, user, lastRoomCode, onCreatePack, on
     const { t } = useLanguage();
 
     return (
-        <div className="relative flex flex-col items-center justify-center min-h-screen p-6 pb-28">
+        <div className="relative flex flex-col items-center justify-center min-h-screen p-6 pb-40">
             <div className="absolute top-4 right-4 flex items-center gap-3">
                 <div className="text-right hidden sm:block">
                     <div className="text-sm font-bold text-slate-200">{user.displayName || t('playerFallback')}</div>
@@ -72,9 +72,19 @@ export default function MainMenu({ setView, user, lastRoomCode, onCreatePack, on
                 </button>
             </div>
 
-            <LanguagePicker className="absolute bottom-6 left-1/2 -translate-x-1/2" />
-            <div className="absolute bottom-2 left-1/2 -translate-x-1/2 text-[10px] leading-none text-slate-500/60">
-                {packageJson.version}
+            <div className="absolute bottom-2 left-1/2 flex -translate-x-1/2 flex-col items-center gap-2">
+                <LanguagePicker />
+                <a
+                    href="https://t.me/vitkrv"
+                    target="_blank"
+                    rel="noreferrer"
+                    className="inline-flex items-center justify-center gap-1.5 rounded-full border border-slate-700 bg-slate-950/60 px-3 py-1.5 text-xs font-bold text-slate-400 transition-colors hover:border-cyan-400/50 hover:text-cyan-200"
+                >
+                    <Send size={14} /> {t('contactCreator')}
+                </a>
+                <div className="text-[10px] leading-none text-slate-500/60">
+                    {packageJson.version}
+                </div>
             </div>
         </div>
     );
