@@ -545,7 +545,7 @@ function CategoryPreviewView({ room, roomRef, isHost, t }) {
 
     return (
         <div className="flex h-full min-h-[24rem] flex-1 items-center justify-center p-4 text-center">
-            <div className="flex max-w-5xl flex-col items-center gap-10">
+            <div className="flex w-full flex-col items-center gap-10">
                 <div
                     key={category?.id || displayedIndex}
                     className={`category-preview-name ${isLeaving ? 'category-preview-name--leaving' : ''}`}

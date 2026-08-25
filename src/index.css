@@ -167,9 +167,9 @@ input {
 }
 
 .category-preview-name {
-    max-width: min(58rem, 92vw);
+    max-width: 100%;
     overflow-wrap: anywhere;
-    font-size: clamp(3rem, 10vw, 8rem);
+    font-size: clamp(2.75rem, 9vw, 7.25rem);
     font-weight: 900;
     line-height: 0.95;
     color: #facc15;
