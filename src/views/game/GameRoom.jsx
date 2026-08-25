@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { arrayUnion, doc, updateDoc } from 'firebase/firestore';
+import { arrayUnion, deleteField, doc, updateDoc } from 'firebase/firestore';
 import { ArrowLeft, ArrowRight, Check, Copy, Gift, Link, Play, PlusCircle, MinusCircle, Users, SlidersHorizontal, ScrollText, Swords, Trophy, X } from 'lucide-react';
 import { HOST_AVATAR } from '../../constants';
 import { appId, db } from '../../firebase';
@@ -347,6 +347,32 @@ function HistoryModal({ history, onClose, t }) {
     );
 }
 
+function LobbyLeaveConfirmModal({ isLeaving, onCancel, onConfirm, t }) {
+    return (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-6" role="dialog" aria-modal="true" aria-labelledby="leave-lobby-title">
+            <div className="w-full max-w-md rounded-xl border border-slate-700 bg-slate-900 shadow-2xl">
+                <div className="flex items-center justify-between border-b border-slate-800 p-5">
+                    <h2 id="leave-lobby-title" className="text-xl font-bold text-white">{t('leaveLobbyConfirmTitle')}</h2>
+                    <button onClick={onCancel} disabled={isLeaving} className="text-slate-500 hover:text-white disabled:opacity-50" aria-label={t('cancel')}>
+                        <X size={22} />
+                    </button>
+                </div>
+                <div className="p-5 text-slate-300">
+                    {t('leaveLobbyConfirmDescription')}
+                </div>
+                <div className="flex justify-end gap-3 border-t border-slate-800 p-5">
+                    <button onClick={onCancel} disabled={isLeaving} className="rounded-lg border border-slate-700 px-4 py-2 font-bold text-slate-300 hover:bg-slate-800 disabled:opacity-50">
+                        {t('cancel')}
+                    </button>
+                    <button onClick={onConfirm} disabled={isLeaving} className="rounded-lg bg-red-600 px-5 py-2 font-bold text-white hover:bg-red-500 disabled:bg-slate-700 disabled:text-slate-500">
+                        {isLeaving ? t('leavingLobby') : t('leave')}
+                    </button>
+                </div>
+            </div>
+        </div>
+    );
+}
+
 function LeaderboardContent({ room, roomRef, isHost, now, createScoreAdjustmentHistory, t }) {
     return (
         <div className="space-y-1 p-2">
@@ -550,7 +576,7 @@ function CategoryPreviewView({ room, roomRef, isHost, t }) {
     );
 }
 
-export default function GameRoom({ room, roomCode, user, onLeaveRoom, showDefinedFinalResults = false }) {
+export default function GameRoom({ room, roomCode, user, onPrepareRoomExit, onLeaveRoom, showDefinedFinalResults = false }) {
     const { t } = useLanguage();
     const isHost = user.uid === room.hostId;
     const isSpectator = !isHost && !room.players?.[user.uid];
@@ -564,9 +590,12 @@ export default function GameRoom({ room, roomCode, user, onLeaveRoom, showDefine
     const [isHistoryOpen, setIsHistoryOpen] = useState(false);
     const [isLeaderboardOpen, setIsLeaderboardOpen] = useState(false);
     const [isHostRpsSetupOpen, setIsHostRpsSetupOpen] = useState(false);
+    const [isLeaveLobbyConfirmOpen, setIsLeaveLobbyConfirmOpen] = useState(false);
+    const [isLeavingLobby, setIsLeavingLobby] = useState(false);
     const hostName = room.players[user.uid]?.name || user.displayName || t('hostLabel');
     const host = { id: user.uid, name: hostName };
     const hasPrize = hasDefinedPrize(room.pack?.prize);
+    const canLeaveLobby = room.status === 'lobby' && !isHost && Boolean(room.players?.[user.uid]);
     const canOpenHostRps = isHost
         && room.status === 'playing'
         && !room.activeQuestionId
@@ -618,6 +647,23 @@ export default function GameRoom({ room, roomCode, user, onLeaveRoom, showDefine
 
     const leaveRoom = async () => {
         onLeaveRoom();
+    };
+
+    const handleLeaveLobbyPlayer = async () => {
+        if (!canLeaveLobby || isLeavingLobby) return;
+
+        onPrepareRoomExit?.(roomCode);
+        setIsLeavingLobby(true);
+        try {
+            await updateDoc(roomRef, {
+                [`players.${user.uid}`]: deleteField()
+            });
+            onLeaveRoom({ clearRemembered: true });
+        } catch (err) {
+            console.error("Leave lobby error:", err);
+            onPrepareRoomExit?.(null);
+            setIsLeavingLobby(false);
+        }
     };
 
     const handleStartGame = async () => {
@@ -701,11 +747,21 @@ export default function GameRoom({ room, roomCode, user, onLeaveRoom, showDefine
         return (
             <div className="min-h-screen flex flex-col items-center justify-center p-6 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-slate-800 via-slate-900 to-black">
                 {isHost && isHistoryOpen && <HistoryModal history={room.history} onClose={() => setIsHistoryOpen(false)} t={t} />}
-                <div className="absolute top-4 left-4">
-                    <button onClick={leaveRoom} className="text-slate-400 hover:text-white flex items-center gap-2">
-                        <ArrowLeft size={20} /> {t('leave')}
-                    </button>
-                </div>
+                {isLeaveLobbyConfirmOpen && (
+                    <LobbyLeaveConfirmModal
+                        isLeaving={isLeavingLobby}
+                        onCancel={() => setIsLeaveLobbyConfirmOpen(false)}
+                        onConfirm={handleLeaveLobbyPlayer}
+                        t={t}
+                    />
+                )}
+                {isHost && (
+                    <div className="absolute top-4 left-4">
+                        <button onClick={leaveRoom} className="text-slate-400 hover:text-white flex items-center gap-2">
+                            <ArrowLeft size={20} /> {t('leave')}
+                        </button>
+                    </div>
+                )}
 
                 <div className="text-center mb-12">
                     <h2 className="text-slate-400 uppercase tracking-widest text-sm mb-2 font-bold">{t('roomCode')}</h2>
@@ -800,6 +856,14 @@ export default function GameRoom({ room, roomCode, user, onLeaveRoom, showDefine
                                     <Play size={18} /> {t('startGame')}
                                 </button>
                             </div>
+                        )}
+                        {canLeaveLobby && (
+                            <button
+                                onClick={() => setIsLeaveLobbyConfirmOpen(true)}
+                                className="rounded-lg border border-red-500/60 px-4 py-2 font-bold text-red-200 hover:bg-red-500/10 hover:text-red-100"
+                            >
+                                {t('leave')}
+                            </button>
                         )}
                     </div>
 

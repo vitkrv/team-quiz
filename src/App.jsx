@@ -70,6 +70,7 @@ export default function App() {
     const [error, setError] = useState('');
     const roomSnapshotReceivedAtRef = useRef(0);
     const roomReconcilePromiseRef = useRef(null);
+    const expectedRoomExitCodeRef = useRef(null);
 
     useEffect(() => {
         if (!authReady) return;
@@ -207,7 +208,15 @@ export default function App() {
         setView('room');
     };
 
-    const handleLeaveGamePage = () => {
+    const handlePrepareRoomExit = (roomCode) => {
+        expectedRoomExitCodeRef.current = roomCode;
+    };
+
+    const handleLeaveGamePage = ({ clearRemembered = false } = {}) => {
+        expectedRoomExitCodeRef.current = null;
+        if (clearRemembered) {
+            localStorage.removeItem(LAST_ROOM_CODE_KEY);
+        }
         handleSetCurrentRoomCode(null, { remember: false });
         setRoomData(null);
         setLinkedGameRoomCode('');
@@ -276,7 +285,11 @@ export default function App() {
                     || hasLinkedDefinedFinalResults;
 
                 if (!isParticipant && !canSpectate) {
-                    setError(translate(language, 'notGameParticipant'));
+                    if (expectedRoomExitCodeRef.current === currentRoomCode) {
+                        expectedRoomExitCodeRef.current = null;
+                    } else {
+                        setError(translate(language, 'notGameParticipant'));
+                    }
                     handleSetCurrentRoomCode(null, { remember: false });
                     setRoomData(null);
                     setLinkedGameRoomCode('');
@@ -469,6 +482,7 @@ export default function App() {
                     room={roomData}
                     roomCode={currentRoomCode}
                     user={user}
+                    onPrepareRoomExit={handlePrepareRoomExit}
                     onLeaveRoom={handleLeaveGamePage}
                     showDefinedFinalResults={linkedGameRoomCode === currentRoomCode}
                 />
