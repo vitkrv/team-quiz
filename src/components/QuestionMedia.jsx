@@ -10,13 +10,15 @@ import { getMediaKind, getMediaUrl, MEDIA_KINDS } from '../services/imageStorage
 const variantClasses = {
     thumbnail: 'h-28 w-44',
     host: 'max-h-48 w-full max-w-sm',
-    player: 'max-h-[42vh] w-full max-w-4xl'
+    player: 'max-h-[42vh] w-full max-w-4xl',
+    answer: 'h-[min(46vh,28rem)] w-full max-w-5xl'
 };
 
 const frameClasses = {
     thumbnail: 'overflow-hidden rounded-lg border border-slate-700 bg-slate-950/70',
     host: 'overflow-hidden rounded-lg border border-slate-700 bg-slate-950/70',
-    player: 'overflow-visible rounded-none border-0 bg-transparent'
+    player: 'overflow-visible rounded-none border-0 bg-transparent',
+    answer: 'overflow-visible rounded-none border-0 bg-transparent'
 };
 
 const iconByKind = {
@@ -47,6 +49,9 @@ export default function QuestionMedia({
     const kind = getMediaKind(media);
     const url = getMediaUrl(media, variant === 'thumbnail' ? 'thumbnail' : variant === 'host' ? 'host' : 'game');
     const Icon = iconByKind[kind] || Image;
+    const videoClassName = variant === 'answer'
+        ? 'max-h-[46vh] w-full max-w-5xl rounded-lg bg-black'
+        : 'max-h-[42vh] w-full max-w-4xl rounded-lg bg-black';
 
     useEffect(() => {
         const element = mediaRef.current;
@@ -139,7 +144,7 @@ export default function QuestionMedia({
         controls,
         preload: 'auto',
         autoPlay: false,
-        className: `max-h-[42vh] w-full max-w-4xl rounded-lg bg-black ${className}`
+        className: `${videoClassName} ${className}`
     };
 
     return (
@@ -154,7 +159,7 @@ export default function QuestionMedia({
                     t={t}
                 />
             ) : (
-                <div className="w-full max-w-4xl">
+                <div className={variant === 'answer' ? 'w-full max-w-5xl' : 'w-full max-w-4xl'}>
                     <video {...videoProps} playsInline />
                     <MediaVolumeControl t={t} />
                 </div>
