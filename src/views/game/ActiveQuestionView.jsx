@@ -16,7 +16,8 @@ const POINT_STEP = 100;
 const SURPRISE_DEFAULT_MIN_POINTS = 100;
 const SURPRISE_DEFAULT_MAX_POINTS = 500;
 const WHEEL_ANIMATION_MS = 6000;
-const LATE_BUZZ_WINDOW_MS = 2000;
+const LATE_BUZZ_WINDOW_MS = 3500;
+const LATE_BUZZ_NOTICE_MS = 3500;
 const EARLY_BUZZ_DELAY_MS = 2500;
 const ACTIVE_QUESTION_ENTRANCE_MS = 750;
 const SURPRISE_BACKGROUND_EMOJIS = ['\u{1F37F}', '\u{1F389}', '\u{1F973}', '\u{1F381}', '\u{1F37E}', '\u{1F382}', '\u{2728}', '\u{1FA84}'];
@@ -47,6 +48,8 @@ const clearStoredEarlyBuzzUnlockAt = (storageKey) => {
         // Ignore storage cleanup failures.
     }
 };
+
+const formatBuzzDelta = (deltaMs) => `+${(deltaMs / 1000).toFixed(2)}s`;
 
 const normalizePoints = (value, fallback = POINT_STEP) => {
     const parsedValue = Number.parseInt(value, 10);
@@ -300,6 +303,7 @@ export default function ActiveQuestionView({ room, roomCode, roomRef, user, isHo
     const [buzzMediaPauseSignal, setBuzzMediaPauseSignal] = useState(0);
     const [isEntranceContentVisible, setIsEntranceContentVisible] = useState(false);
     const [earlyBuzzNoticeQuestionId, setEarlyBuzzNoticeQuestionId] = useState(null);
+    const [lateBuzzNotice, setLateBuzzNotice] = useState(null);
     const surpriseBackgroundItems = useMemo(
         () => createFloatingBackgroundItems({
             seed: room.activeQuestionId || 'question',
@@ -345,6 +349,7 @@ export default function ActiveQuestionView({ room, roomCode, roomRef, user, isHo
     useEffect(() => {
         setIsEntranceContentVisible(false);
         setEarlyBuzzNoticeQuestionId(null);
+        setLateBuzzNotice(null);
         const storedUnlockAt = getStoredEarlyBuzzUnlockAt(earlyBuzzDelayStorageKey);
         if (storedUnlockAt > serverNow()) {
             setEarlyBuzzDelayUnlockAt(storedUnlockAt);
@@ -358,6 +363,13 @@ export default function ActiveQuestionView({ room, roomCode, roomRef, user, isHo
 
         return () => window.clearTimeout(timeoutId);
     }, [earlyBuzzDelayStorageKey, room.activeQuestionId, serverNow]);
+
+    useEffect(() => {
+        if (!lateBuzzNotice) return undefined;
+
+        const timeoutId = window.setTimeout(() => setLateBuzzNotice(null), LATE_BUZZ_NOTICE_MS);
+        return () => window.clearTimeout(timeoutId);
+    }, [lateBuzzNotice]);
 
     useEffect(() => {
         if (!room.activeQuestionId || !effectiveBuzzUnlockAt || room.buzzedPlayerId || room.answerRevealed) {
@@ -452,6 +464,7 @@ export default function ActiveQuestionView({ room, roomCode, roomRef, user, isHo
         if (!canClickBuzzButton) return;
         const clickedAt = serverNow();
         let didRegisterBuzzAttempt = false;
+        let nextLateBuzzNotice = null;
 
         if (!isBuzzUnlocked) {
             if (room.trueCompetitiveMode && !earlyBuzzDelayUnlockAt && buzzUnlockAt) {
@@ -514,18 +527,39 @@ export default function ActiveQuestionView({ room, roomCode, roomRef, user, isHo
 
             const buzzDelta = clickedAt - latestRoom.buzzTimestamp;
             if (buzzDelta > 0 && buzzDelta <= LATE_BUZZ_WINDOW_MS) {
+                const firstBuzzPlayerName = latestRoom.players?.[latestRoom.buzzedPlayerId]?.name || t('playerFallback');
+                const delta = formatBuzzDelta(buzzDelta);
                 transaction.update(roomRef, {
                     buzzAttempts: {
                         ...buzzAttempts,
                         [user.uid]: { clickedAt, questionId: activeQ.id }
-                    }
+                    },
+                    history: arrayUnion(createHistoryItem({
+                        type: 'player_buzzed_late',
+                        actorId: user.uid,
+                        actorName,
+                        message: t('historyPlayerBuzzedLate', {
+                            actorName,
+                            playerName: firstBuzzPlayerName,
+                            delta
+                        }),
+                        details: {
+                            actorName,
+                            playerName: firstBuzzPlayerName,
+                            deltaMs: buzzDelta
+                        }
+                    }))
                 });
+                nextLateBuzzNotice = { questionId: activeQ.id, playerName: firstBuzzPlayerName, delta };
                 didRegisterBuzzAttempt = true;
             }
         });
 
         if (didRegisterBuzzAttempt) {
             setBuzzMediaPauseSignal((signal) => signal + 1);
+        }
+        if (nextLateBuzzNotice) {
+            setLateBuzzNotice(nextLateBuzzNotice);
         }
     };
 
@@ -821,6 +855,14 @@ export default function ActiveQuestionView({ room, roomCode, roomRef, user, isHo
             {earlyBuzzNoticeQuestionId === activeQ.id && !isBuzzUnlocked && (
                 <div className="pointer-events-none fixed left-1/2 top-4 z-50 w-[calc(100%-2rem)] max-w-md -translate-x-1/2 rounded-xl border border-red-500/40 bg-red-950/95 px-4 py-3 text-sm font-bold text-red-100 shadow-2xl shadow-black/40">
                     {t('buzzClickedTooEarly')}
+                </div>
+            )}
+            {lateBuzzNotice?.questionId === activeQ.id && (
+                <div className="pointer-events-none fixed left-1/2 top-4 z-50 w-[calc(100%-2rem)] max-w-md -translate-x-1/2 rounded-xl border border-yellow-400/40 bg-yellow-950/95 px-4 py-3 text-sm font-bold text-yellow-100 shadow-2xl shadow-black/40">
+                    {t('buzzClickedLater', {
+                        playerName: lateBuzzNotice.playerName,
+                        delta: lateBuzzNotice.delta
+                    })}
                 </div>
             )}
             <div

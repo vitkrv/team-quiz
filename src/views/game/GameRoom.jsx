@@ -17,7 +17,7 @@ import BoardView from './BoardView';
 import ResultsView from './ResultsView';
 
 const ANSWER_WINDOW_MS = 10000;
-const LATE_BUZZ_WINDOW_MS = 2000;
+const LATE_BUZZ_WINDOW_MS = 3500;
 const BOARD_CLOCK_RESYNC_INTERVAL_MS = 2 * 60 * 1000;
 
 const getPlayerEntries = (players) => Object.entries(players).filter(([, player]) => !player.isHost);
@@ -282,6 +282,11 @@ const renderHistoryMessage = (item, t) => {
             return <><PlayerName>{details.actorName || fallbackName}</PlayerName> {t('historyViewPicked')} &quot;{details.categoryName || t('question')}&quot; {t('historyViewFor')} <PointValue value={details.points} /></>;
         case 'player_buzzed':
             return <><PlayerName>{details.actorName || fallbackName}</PlayerName> {t('historyViewBuzzed')}</>;
+        case 'player_buzzed_late':
+            return <><PlayerName>{details.actorName || fallbackName}</PlayerName> {t('historyViewBuzzedLate', {
+                playerName: details.playerName || t('playerFallback'),
+                delta: formatBuzzDelta(Number(details.deltaMs) || 0)
+            })}</>;
         case 'answer_correct':
             return <><PlayerName>{details.playerName || t('playerFallback')}</PlayerName> {t('historyViewCorrect')}, <PointValue value={details.points} showSign /></>;
         case 'answer_incorrect':
