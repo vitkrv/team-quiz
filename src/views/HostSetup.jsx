@@ -1,12 +1,12 @@
-import { useEffect, useState } from 'react';
-import { collection, doc, getDocs, query, setDoc, where } from 'firebase/firestore';
+import { useEffect, useRef, useState } from 'react';
+import { collection, getDocs, query, where } from 'firebase/firestore';
 import { ArrowLeft, ChevronDown, ChevronRight, Play } from 'lucide-react';
 import { HOST_AVATAR } from '../constants';
 import PackTitle from '../components/PackTitle';
 import { appId, db } from '../firebase';
 import { getPackAnalyticsSummary, trackEvent } from '../services/analytics';
 import { useLanguage } from '../useLanguage';
-import { generateRoomCode } from '../utils/ids';
+import { createRoom } from '../actions/roomActions';
 import { createHistoryItem } from '../actions/gameActions';
 
 const sortPacksByUpdatedAt = (packs) => packs.sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
@@ -90,6 +90,7 @@ export default function HostSetup({ setView, user, setCurrentRoomCode, onCreateP
     const [ownedPacks, setOwnedPacks] = useState([]);
     const [sharedPacks, setSharedPacks] = useState([]);
     const [loading, setLoading] = useState(true);
+    const creatingRoomRef = useRef(false);
     const [hostName, setHostName] = useState(() => t('hostLabel'));
     const [collapsedSections, setCollapsedSections] = useState({ owned: false, shared: false });
 
@@ -138,7 +139,7 @@ export default function HostSetup({ setView, user, setCurrentRoomCode, onCreateP
     };
 
     const handleStartRoom = async (pack) => {
-        const code = generateRoomCode();
+        if (creatingRoomRef.current) return;
 
         // Initialize question states map
         const qStates = {};
@@ -182,14 +183,17 @@ export default function HostSetup({ setView, user, setCurrentRoomCode, onCreateP
             ]
         };
 
+        creatingRoomRef.current = true;
         try {
-            await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'rooms', code), roomData);
+            const gameId = await createRoom(roomData);
             trackEvent('room_created', getPackAnalyticsSummary(pack));
-            setCurrentRoomCode(code);
+            setCurrentRoomCode(gameId);
             setView('room');
         } catch (err) {
             console.error("Error creating room", err);
             alert(t('failedToCreateRoom'));
+        } finally {
+            creatingRoomRef.current = false;
         }
     };
 

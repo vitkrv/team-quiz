@@ -20,13 +20,28 @@ service cloud.firestore {
         && resource.data.ownerId == request.auth.uid;
     }
 
-    match /artifacts/{appId}/public/data/rooms/{roomCode} {
+    match /artifacts/{appId}/public/data/roomCodes/{code} {
+      allow read: if isGoogleUser() || isAdmin(appId);
+      allow create: if isGoogleUser() && validReservation(appId, code);
+      allow update: if isGoogleUser()
+        && get(/databases/$(database)/documents/artifacts/$(appId)/public/data/rooms/$(resource.data.gameId)).data.status == 'finished'
+        && validReservation(appId, code);
+      allow delete: if false;
+    }
+
+    match /artifacts/{appId}/public/data/rooms/{gameId} {
       allow read: if isAdmin(appId) || isGoogleUser();
       allow create: if isGoogleUser()
         && request.resource.data.hostId == request.auth.uid
+        && gameId.matches('^[A-Za-z0-9]{20}$')
+        && request.resource.data.status == 'lobby'
+        && request.resource.data.roomCode is string
+        && request.resource.data.roomCode.matches('^[0-9]{6}$')
+        && getAfter(/databases/$(database)/documents/artifacts/$(appId)/public/data/roomCodes/$(request.resource.data.roomCode)).data.gameId == gameId
         && request.resource.data.packId is string
         && canHostPack(appId, request.resource.data.packId, request.auth.uid);
       allow update: if isGoogleUser()
+        && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['roomCode', 'hostId'])
         && (
           (
             roomParticipantOrHost(resource.data, request.auth.uid)
@@ -76,6 +91,21 @@ service cloud.firestore {
 
     function roomParticipantOrHost(room, uid) {
       return room.hostId == uid || uid in room.players;
+    }
+
+    function validReservation(appId, code) {
+      let gameId = request.resource.data.gameId;
+      let roomPath = /databases/$(database)/documents/artifacts/$(appId)/public/data/rooms/$(gameId);
+      let room = getAfter(roomPath).data;
+      return code.matches('^[0-9]{6}$')
+        && request.resource.data.keys().hasOnly(['gameId'])
+        && gameId is string
+        && gameId.matches('^[A-Za-z0-9]{20}$')
+        && !exists(roomPath)
+        && !exists(/databases/$(database)/documents/artifacts/$(appId)/public/data/rooms/$(code))
+        && room.roomCode == code
+        && room.hostId == request.auth.uid
+        && room.status == 'lobby';
     }
 
     function canJoinLobby(before, after, uid) {

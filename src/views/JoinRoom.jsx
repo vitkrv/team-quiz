@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react';
-import { doc, getDoc, runTransaction } from 'firebase/firestore';
+import { runTransaction } from 'firebase/firestore';
 import { ArrowLeft } from 'lucide-react';
 import PackTitle from '../components/PackTitle';
 import { ANIMAL_AVATARS, HOST_AVATAR } from '../constants';
-import { appId, db } from '../firebase';
+import { db } from '../firebase';
+import { getRoomByCode } from '../actions/roomActions';
 import { trackEvent } from '../services/analytics';
 import { useLanguage } from '../useLanguage';
 
@@ -26,8 +27,7 @@ export default function JoinRoom({ initialCode = '', setView, user, setCurrentRo
 
         const timeoutId = window.setTimeout(async () => {
             try {
-                const roomRef = doc(db, 'artifacts', appId, 'public', 'data', 'rooms', normalizedCode);
-                const roomSnap = await getDoc(roomRef);
+                const roomSnap = await getRoomByCode(normalizedCode);
                 if (isCancelled) return;
 
                 setRoomPreview({
@@ -56,10 +56,10 @@ export default function JoinRoom({ initialCode = '', setView, user, setCurrentRo
 
         try {
             const normalizedCode = code.trim().toUpperCase();
-            const roomRef = doc(db, 'artifacts', appId, 'public', 'data', 'rooms', normalizedCode);
 
             const joinResult = await runTransaction(db, async (transaction) => {
-                const roomSnap = await transaction.get(roomRef);
+                const roomSnap = await getRoomByCode(normalizedCode, (ref) => transaction.get(ref));
+                const roomRef = roomSnap.ref;
 
                 if (!roomSnap.exists()) {
                     return { error: t('roomNotFound') };
@@ -68,7 +68,7 @@ export default function JoinRoom({ initialCode = '', setView, user, setCurrentRo
                 const roomData = roomSnap.data();
                 if (roomData.status !== 'lobby') {
                     if (roomData.status === 'category_preview' || roomData.status === 'playing' || roomData.status === 'finished') {
-                        return { ok: true, spectating: true };
+                        return { ok: true, spectating: true, gameId: roomRef.id };
                     }
 
                     return { error: t('roomClosed') };
@@ -110,7 +110,7 @@ export default function JoinRoom({ initialCode = '', setView, user, setCurrentRo
                     }
                 });
 
-                return { ok: true };
+                return { ok: true, gameId: roomRef.id };
             });
 
             if (joinResult.error) {
@@ -119,7 +119,7 @@ export default function JoinRoom({ initialCode = '', setView, user, setCurrentRo
                 return;
             }
 
-            setCurrentRoomCode(normalizedCode, { remember: !joinResult.spectating });
+            setCurrentRoomCode(joinResult.gameId, { remember: !joinResult.spectating });
             trackEvent('room_joined', { spectating: joinResult.spectating ? 'yes' : 'no' });
             onCodeConsumed?.();
             setView('room');

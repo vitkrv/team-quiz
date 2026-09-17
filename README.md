@@ -57,6 +57,18 @@ Product and gameplay references for reviewing manual or AI-generated changes:
 - [App overview and change baseline](docs/app-overview.md)
 - [Game modes and gameplay reference](docs/gameplay-reference.md)
 
+## Room identity and invitation codes
+
+New games use stable Firestore document IDs. Six-digit invitation codes resolve through
+`artifacts/{appId}/public/data/roomCodes/{code}` and are reserved atomically with the game.
+Creation tries at most 10 code candidates; codes belonging to finished games may be reused.
+Results links (`?game=<gameId>`) and remembered rooms retain the stable ID, so reuse does
+not redirect an old results link. Legacy six-digit room documents and their links remain
+supported, and their codes are never reused.
+
+Validate and deploy the updated `firestore.rules` together with this frontend release.
+Older clients must reload to create rooms after the new rules are deployed.
+
 ## Firebase Auth Troubleshooting
 
 `auth/configuration-not-found` means the Firebase project in `.env.local` does not have Authentication configured for the requested sign-in method. Enable Google sign-in for that same project, verify the `VITE_FIREBASE_PROJECT_ID` value matches it, and restart the Vite dev server after changing `.env.local`.

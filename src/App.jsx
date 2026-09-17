@@ -23,7 +23,12 @@ const LANGUAGE_CACHE_KEY = 'cortex-rush:language';
 const ROOM_STALE_SNAPSHOT_MS = 5000;
 const ROOM_RECONCILE_INTERVAL_MS = 10000;
 const getRoomCodeFromUrl = () => new URLSearchParams(window.location.search).get('room')?.trim().toUpperCase() || '';
-const getGameCodeFromUrl = () => new URLSearchParams(window.location.search).get('game')?.trim().toUpperCase() || '';
+// Game IDs are case-sensitive; six-digit IDs keep legacy results links working.
+const isRoomId = (id) => /^(?:[A-Za-z0-9]{20}|[0-9]{6})$/.test(id || '');
+const getGameCodeFromUrl = () => {
+    const id = new URLSearchParams(window.location.search).get('game')?.trim() || '';
+    return isRoomId(id) ? id : '';
+};
 const replaceUrl = (url) => {
     window.history.replaceState({}, '', `${url.pathname}${url.search}${url.hash}`);
 };
@@ -63,7 +68,12 @@ export default function App() {
     const [joinRoomCode, setJoinRoomCode] = useState(() => getRoomCodeFromUrl());
     const [gameRoomCode, setGameRoomCode] = useState(() => getGameCodeFromUrl());
     const [linkedGameRoomCode, setLinkedGameRoomCode] = useState(() => getGameCodeFromUrl());
-    const [latestActiveRoomCode, setLatestActiveRoomCode] = useState(() => localStorage.getItem(LAST_ROOM_CODE_KEY));
+    const [latestActiveRoomCode, setLatestActiveRoomCode] = useState(() => {
+        const id = localStorage.getItem(LAST_ROOM_CODE_KEY);
+        return isRoomId(id) ? id : null;
+    });
+    const [latestInvitationCode, setLatestInvitationCode] = useState('');
+    // Room state and remembered-room storage contain stable document IDs.
     const [currentRoomCode, setCurrentRoomCode] = useState(null);
     const [roomData, setRoomData] = useState(null);
     const [editingPack, setEditingPack] = useState(null);
@@ -251,6 +261,7 @@ export default function App() {
         const roomRef = doc(db, 'artifacts', appId, 'public', 'data', 'rooms', latestActiveRoomCode);
         const unsubscribe = onSnapshot(roomRef, (snapshot) => {
             const room = snapshot.data();
+            setLatestInvitationCode(room?.roomCode || latestActiveRoomCode);
             if (!snapshot.exists() || room.status === 'finished' || !room.players?.[user.uid]) {
                 localStorage.removeItem(LAST_ROOM_CODE_KEY);
                 setLatestActiveRoomCode(null);
@@ -301,6 +312,11 @@ export default function App() {
                 }
 
                 setRoomData(room);
+                setLatestInvitationCode(room.roomCode || currentRoomCode);
+
+                if (view === 'room') {
+                    setGameCodeInUrl(currentRoomCode);
+                }
 
                 if (room.status === 'finished' || hasLinkedDefinedFinalResults) {
                     localStorage.removeItem(LAST_ROOM_CODE_KEY);
@@ -316,9 +332,6 @@ export default function App() {
                     setLatestActiveRoomCode(null);
                 }
 
-                if (view === 'room') {
-                    setGameCodeInUrl(currentRoomCode);
-                }
             } else {
                 setError(translate(language, 'roomClosed'));
                 handleSetCurrentRoomCode(null, { remember: false });
@@ -427,7 +440,7 @@ export default function App() {
                 <MainMenu
                     setView={setView}
                     user={user}
-                    lastRoomCode={latestActiveRoomCode}
+                    lastRoomCode={latestActiveRoomCode ? latestInvitationCode : ''}
                     onCreatePack={handleCreatePack}
                     onReturnToRoom={handleReturnToRoom}
                     onSignOut={handleSignOut}

@@ -583,6 +583,7 @@ function CategoryPreviewView({ room, roomRef, isHost, t }) {
 
 export default function GameRoom({ room, roomCode, user, onPrepareRoomExit, onLeaveRoom, showDefinedFinalResults = false }) {
     const { t } = useLanguage();
+    const invitationCode = room.roomCode || roomCode;
     const isHost = user.uid === room.hostId;
     const isSpectator = !isHost && !room.players?.[user.uid];
     const roomRef = doc(db, 'artifacts', appId, 'public', 'data', 'rooms', roomCode);
@@ -727,7 +728,7 @@ export default function GameRoom({ room, roomCode, user, onPrepareRoomExit, onLe
 
     const handleCopyRoomCode = async () => {
         try {
-            await navigator.clipboard.writeText(roomCode);
+            await navigator.clipboard.writeText(invitationCode);
             setCopiedRoomCode(true);
             window.setTimeout(() => setCopiedRoomCode(false), 1600);
         } catch (err) {
@@ -739,7 +740,7 @@ export default function GameRoom({ room, roomCode, user, onPrepareRoomExit, onLe
         try {
             const joinUrl = new URL(window.location.href);
             joinUrl.searchParams.delete('game');
-            joinUrl.searchParams.set('room', roomCode);
+            joinUrl.searchParams.set('room', invitationCode);
             await navigator.clipboard.writeText(joinUrl.toString());
             setCopiedJoinLink(true);
             window.setTimeout(() => setCopiedJoinLink(false), 1600);
@@ -772,7 +773,7 @@ export default function GameRoom({ room, roomCode, user, onPrepareRoomExit, onLe
                     <h2 className="text-slate-400 uppercase tracking-widest text-sm mb-2 font-bold">{t('roomCode')}</h2>
                     <div className="flex items-center justify-center">
                         <div className="text-7xl font-black font-mono tracking-widest text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-purple-500 bg-slate-800 px-6 py-5 rounded-2xl border border-slate-700 shadow-2xl">
-                            {roomCode}
+                            {invitationCode}
                         </div>
                     </div>
                     <div className="mt-4 flex flex-col sm:flex-row items-center justify-center gap-4 sm:gap-8">
@@ -939,7 +940,7 @@ export default function GameRoom({ room, roomCode, user, onPrepareRoomExit, onLe
                         <h1 className="min-w-0 flex-1 text-base font-bold text-blue-400 md:max-w-xs md:text-xl">
                             <PackTitle pack={room.pack} />
                         </h1>
-                        <span className="hidden shrink-0 rounded-full bg-slate-800 px-3 py-1 font-mono text-xs text-slate-400 sm:inline-flex">{t('codeLabel', { roomCode })}</span>
+                        <span className="hidden shrink-0 rounded-full bg-slate-800 px-3 py-1 font-mono text-xs text-slate-400 sm:inline-flex">{t('codeLabel', { roomCode: invitationCode })}</span>
                         {isSpectator && (
                             <span className="hidden shrink-0 rounded-full border border-cyan-500/40 bg-cyan-500/10 px-3 py-1 text-xs font-black uppercase tracking-widest text-cyan-200 sm:inline-flex">
                                 {t('spectatorMode')}
@@ -955,7 +956,7 @@ export default function GameRoom({ room, roomCode, user, onPrepareRoomExit, onLe
                         </button>
                     </div>
                     <div className="flex w-full min-w-0 items-center justify-between gap-2 text-xs font-medium text-slate-300 md:w-auto md:justify-end md:text-sm">
-                        <span className="shrink-0 rounded-full bg-slate-800 px-2 py-1 font-mono text-[11px] text-slate-400 sm:hidden">{t('codeLabel', { roomCode })}</span>
+                        <span className="shrink-0 rounded-full bg-slate-800 px-2 py-1 font-mono text-[11px] text-slate-400 sm:hidden">{t('codeLabel', { roomCode: invitationCode })}</span>
                         {isSpectator && (
                             <span className="shrink-0 rounded-full border border-cyan-500/40 bg-cyan-500/10 px-2 py-1 text-[11px] font-black uppercase tracking-widest text-cyan-200 sm:hidden">
                                 {t('spectatorMode')}
