@@ -4,6 +4,18 @@ Cortex Rush is a real-time multiplayer trivia game built with React, Tailwind CS
 
 Question packs are owner-only by default. Authors can mark a pack as available to everyone so any signed-in user can host a room with it. Only the Google-authenticated author who created a pack can edit or delete it.
 
+## Features and game flow
+
+- Google sign-in and English/Ukrainian interfaces.
+- Pack editing with category/question reordering, board previews, image/audio/video questions and answers, and optional concealed/revealed prize images.
+- Host-led rooms for up to 20 contestants plus the host, with six-digit invitations, remembered rooms, and spectator support after play starts.
+- Category previews, a shared question board, contestant question suggestions, and host judging/reveal controls. Answers are given outside the app; the app does not evaluate free-text answers or provide voice chat.
+- Standard scoring or optional True Competitive Mode with wrong-answer deductions and early-buzz delays. Near-simultaneous losing buzzes can receive personal feedback within a 3.5-second window.
+- Surprise questions with animated contestant selection and wheel or hidden-table scoring; host score adjustments and paginated game history.
+- Rock-paper-scissors side matches and final top-score tie-breakers, plus shareable results that exclude the host from contestant standings.
+
+To play, sign in, create or choose an owned/public pack, host a room, and share its invitation. Start with at least one contestant, advance the category previews, then open and judge questions. Explicitly finish the game to retain results and release its frozen pack snapshot. Detailed rules and role boundaries are in the [gameplay reference](docs/gameplay-reference.md).
+
 ## Setup
 
 1. Install dependencies:
@@ -15,6 +27,8 @@ Question packs are owner-only by default. Authors can mark a pack as available t
 2. Create `.env.local` from `.env.example` and fill it with your Firebase web app config.
    For production builds, put production-only values in `.env.production.local` so Firebase and Analytics config stays out of the public repository.
    Keep `VITE_FIREBASE_MEASUREMENT_ID` empty in committed example files and set the real value only in ignored local env files.
+
+   Use a consistent `VITE_FIREBASE_APP_NAMESPACE` for the intended dataset. The supplied example uses `qa-showdown`; when unset, the code defaults to `cortex-rush`. Changing it changes the Firestore data paths. Optional `VITE_APP_PUBLIC_URL` identifies the production hostname for Analytics environment labels.
 
 3. In Firebase Console, open Authentication, click Get started if Auth has not been initialized yet, then enable the Google provider under Sign-in method.
 
@@ -41,12 +55,29 @@ Question packs are owner-only by default. Authors can mark a pack as available t
    npm run dev
    ```
 
+   The ImageKit endpoint is needed for media upload/delete operations; text-only packs do not require it. Restart Vite after changing environment values.
+
 ## Scripts
 
 - `npm run dev` starts the Vite dev server.
 - `npm run build` creates a production-mode Vite build in `dist` for Firebase Hosting.
 - `npm run preview` previews the production build.
 - `npm run lint` runs ESLint.
+
+## Verification and deployment
+
+For code changes, run `npm run lint` and `npm run build`, then manually check the affected host, player, and spectator flows. There is no general unit/e2e test script. Storage, game-action, and Firestore-rule changes also have a focused [Firestore Emulator validation harness](docs/game-storage-validation.md), using a dedicated local emulator and the `demo-game-storage` project.
+
+For documentation-only edits, verify source accuracy, relative links, and `git diff --check`.
+
+To publish the frontend, build first, then deploy Hosting:
+
+```sh
+npm run build
+firebase deploy --only hosting
+```
+
+Rules deploy separately with `firebase deploy --only firestore:rules`; coordinate rules and frontend changes for storage releases. Deploy Worker changes from `imagekit-auth-worker/` using the [Worker guide](imagekit-auth-worker/README.md). These deployment commands require the corresponding CLI, account access, and intended target project; lint/build and emulator validation do not deploy anything.
 
 ## AI / Agent Guide
 
@@ -71,7 +102,7 @@ Older clients must reload to create rooms after the new rules are deployed.
 
 ## Game history and frozen packs
 
-New rooms use storage version 2. The live room contains pack display metadata and a
+New rooms use `dataVersion: 2`. The live room contains pack display metadata and a
 `packVersionId`, without embedded history or question-pack content. When the host
 clicks **Start Game**, a transaction freezes the latest saved source pack in
 `artifacts/{appId}/public/data/gamePackVersions/{versionId}` and initializes the board.
