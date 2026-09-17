@@ -33,6 +33,10 @@ service cloud.firestore {
       allow read: if isAdmin(appId) || isGoogleUser();
       allow create: if isGoogleUser()
         && request.resource.data.hostId == request.auth.uid
+        && request.resource.data.dataVersion == 2
+        && !request.resource.data.keys().hasAny(['pack', 'history'])
+        && request.resource.data.packVersionId == null
+        && validPackSummary(request.resource.data.packSummary)
         && gameId.matches('^[A-Za-z0-9]{20}$')
         && request.resource.data.status == 'lobby'
         && request.resource.data.roomCode is string
@@ -42,6 +46,7 @@ service cloud.firestore {
         && canHostPack(appId, request.resource.data.packId, request.auth.uid);
       allow update: if isGoogleUser()
         && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['roomCode', 'hostId'])
+        && validGameStorageUpdate(appId, gameId, resource.data, request.resource.data)
         && (
           (
             roomParticipantOrHost(resource.data, request.auth.uid)
@@ -50,6 +55,139 @@ service cloud.firestore {
           || canJoinLobby(resource.data, request.resource.data, request.auth.uid)
         );
       allow delete: if false;
+    }
+
+    match /artifacts/{appId}/public/data/rooms/{gameId}/history/{eventId} {
+      allow read: if isGoogleUser()
+        && get(/databases/$(database)/documents/artifacts/$(appId)/public/data/rooms/$(gameId)).data.hostId == request.auth.uid;
+      allow create: if isGoogleUser() && validHistoryEvent(appId, gameId, eventId);
+      allow update, delete: if false;
+    }
+
+    match /artifacts/{appId}/public/data/gamePackVersions/{versionId} {
+      allow read: if isGoogleUser() || isAdmin(appId);
+      allow create: if isGoogleUser() && validPackVersion(appId, versionId);
+      allow update: if false;
+      allow delete: if isGoogleUser()
+        && get(/databases/$(database)/documents/artifacts/$(appId)/public/data/rooms/$(resource.data.gameId)).data.hostId == request.auth.uid
+        && get(/databases/$(database)/documents/artifacts/$(appId)/public/data/rooms/$(resource.data.gameId)).data.status in ['playing', 'category_preview']
+        && get(/databases/$(database)/documents/artifacts/$(appId)/public/data/rooms/$(resource.data.gameId)).data.packVersionId == versionId
+        && getAfter(/databases/$(database)/documents/artifacts/$(appId)/public/data/rooms/$(resource.data.gameId)).data.status == 'finished';
+    }
+
+    function validPackSummary(summary) {
+      return summary is map && summary.keys().hasOnly(['name', 'iconEmoji'])
+        && summary.name is string && summary.iconEmoji is string;
+    }
+
+    function validGameStorageUpdate(appId, gameId, before, after) {
+      return before.get('dataVersion', 1) != 2
+        ? !after.diff(before).affectedKeys().hasAny(['dataVersion'])
+        : after.dataVersion == 2
+          && !after.keys().hasAny(['pack', 'history'])
+          && after.packId == before.packId
+          && validPackSummary(after.packSummary)
+          && (after.packSummary == before.packSummary || (before.status == 'lobby' && before.hostId == request.auth.uid))
+          && (after.status == before.status || before.hostId == request.auth.uid)
+          && (before.status != 'finished' || after.status == 'finished')
+          && validPackLifecycle(appId, gameId, before, after);
+    }
+
+    function validPackLifecycle(appId, gameId, before, after) {
+      return before.status == 'lobby'
+        ? ((after.status == 'lobby' && after.packVersionId == null)
+          || (before.hostId == request.auth.uid
+            && after.status in ['category_preview', 'playing']
+            && after.packVersionId is string
+            && !exists(/databases/$(database)/documents/artifacts/$(appId)/public/data/gamePackVersions/$(after.packVersionId))
+            && getAfter(/databases/$(database)/documents/artifacts/$(appId)/public/data/gamePackVersions/$(after.packVersionId)).data.gameId == gameId))
+        : after.packVersionId == before.packVersionId
+          && after.status != 'lobby'
+          && (before.status == 'finished' || after.status != 'finished'
+            || (before.hostId == request.auth.uid
+              && !existsAfter(/databases/$(database)/documents/artifacts/$(appId)/public/data/gamePackVersions/$(before.packVersionId))));
+    }
+
+    function validPackVersion(appId, versionId) {
+      let version = request.resource.data;
+      let roomPath = /databases/$(database)/documents/artifacts/$(appId)/public/data/rooms/$(version.gameId);
+      let before = get(roomPath).data;
+      let after = getAfter(roomPath).data;
+      return version.keys().hasOnly(['gameId', 'sourcePackId', 'schemaVersion', 'createdAt', 'content'])
+        && version.schemaVersion == 1 && version.createdAt == request.time
+        && before.dataVersion == 2 && before.hostId == request.auth.uid
+        && before.status == 'lobby' && before.packVersionId == null
+        && after.status in ['category_preview', 'playing'] && after.packVersionId == versionId
+        && version.sourcePackId == before.packId
+        && canHostPack(appId, version.sourcePackId, request.auth.uid)
+        && version.content == get(/databases/$(database)/documents/artifacts/$(appId)/public/data/packs/$(version.sourcePackId)).data;
+    }
+
+    function validHistoryEvent(appId, gameId, eventId) {
+      let event = request.resource.data;
+      let roomPath = /databases/$(database)/documents/artifacts/$(appId)/public/data/rooms/$(gameId);
+      let after = getAfter(roomPath).data;
+      return after.dataVersion == 2
+        && event.keys().hasOnly(['id', 'type', 'actorId', 'actorName', 'message', 'details', 'timestamp', 'recordedAt'])
+        && event.id == eventId && event.actorId == request.auth.uid
+        && event.actorName is string && event.message is string && event.details is map
+        && event.timestamp is number && event.recordedAt == request.time
+        && (after.hostId == request.auth.uid
+          || (request.auth.uid in after.players
+            && event.actorName == after.players[request.auth.uid].name
+            && validPlayerEvent(get(roomPath).data, after, event, request.auth.uid)));
+    }
+
+    function validPlayerEvent(before, after, event, uid) {
+      return before.status == 'playing' && after.status == 'playing'
+        && uid in before.players && before.players[uid].isHost == false
+        && before.activeQuestionId != null && before.activeQuestionId == after.activeQuestionId
+        && ((event.type in ['player_buzzed', 'player_buzzed_late'] && validBuzzEvent(before, after, event, uid))
+          || (event.type in ['surprise_table_picked', 'surprise_wheel_rolled'] && validSurpriseEvent(before, after, event, uid)));
+    }
+
+    function validBuzzEvent(before, after, event, uid) {
+      let attempt = after.buzzAttempts[uid];
+      return !before.answerRevealed && !after.answerRevealed
+        && !(uid in before.incorrectBuzzedIds)
+        && attempt.questionId == before.activeQuestionId
+        && attempt != before.buzzAttempts.get(uid, null)
+        && attempt.clickedAt >= before.buzzUnlockAt
+        && event.details.actorName == before.players[uid].name
+        && after.diff(before).affectedKeys().hasOnly(['buzzedPlayerId', 'buzzTimestamp', 'buzzAttempts'])
+        && after.buzzAttempts.diff(before.buzzAttempts).affectedKeys().hasOnly([uid])
+        && (event.type == 'player_buzzed'
+          ? before.buzzedPlayerId == null && after.buzzedPlayerId == uid && after.buzzTimestamp == attempt.clickedAt
+          : before.buzzedPlayerId != null && before.buzzedPlayerId != uid
+            && after.buzzedPlayerId == before.buzzedPlayerId && after.buzzTimestamp == before.buzzTimestamp
+            && attempt.clickedAt > before.buzzTimestamp && attempt.clickedAt - before.buzzTimestamp <= 3500
+            && (before.buzzAttempts.get(uid, null) == null || attempt.clickedAt < before.buzzAttempts[uid].clickedAt)
+            && event.details.deltaMs == attempt.clickedAt - before.buzzTimestamp
+            && event.details.playerName == before.players[before.buzzedPlayerId].name);
+    }
+
+    function validSurpriseEvent(before, after, event, uid) {
+      let previous = before.surpriseRound;
+      let next = after.surpriseRound;
+      return before.answerRevealed && after.answerRevealed && previous.judgeResult != null
+        && previous.answererId == uid && next.answererId == uid
+        && previous.questionId == before.activeQuestionId && next.questionId == previous.questionId
+        && event.details.playerName == before.players[uid].name
+        && (event.type == 'surprise_wheel_rolled'
+          ? previous.get('rollResult', null) == null && next.rolledBy == uid
+            && next.rollResult in previous.wheelValues && event.details.points == next.rollResult
+            && after.diff(before).affectedKeys().hasOnly(['surpriseRound'])
+            && next.diff(previous).affectedKeys().hasOnly(['rollResult', 'rolledAt', 'rolledBy', 'scoreAppliedAt'])
+          : previous.get('tablePickedCellId', null) == null && next.tablePickedBy == uid
+            && previous.scoringMechanic == 'table'
+            && event.details.cellIndex is int && event.details.cellIndex >= 0 && event.details.cellIndex < previous.tableCells.size()
+            && next.tablePickedCellId == previous.tableCells[event.details.cellIndex].id
+            && event.details.points == previous.tableCells[event.details.cellIndex].value
+            && after.players[uid].score == before.players[uid].score + event.details.points
+            && after.players.diff(before.players).affectedKeys().hasOnly([uid])
+            && after.players[uid].diff(before.players[uid]).affectedKeys().hasOnly(['score'])
+            && next.diff(previous).affectedKeys().hasOnly(['tablePickedCellId', 'tablePickedAt', 'tablePickedBy', 'scoreAppliedAt'])
+            && after.diff(before).affectedKeys().hasOnly(['players', 'currentTurn', 'surpriseRound']));
     }
 
     match /artifacts/{appId}/users/{userId} {

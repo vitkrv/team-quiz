@@ -23,16 +23,18 @@ Competitive mode does not replace surprise scoring with the ordinary right/wrong
 
 ## 2. Lobby and starting play
 
-1. The host creates a room from an owned or public pack. Every question begins as `available`; scores begin at zero and the host has a crown avatar.
+1. The host creates a room from an owned or public pack. New lobbies store pack display metadata; scores begin at zero and the host has a crown avatar.
 2. Contestants join using the six-digit code or join link. Names are limited to 18 characters. New contestants receive an unused animal avatar; an existing participant can retain their avatar and score.
 3. The lobby allows 20 contestants plus one host. A contestant can explicitly leave the lobby, removing their entry.
 4. Only the host can change competitive mode, and only while the room remains in the lobby.
-5. The start control requires at least one contestant. A random non-host contestant receives the first selection turn.
+5. The start control requires at least one contestant. For new rooms, starting freezes the latest saved pack in a separate immutable version and initializes its questions as `available`. A missing, inaccessible or invalid pack leaves the room in the lobby. A random non-host contestant receives the first selection turn.
 6. The host advances through category previews in pack order, then opens the board. New arrivals once play/preview has begun spectate instead of joining the scoring roster.
 
 Room lifecycle:
 
 `lobby -> category_preview -> playing -> finished`
+
+Explicitly finishing a new-format game atomically deletes its frozen pack and retains standings/champion data for results links. Completing the board or leaving the page alone does not delete it.
 
 The implementation can go directly from lobby to playing if there are no categories. During `playing`, the board, active question, answer reveal, and tie-breaker are substates rather than separate room statuses.
 
@@ -146,7 +148,7 @@ The host can adjust contestant scores by +100/-100 and use the score editor to s
 
 A pack with both prize images allows the host to open the prize presentation, reveal it, and close it. It is a visual activity and does not automatically award points or deliver a real-world prize.
 
-The history records the implemented events, including question picks, accepted/late buzzes, judgments, surprise results, skips, board resumes, score changes, and game completion. It is a session activity record, not an immutable audit or automatic undo system.
+The history records the implemented events, including question picks, accepted/late buzzes, judgments, surprise results, skips, board resumes, score changes, and game completion. For new rooms, events are separate append-only documents readable exclusively by the game host. The history dialog loads the latest 50 while open and offers older pages; players and spectators never receive these history documents. Player buzz and surprise-scoring actions append their events atomically without history read permission. Legacy rooms retain the embedded history array. This remains a session activity record, not a trusted audit or automatic undo system.
 
 ## 7. RPS and final results
 
@@ -211,7 +213,7 @@ These are current limitations, not requirements to preserve bugs. Addressing the
 
 | Rules | Source |
 | --- | --- |
-| Room defaults and pack snapshot | [HostSetup.jsx](../src/views/HostSetup.jsx) |
+| Room defaults, frozen pack creation and start | [HostSetup.jsx](../src/views/HostSetup.jsx), [roomActions.js](../src/actions/roomActions.js) |
 | Admission, capacity, names, avatars | [JoinRoom.jsx](../src/views/JoinRoom.jsx) |
 | Lobby, previews, mode toggle, score tools, prize, history | [GameRoom.jsx](../src/views/game/GameRoom.jsx) |
 | Board selection, surprise draw, completion controls | [BoardView.jsx](../src/views/game/BoardView.jsx) |

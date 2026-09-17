@@ -1,5 +1,9 @@
+import { startGame } from '../../actions/roomActions';
+import useGamePack from '../../hooks/useGamePack';
+import useGameHistory from '../../hooks/useGameHistory';
+import { updateRoom } from '../../actions/gameStorage';
 import { useEffect, useRef, useState } from 'react';
-import { arrayUnion, deleteField, doc, updateDoc } from 'firebase/firestore';
+import { deleteField, doc } from 'firebase/firestore';
 import { ArrowLeft, ArrowRight, Check, Copy, Gift, Link, Play, PlusCircle, MinusCircle, Users, SlidersHorizontal, ScrollText, Swords, Trophy, X } from 'lucide-react';
 import { HOST_AVATAR } from '../../constants';
 import { appId, db } from '../../firebase';
@@ -199,9 +203,9 @@ function ScoreEditorModal({ players, roomRef, host, onClose, t }) {
         }
 
         setIsSaving(true);
-        await updateDoc(roomRef, {
+        await updateRoom(roomRef, {
             ...update,
-            history: arrayUnion(...historyItems)
+            history: [...historyItems]
         });
         setIsSaving(false);
         onClose();
@@ -314,8 +318,9 @@ const renderHistoryMessage = (item, t) => {
     }
 };
 
-function HistoryModal({ history, onClose, t }) {
-    const sortedHistory = [...(history || [])].sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
+function HistoryModal({ room, gameId, onClose, t }) {
+    const { items, loading, error, hasMore, loadMore, retry } = useGameHistory(gameId, room.dataVersion === 2);
+    const sortedHistory = room.dataVersion === 2 ? items : [...(room.history || [])].sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
 
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-6">
@@ -327,7 +332,9 @@ function HistoryModal({ history, onClose, t }) {
                     </button>
                 </div>
                 <div className="max-h-[65vh] overflow-y-auto p-5">
-                    {sortedHistory.length === 0 ? (
+                    {loading && <p className="mb-3 text-slate-400">{t('gameDataLoading')}</p>}
+                    {error && <button onClick={retry} className="mb-3 text-red-300">{t('historyLoadFailed')} {t('gameDataRetry')}</button>}
+                    {sortedHistory.length === 0 && !loading && !error ? (
                         <div className="rounded-lg border border-dashed border-slate-700 p-8 text-center text-slate-500">
                             {t('historyEmpty')}
                         </div>
@@ -346,6 +353,7 @@ function HistoryModal({ history, onClose, t }) {
                             ))}
                         </div>
                     )}
+                    {hasMore && <button onClick={loadMore} disabled={loading} className="mt-4 rounded-lg bg-slate-800 px-4 py-2 text-white disabled:opacity-50">{t('historyLoadMore')}</button>}
                 </div>
             </div>
         </div>
@@ -539,7 +547,7 @@ function CategoryPreviewView({ room, roomRef, isHost, t }) {
     const handleAdvance = async () => {
         try {
             setIsSaving(true);
-            await updateDoc(roomRef, isLastCategory
+            await updateRoom(roomRef, isLastCategory
                 ? { status: 'playing' }
                 : { categoryPreviewIndex: roomIndex + 1 }
             );
@@ -581,7 +589,7 @@ function CategoryPreviewView({ room, roomRef, isHost, t }) {
     );
 }
 
-export default function GameRoom({ room, roomCode, user, onPrepareRoomExit, onLeaveRoom, showDefinedFinalResults = false }) {
+function GameRoomContent({ room, roomCode, user, onPrepareRoomExit, onLeaveRoom, showDefinedFinalResults = false }) {
     const { t } = useLanguage();
     const invitationCode = room.roomCode || roomCode;
     const isHost = user.uid === room.hostId;
@@ -661,7 +669,7 @@ export default function GameRoom({ room, roomCode, user, onPrepareRoomExit, onLe
         onPrepareRoomExit?.(roomCode);
         setIsLeavingLobby(true);
         try {
-            await updateDoc(roomRef, {
+            await updateRoom(roomRef, {
                 [`players.${user.uid}`]: deleteField()
             });
             onLeaveRoom({ clearRemembered: true });
@@ -672,30 +680,19 @@ export default function GameRoom({ room, roomCode, user, onPrepareRoomExit, onLe
         }
     };
 
+    const [isStarting, setIsStarting] = useState(false);
     const handleStartGame = async () => {
-        // Pick a random player to start (not host)
-        const playerIds = Object.keys(room.players).filter(id => !room.players[id].isHost);
-        const starterId = playerIds.length > 0 ? playerIds[Math.floor(Math.random() * playerIds.length)] : user.uid;
-
-        await updateDoc(roomRef, {
-            status: (room.pack?.categories || []).length > 0 ? 'category_preview' : 'playing',
-            categoryPreviewIndex: 0,
-            currentTurn: starterId,
-            history: arrayUnion(createHistoryItem({
-                type: 'game_started',
-                actorId: user.uid,
-                actorName: hostName,
-                message: t('historyGameStarted', {
-                    actorName: hostName,
-                    playerName: room.players[starterId]?.name || t('hostLabel')
-                }),
-                details: {
-                    actorName: hostName,
-                    playerName: room.players[starterId]?.name || t('hostLabel')
-                }
-            }))
-        });
-        trackEvent('game_started', getRoomAnalyticsSummary(room));
+        if (isStarting) return;
+        setIsStarting(true);
+        try {
+            const startedRoom = await startGame(roomRef, host, t);
+            if (startedRoom) trackEvent('game_started', getRoomAnalyticsSummary(startedRoom));
+        } catch (error) {
+            console.error('Failed to start game:', error);
+            alert(t('gameStartFailed'));
+        } finally {
+            setIsStarting(false);
+        }
     };
 
     const createScoreAdjustmentHistory = (player, delta, nextScore) => createHistoryItem({
@@ -723,7 +720,7 @@ export default function GameRoom({ room, roomCode, user, onPrepareRoomExit, onLe
 
     const handleTrueCompetitiveModeChange = async (event) => {
         if (!isHost || room.status !== 'lobby') return;
-        await updateDoc(roomRef, { trueCompetitiveMode: event.target.checked });
+        await updateRoom(roomRef, { trueCompetitiveMode: event.target.checked });
     };
 
     const handleCopyRoomCode = async () => {
@@ -752,7 +749,7 @@ export default function GameRoom({ room, roomCode, user, onPrepareRoomExit, onLe
     if (room.status === 'lobby') {
         return (
             <div className="min-h-screen flex flex-col items-center justify-center p-6 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-slate-800 via-slate-900 to-black">
-                {isHost && isHistoryOpen && <HistoryModal history={room.history} onClose={() => setIsHistoryOpen(false)} t={t} />}
+                {isHost && isHistoryOpen && <HistoryModal room={room} gameId={roomCode} onClose={() => setIsHistoryOpen(false)} t={t} />}
                 {isLeaveLobbyConfirmOpen && (
                     <LobbyLeaveConfirmModal
                         isLeaving={isLeavingLobby}
@@ -856,7 +853,7 @@ export default function GameRoom({ room, roomCode, user, onPrepareRoomExit, onLe
                                 </button>
                                 <button
                                     onClick={handleStartGame}
-                                    disabled={Object.keys(room.players).length < 2} // need at least 1 player + host
+                                    disabled={isStarting || Object.keys(room.players).length < 2} // need at least 1 player + host
                                     className="bg-green-600 hover:bg-green-500 disabled:opacity-50 text-white px-6 py-2 rounded-lg font-bold flex items-center gap-2 transition-all shadow-lg shadow-green-600/20"
                                 >
                                     <Play size={18} /> {t('startGame')}
@@ -906,7 +903,7 @@ export default function GameRoom({ room, roomCode, user, onPrepareRoomExit, onLe
                         t={t}
                     />
                 )}
-                {isHost && isHistoryOpen && <HistoryModal history={room.history} onClose={() => setIsHistoryOpen(false)} t={t} />}
+                {isHost && isHistoryOpen && <HistoryModal room={room} gameId={roomCode} onClose={() => setIsHistoryOpen(false)} t={t} />}
                 <HostRpsModal
                     players={room.players}
                     hostRps={room.hostRps || null}
@@ -1042,4 +1039,17 @@ export default function GameRoom({ room, roomCode, user, onPrepareRoomExit, onLe
     }
 
     return null;
+}
+
+export default function GameRoom(props) {
+    const { t } = useLanguage();
+    const { pack, loading, error, retry } = useGamePack(props.room, props.roomCode);
+    if (loading || error) {
+        return <div className="p-8 text-center text-slate-300">
+            <p>{t(error ? 'gamePackLoadFailed' : 'gameDataLoading')}</p>
+            {error && <button onClick={retry} className="mt-4 rounded-lg bg-blue-600 px-4 py-2 text-white">{t('gameDataRetry')}</button>}
+            <button onClick={() => props.onLeaveRoom()} className="ml-4 mt-4 text-slate-400">{t('leave')}</button>
+        </div>;
+    }
+    return <GameRoomContent key={`${props.roomCode}/${props.user.uid}`} {...props} room={{ ...props.room, pack }} />;
 }

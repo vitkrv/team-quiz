@@ -7,6 +7,13 @@ export const LANGUAGES = [
 
 const translations = {
     en: {
+        gameDataLoading: 'Loading game data…',
+        gameDataRetry: 'Retry',
+        gamePackLoadFailed: 'Could not load this game’s question pack.',
+        gameStartFailed: 'Could not start the game. Check that the selected pack still exists and is available to you, then retry.',
+        historyLoadFailed: 'Could not load game history.',
+        historyLoadMore: 'Load more',
+
         signOut: 'Sign out',
         firebaseSetupRequiredTitle: 'Firebase setup required',
         firebaseSetupRequiredDescription: 'Cortex Rush needs a Firebase web app configuration before multiplayer rooms and question packs can sync.',
@@ -346,6 +353,13 @@ const translations = {
         historyViewHostRpsVs: 'and'
     },
     uk: {
+        gameDataLoading: 'Завантаження даних гри…',
+        gameDataRetry: 'Повторити',
+        gamePackLoadFailed: 'Не вдалося завантажити пакет запитань цієї гри.',
+        gameStartFailed: 'Не вдалося почати гру. Перевірте, чи вибраний пакет існує та доступний вам, і повторіть спробу.',
+        historyLoadFailed: 'Не вдалося завантажити історію гри.',
+        historyLoadMore: 'Завантажити ще',
+
         signOut: 'Вийти',
         firebaseSetupRequiredTitle: 'Потрібне налаштування Firebase',
         firebaseSetupRequiredDescription: 'Cortex Rush потребує конфігурації Firebase web app, щоб синхронізувати ігрові кімнати та набори питань.',

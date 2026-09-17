@@ -32,7 +32,7 @@ export default function JoinRoom({ initialCode = '', setView, user, setCurrentRo
 
                 setRoomPreview({
                     loading: false,
-                    pack: roomSnap.exists() ? roomSnap.data().pack || null : null,
+                    pack: roomSnap.exists() ? roomSnap.data().packSummary || roomSnap.data().pack || null : null,
                     status: roomSnap.exists() ? roomSnap.data().status || null : null
                 });
             } catch (err) {

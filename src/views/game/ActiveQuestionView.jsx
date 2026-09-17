@@ -1,5 +1,6 @@
+import { updateRoom, updateRoomInTransaction } from '../../actions/gameStorage';
 import { useEffect, useMemo, useState } from 'react';
-import { arrayUnion, increment, runTransaction, updateDoc } from 'firebase/firestore';
+import { arrayUnion, increment, runTransaction } from 'firebase/firestore';
 import { Check, Play, RotateCw, X } from 'lucide-react';
 import { ANIMAL_AVATARS, normalizeSurpriseScoringMechanic, SURPRISE_SCORING_MECHANICS } from '../../constants';
 import { useLanguage } from '../../useLanguage';
@@ -469,6 +470,7 @@ export default function ActiveQuestionView({ room, roomCode, roomRef, user, isHo
         if (!canClickBuzzButton) return;
         const clickedAt = serverNow();
         let didRegisterBuzzAttempt = false;
+        const historyId = generateId();
         let nextLateBuzzNotice = null;
 
         if (!isBuzzUnlocked) {
@@ -503,20 +505,20 @@ export default function ActiveQuestionView({ room, roomCode, roomRef, user, isHo
                 && Number(existingAttempt.clickedAt) <= clickedAt;
 
             if (!latestRoom.buzzedPlayerId) {
-                transaction.update(roomRef, {
+                updateRoomInTransaction(transaction, roomRef, latestRoom, {
                     buzzedPlayerId: user.uid,
                     buzzTimestamp: clickedAt,
                     buzzAttempts: {
                         ...buzzAttempts,
                         [user.uid]: { clickedAt, questionId: activeQ.id }
                     },
-                    history: arrayUnion(createHistoryItem({
-                        type: 'player_buzzed',
+                    history: [createHistoryItem({
+                        id: historyId, type: 'player_buzzed',
                         actorId: user.uid,
                         actorName,
                         message: t('historyPlayerBuzzed', { actorName }),
                         details: { actorName }
-                    }))
+                    })]
                 });
                 didRegisterBuzzAttempt = true;
                 return;
@@ -534,13 +536,13 @@ export default function ActiveQuestionView({ room, roomCode, roomRef, user, isHo
             if (buzzDelta > 0 && buzzDelta <= LATE_BUZZ_WINDOW_MS) {
                 const firstBuzzPlayerName = latestRoom.players?.[latestRoom.buzzedPlayerId]?.name || t('playerFallback');
                 const delta = formatBuzzDelta(buzzDelta);
-                transaction.update(roomRef, {
+                updateRoomInTransaction(transaction, roomRef, latestRoom, {
                     buzzAttempts: {
                         ...buzzAttempts,
                         [user.uid]: { clickedAt, questionId: activeQ.id }
                     },
-                    history: arrayUnion(createHistoryItem({
-                        type: 'player_buzzed_late',
+                    history: [createHistoryItem({
+                        id: historyId, type: 'player_buzzed_late',
                         actorId: user.uid,
                         actorName,
                         message: t('historyPlayerBuzzedLate', {
@@ -553,7 +555,7 @@ export default function ActiveQuestionView({ room, roomCode, roomRef, user, isHo
                             playerName: firstBuzzPlayerName,
                             deltaMs: buzzDelta
                         }
-                    }))
+                    })]
                 });
                 nextLateBuzzNotice = { questionId: activeQ.id, playerName: firstBuzzPlayerName, delta };
                 didRegisterBuzzAttempt = true;
@@ -604,7 +606,7 @@ export default function ActiveQuestionView({ room, roomCode, roomRef, user, isHo
                     tablePickedBy: null,
                     scoreAppliedAt: null
                 };
-            await updateDoc(roomRef, {
+            await updateRoom(roomRef, {
                 answerRevealed: true,
                 buzzedPlayerId: null,
                 buzzTimestamp: null,
@@ -617,7 +619,7 @@ export default function ActiveQuestionView({ room, roomCode, roomRef, user, isHo
                     scoringMechanic: surpriseScoringMechanic,
                     ...surpriseScoringUpdate
                 },
-                history: arrayUnion(createHistoryItem({
+                history: [createHistoryItem({
                     type: isCorrect ? 'surprise_answer_correct' : 'surprise_answer_incorrect',
                     actorId: user.uid,
                     actorName,
@@ -625,7 +627,7 @@ export default function ActiveQuestionView({ room, roomCode, roomRef, user, isHo
                         ? t('historySurpriseAnswerCorrect', { playerName })
                         : t('historySurpriseAnswerIncorrect', { playerName }),
                     details: { playerName }
-                }))
+                })]
             });
             return;
         }
@@ -636,13 +638,13 @@ export default function ActiveQuestionView({ room, roomCode, roomRef, user, isHo
             // Award points and reveal the answer before returning to the board.
             const pId = room.buzzedPlayerId;
             const currentScore = room.players[pId].score || 0;
-            await updateDoc(roomRef, {
+            await updateRoom(roomRef, {
                 [`players.${pId}.score`]: currentScore + activeQ.points,
                 answerRevealed: true,
                 buzzUnlockAt: null,
                 currentTurn: pId,
                 [`questionStates.${activeQ.id}`]: 'done',
-                history: arrayUnion(createHistoryItem({
+                history: [createHistoryItem({
                     type: 'answer_correct',
                     actorId: user.uid,
                     actorName,
@@ -654,7 +656,7 @@ export default function ActiveQuestionView({ room, roomCode, roomRef, user, isHo
                         playerName: room.players[pId]?.name || t('playerFallback'),
                         points: activeQ.points
                     }
-                }))
+                })]
             });
         } else {
             // Mark incorrect, reset buzz
@@ -668,7 +670,7 @@ export default function ActiveQuestionView({ room, roomCode, roomRef, user, isHo
                 buzzTimestamp: null,
                 buzzAttempts: {},
                 incorrectBuzzedIds: arrayUnion(room.buzzedPlayerId),
-                history: arrayUnion(createHistoryItem({
+                history: [createHistoryItem({
                     type: 'answer_incorrect',
                     actorId: user.uid,
                     actorName,
@@ -681,18 +683,18 @@ export default function ActiveQuestionView({ room, roomCode, roomRef, user, isHo
                             playerName: buzzedPlayerName || t('playerFallback')
                         }),
                     details: historyDetails
-                }))
+                })]
             };
             if (penalty) {
                 update[`players.${room.buzzedPlayerId}.score`] = increment(-penalty);
             }
-            await updateDoc(roomRef, update);
+            await updateRoom(roomRef, update);
         }
     };
 
     const handleSkip = async () => {
         if (!isHost) return;
-        await updateDoc(roomRef, {
+        await updateRoom(roomRef, {
             answerRevealed: true,
             buzzedPlayerId: null,
             buzzTimestamp: null,
@@ -701,7 +703,7 @@ export default function ActiveQuestionView({ room, roomCode, roomRef, user, isHo
             mediaPlayback: null,
             surprisePlayerDraw: null,
             [`questionStates.${activeQ.id}`]: 'done',
-            history: arrayUnion(createHistoryItem({
+            history: [createHistoryItem({
                 type: 'question_skipped',
                 actorId: user.uid,
                 actorName,
@@ -713,13 +715,13 @@ export default function ActiveQuestionView({ room, roomCode, roomRef, user, isHo
                     categoryName: activeCatName,
                     points: activeQ.points
                 }
-            }))
+            })]
         });
     };
 
     const handleContinue = async () => {
         if (!isHost) return;
-        await updateDoc(roomRef, {
+        await updateRoom(roomRef, {
             activeQuestionId: null,
             answerRevealed: false,
             buzzedPlayerId: null,
@@ -730,13 +732,13 @@ export default function ActiveQuestionView({ room, roomCode, roomRef, user, isHo
             mediaPlayback: null,
             surprisePlayerDraw: null,
             surpriseRound: null,
-            history: arrayUnion(createHistoryItem({
+            history: [createHistoryItem({
                 type: 'board_resumed',
                 actorId: user.uid,
                 actorName,
                 message: t('historyBoardResumed', { actorName }),
                 details: { actorName }
-            }))
+            })]
         });
     };
 
@@ -749,7 +751,7 @@ export default function ActiveQuestionView({ room, roomCode, roomRef, user, isHo
         const rolledAt = Date.now();
 
         try {
-            await updateDoc(roomRef, {
+            await updateRoom(roomRef, {
                 surpriseRound: {
                     ...surpriseRound,
                     rollResult: result,
@@ -757,7 +759,7 @@ export default function ActiveQuestionView({ room, roomCode, roomRef, user, isHo
                     rolledBy: user.uid,
                     scoreAppliedAt: null
                 },
-                history: arrayUnion(createHistoryItem({
+                history: [createHistoryItem({
                     type: 'surprise_wheel_rolled',
                     actorId: user.uid,
                     actorName,
@@ -769,12 +771,12 @@ export default function ActiveQuestionView({ room, roomCode, roomRef, user, isHo
                         playerName: player?.name || t('playerFallback'),
                         points: result
                     }
-                }))
+                })]
             });
 
             window.setTimeout(async () => {
                 try {
-                    await updateDoc(roomRef, {
+                    await updateRoom(roomRef, {
                         [`players.${surpriseAnswererId}.score`]: increment(result),
                         currentTurn: surpriseAnswererId,
                         'surpriseRound.scoreAppliedAt': Date.now()
@@ -790,6 +792,7 @@ export default function ActiveQuestionView({ room, roomCode, roomRef, user, isHo
 
     const handlePickSurpriseTableCell = async (cellId) => {
         if (!canPickSurpriseTableCell || !cellId || !surpriseAnswererId) return;
+        const historyId = generateId();
 
         await runTransaction(roomRef.firestore, async (transaction) => {
             const roomSnap = await transaction.get(roomRef);
@@ -817,7 +820,7 @@ export default function ActiveQuestionView({ room, roomCode, roomRef, user, isHo
             const player = latestRoom.players?.[surpriseAnswererId];
             const pickedAt = Date.now();
             const historyItem = createHistoryItem({
-                type: 'surprise_table_picked',
+                id: historyId, type: 'surprise_table_picked',
                 actorId: user.uid,
                 actorName,
                 message: t('historySurpriseTablePicked', {
@@ -826,25 +829,26 @@ export default function ActiveQuestionView({ room, roomCode, roomRef, user, isHo
                 }),
                 details: {
                     playerName: player?.name || t('playerFallback'),
-                    points: pickedCell.value
+                    points: pickedCell.value,
+                    cellIndex: latestRound.tableCells.findIndex((cell) => cell.id === cellId)
                 }
             });
 
-            transaction.update(roomRef, {
+            updateRoomInTransaction(transaction, roomRef, latestRoom, {
                 [`players.${surpriseAnswererId}.score`]: increment(pickedCell.value),
                 currentTurn: surpriseAnswererId,
                 'surpriseRound.tablePickedCellId': cellId,
                 'surpriseRound.tablePickedAt': pickedAt,
                 'surpriseRound.tablePickedBy': user.uid,
                 'surpriseRound.scoreAppliedAt': pickedAt,
-                history: arrayUnion(historyItem)
+                history: [historyItem]
             });
         });
     };
 
     const handleStartQuestionMedia = async () => {
         if (!isHost || !hasGatedQuestionMedia || isQuestionMediaStarted) return;
-        await updateDoc(roomRef, {
+        await updateRoom(roomRef, {
             mediaPlayback: {
                 questionId: activeQ.id,
                 slot: MEDIA_SLOTS.QUESTION,

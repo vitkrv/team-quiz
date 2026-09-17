@@ -47,7 +47,7 @@ Each question includes a point value and question/answer content. Each side must
 
 Questions can be marked as surprise questions, with a displayed board value and a separate minimum/maximum scoring range. The pack chooses the wheel or hidden-table scoring mechanic. An optional prize uses two images: a concealed presentation and a revealed presentation.
 
-Packs are private by default. Room creation embeds a snapshot of the selected pack in the room. Later edits to the original pack do not automatically rewrite that room's question content. Media assets are still external resources: copying their metadata into a room does not preserve a separately owned copy of the files.
+Packs are private by default. New rooms store only pack display metadata in the lobby. Start Game freezes the latest saved pack in an immutable, game-specific version document shared by all participants and spectators. Later source-pack edits do not change that version. Explicitly finishing the game deletes the version while retaining results in the room. Legacy rooms keep their embedded snapshots. Media assets remain external resources; copied metadata does not preserve a separate copy of the files.
 
 ## Shared state and services
 
@@ -60,7 +60,7 @@ Packs are private by default. Room creation embeds a snapshot of the selected pa
 | ImageKit and Cloudflare auth Worker | Media storage and authorized upload/delete operations, with Firebase identity and pack ownership checks. |
 | Optional Firebase Analytics | Usage events when configured. |
 
-Data is scoped under `artifacts/{appId}/...`; environment configuration determines the namespace. Room snapshots synchronize participants, while clock synchronization helps align buzz timing. The client also reconciles stale room state when appropriate. These mechanisms support live play but do not guarantee zero latency or identical media playback on every device.
+Data is scoped under `artifacts/{appId}/...`; environment configuration determines the namespace. New rooms keep history in a separate host-readable collection, loaded only when the host opens history. Players append authorized events without reading history. Legacy rooms still embed history. Room snapshots synchronize participants, while clock synchronization helps align buzz timing. The client also reconciles stale room state when appropriate. These mechanisms support live play but do not guarantee zero latency or identical media playback on every device.
 
 The host remains an active part of the workflow. Category advancement, judging, returning to the board, and some timed transitions require a participating client. There is no automatic host migration workflow.
 
@@ -70,7 +70,7 @@ The host remains an active part of the workflow. Category advancement, judging, 
 | --- | --- |
 | APP-01 | Preserve the distinction between pack ownership, permission to host a public pack, and participation in a room. |
 | APP-02 | Keep host, contestant, and spectator controls distinct; exclude the host from contestant scoring/ranking. |
-| APP-03 | Keep the room's embedded pack snapshot separate from later source-pack edits. |
+| APP-03 | Keep each game's frozen pack version independent of later source-pack edits and preserve results after snapshot deletion. |
 | APP-04 | Preserve real-time updates, listener cleanup, and participant recovery when returning to an active room. |
 | APP-05 | Keep user-facing copy translated through the existing English/Ukrainian translation system. |
 | APP-06 | Maintain usable host, player, and spectator layouts on desktop and mobile, including text and media answers. |

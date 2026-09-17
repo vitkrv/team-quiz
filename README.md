@@ -69,6 +69,37 @@ supported, and their codes are never reused.
 Validate and deploy the updated `firestore.rules` together with this frontend release.
 Older clients must reload to create rooms after the new rules are deployed.
 
+## Game history and frozen packs
+
+New rooms use storage version 2. The live room contains pack display metadata and a
+`packVersionId`, without embedded history or question-pack content. When the host
+clicks **Start Game**, a transaction freezes the latest saved source pack in
+`artifacts/{appId}/public/data/gamePackVersions/{versionId}` and initializes the board.
+The snapshot cannot change during play. Participants and spectators fetch that same
+version once per load; ordinary room updates do not resend it.
+
+History events live in `rooms/{gameId}/history/{eventId}` under the same data root.
+Only the game host can read them, including when an unrelated user is an admin.
+The host dialog subscribes to the newest 50 events while open and loads older pages
+on demand. Players can append their own validated buzz and surprise-scoring events
+atomically with the action, but cannot read any history. Event documents cannot be
+edited or deleted by clients.
+
+Finishing a new-format game atomically deletes its pack snapshot and records the
+final event. The room retains scores, champion information and display metadata, so
+results links work without the pack. Leaving a game or finishing all questions does
+not delete the snapshot: the host must explicitly finish the game. Abandoned-game
+cleanup is deferred.
+
+Existing rooms retain embedded packs/history and their previous behavior, including
+history visibility in shared payloads. No migration is performed. Full frozen packs
+still include answers for every participant; answer secrecy and retaining external
+media files are separate work.
+
+Validate and deploy `firestore.rules` with the frontend release. Older clients must
+reload before creating new rooms; neither rules nor hosting are deployed by the
+validation commands. See [storage validation](docs/game-storage-validation.md).
+
 ## Firebase Auth Troubleshooting
 
 `auth/configuration-not-found` means the Firebase project in `.env.local` does not have Authentication configured for the requested sign-in method. Enable Google sign-in for that same project, verify the `VITE_FIREBASE_PROJECT_ID` value matches it, and restart the Vite dev server after changing `.env.local`.

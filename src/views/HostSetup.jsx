@@ -141,14 +141,6 @@ export default function HostSetup({ setView, user, setCurrentRoomCode, onCreateP
     const handleStartRoom = async (pack) => {
         if (creatingRoomRef.current) return;
 
-        // Initialize question states map
-        const qStates = {};
-        pack.categories.forEach(cat => {
-            cat.questions.forEach(q => {
-                qStates[q.id] = 'available';
-            });
-        });
-
         const roomData = {
             hostId: user.uid,
             packId: pack.id,
@@ -158,7 +150,8 @@ export default function HostSetup({ setView, user, setCurrentRoomCode, onCreateP
             players: {
                 [user.uid]: { name: hostName, score: 0, isHost: true, avatar: HOST_AVATAR }
             },
-            questionStates: qStates,
+            // The latest saved pack initializes the board at Start Game.
+            questionStates: {},
             categoryPreviewIndex: 0,
             currentTurn: null,
             activeQuestionId: null,

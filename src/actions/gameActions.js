@@ -1,4 +1,5 @@
-import { arrayUnion, deleteField, runTransaction, updateDoc } from 'firebase/firestore';
+import { packVersionRef, readRoomPack, updateRoom, updateRoomInTransaction } from './gameStorage';
+import { deleteField, getDocFromServer, runTransaction } from 'firebase/firestore';
 import { generateId } from '../utils/ids';
 
 export const RPS_CHOICES = {
@@ -127,8 +128,8 @@ const advanceTieBreakerWinner = (tieBreaker, winnerId, loserId) => {
     };
 };
 
-export const createHistoryItem = ({ type, actorId, actorName, message, details = {} }) => ({
-    id: generateId(),
+export const createHistoryItem = ({ id = generateId(), type, actorId, actorName, message, details = {} }) => ({
+    id,
     type,
     actorId,
     actorName,
@@ -143,10 +144,10 @@ export const adjustScore = async (roomRef, playerId, currentScore, delta, histor
     };
 
     if (historyItem) {
-        update.history = arrayUnion(historyItem);
+        update.history = [historyItem];
     }
 
-    await updateDoc(roomRef, update);
+    await updateRoom(roomRef, update);
 };
 
 export const setPlayerScore = async (roomRef, playerId, score, historyItem) => {
@@ -155,10 +156,10 @@ export const setPlayerScore = async (roomRef, playerId, score, historyItem) => {
     };
 
     if (historyItem) {
-        update.history = arrayUnion(historyItem);
+        update.history = [historyItem];
     }
 
-    await updateDoc(roomRef, {
+    await updateRoom(roomRef, {
         ...update
     });
 };
@@ -197,10 +198,10 @@ export const handlePickQuestion = async (roomRef, qId, actorId, historyItem, ext
         };
 
         if (historyItem) {
-            update.history = arrayUnion(historyItem);
+            update.history = [historyItem];
         }
 
-        transaction.update(roomRef, update);
+        updateRoomInTransaction(transaction, roomRef, room, update);
         didPickQuestion = true;
     });
 
@@ -215,7 +216,9 @@ export const beginSurprisePlayerDraw = async (roomRef, qId, actorId, requestedPl
         if (!roomSnap.exists()) return;
 
         const room = roomSnap.data();
-        const question = getQuestionFromRoomPack(room, qId);
+        if (room.status !== 'playing') return;
+        const pack = await readRoomPack(transaction, roomRef, room);
+        const question = getQuestionFromRoomPack({ pack }, qId);
         const candidatePlayerIds = getSurpriseCandidatePlayerIds(room.players);
         const isSpecificPick = Boolean(requestedPlayerId);
         const answererId = isSpecificPick
@@ -234,7 +237,7 @@ export const beginSurprisePlayerDraw = async (roomRef, qId, actorId, requestedPl
             return;
         }
 
-        transaction.update(roomRef, {
+        updateRoomInTransaction(transaction, roomRef, room, {
             surprisePlayerDraw: {
                 id: generateId(),
                 questionId: qId,
@@ -265,7 +268,9 @@ export const completeSurprisePlayerDraw = async (roomRef, drawId, actorId, histo
 
         const room = roomSnap.data();
         const draw = room.surprisePlayerDraw;
-        const question = getQuestionFromRoomPack(room, draw?.questionId);
+        if (room.status !== 'playing' || !draw) return;
+        const pack = await readRoomPack(transaction, roomRef, room);
+        const question = getQuestionFromRoomPack({ pack }, draw?.questionId);
 
         if (
             room.status !== 'playing'
@@ -305,10 +310,10 @@ export const completeSurprisePlayerDraw = async (roomRef, drawId, actorId, histo
         };
 
         if (historyItem) {
-            update.history = arrayUnion(historyItem);
+            update.history = [historyItem];
         }
 
-        transaction.update(roomRef, update);
+        updateRoomInTransaction(transaction, roomRef, room, update);
         didCompleteDraw = true;
     });
 
@@ -335,7 +340,7 @@ export const pulseQuestionSelection = async (roomRef, qId, actorId) => {
             return;
         }
 
-        transaction.update(roomRef, {
+        updateRoomInTransaction(transaction, roomRef, room, {
             questionPulse: {
                 id: generateId(),
                 questionId: qId,
@@ -353,14 +358,29 @@ export const handleEndGame = async (roomRef, historyItem, extraUpdate = {}) => {
     const update = { status: 'finished', mediaPlayback: null, prizeModal: deleteField(), surprisePlayerDraw: null, ...extraUpdate };
 
     if (historyItem) {
-        update.history = arrayUnion(historyItem);
+        update.history = [historyItem];
     }
 
-    await updateDoc(roomRef, update);
+    await runTransaction(roomRef.firestore, async (transaction) => {
+        const snapshot = await transaction.get(roomRef);
+        if (!snapshot.exists()) return;
+        const room = snapshot.data();
+        if (room.status === 'finished') return;
+        if (room.dataVersion === 2 && room.packVersionId) {
+            transaction.delete(packVersionRef(roomRef, room.packVersionId));
+        }
+        updateRoomInTransaction(transaction, roomRef, room, update);
+    }).catch(async (error) => {
+        if (error.code === 'permission-denied') {
+            const current = await getDocFromServer(roomRef);
+            if (current.exists() && current.data().status === 'finished' && current.data().hostId === historyItem?.actorId) return;
+        }
+        throw error;
+    });
 };
 
 export const openPrizeModal = async (roomRef, actorId) => {
-    await updateDoc(roomRef, {
+    await updateRoom(roomRef, {
         prizeModal: {
             status: 'hidden',
             openedAt: Date.now(),
@@ -370,14 +390,14 @@ export const openPrizeModal = async (roomRef, actorId) => {
 };
 
 export const revealPrizeModal = async (roomRef) => {
-    await updateDoc(roomRef, {
+    await updateRoom(roomRef, {
         'prizeModal.status': 'revealed',
         'prizeModal.revealedAt': Date.now()
     });
 };
 
 export const closePrizeModal = async (roomRef) => {
-    await updateDoc(roomRef, {
+    await updateRoom(roomRef, {
         prizeModal: deleteField()
     });
 };
@@ -402,10 +422,10 @@ export const initializeTieBreaker = async (roomRef, playerIds, mode = 'one', his
     const update = { tieBreaker };
 
     if (historyItem) {
-        update.history = arrayUnion(historyItem);
+        update.history = [historyItem];
     }
 
-    await updateDoc(roomRef, update);
+    await updateRoom(roomRef, update);
 };
 
 export const startHostRps = async (roomRef, playerIds, mode = 'one') => {
@@ -423,7 +443,7 @@ export const startHostRps = async (roomRef, playerIds, mode = 'one') => {
         const [playerAId, playerBId] = uniquePlayerIds;
         if (!room.players?.[playerAId] || !room.players?.[playerBId]) return;
 
-        transaction.update(roomRef, {
+        updateRoomInTransaction(transaction, roomRef, room, {
             hostRps: createHostRps(playerAId, playerBId, normalizedMode)
         });
     });
@@ -439,12 +459,13 @@ export const submitHostRpsChoice = async (roomRef, hostRps, playerId, choice) =>
         return;
     }
 
-    await updateDoc(roomRef, {
+    await updateRoom(roomRef, {
         [`hostRps.choices.${playerId}`]: choice
     });
 };
 
 export const resolveHostRpsThrow = async (roomRef, actor, t) => {
+    const historyId = generateId();
     await runTransaction(roomRef.firestore, async (transaction) => {
         const roomSnap = await transaction.get(roomRef);
         if (!roomSnap.exists()) return;
@@ -467,7 +488,7 @@ export const resolveHostRpsThrow = async (roomRef, actor, t) => {
         const throws = [...(hostRps.throws || []), throwItem];
 
         if (!throwWinnerId) {
-            transaction.update(roomRef, {
+            updateRoomInTransaction(transaction, roomRef, room, {
                 'hostRps.choices': {},
                 'hostRps.throws': throws
             });
@@ -480,7 +501,7 @@ export const resolveHostRpsThrow = async (roomRef, actor, t) => {
         };
 
         if (wins[throwWinnerId] < hostRps.targetWins) {
-            transaction.update(roomRef, {
+            updateRoomInTransaction(transaction, roomRef, room, {
                 'hostRps.choices': {},
                 'hostRps.throws': throws,
                 'hostRps.wins': wins
@@ -493,7 +514,7 @@ export const resolveHostRpsThrow = async (roomRef, actor, t) => {
         const opponentAName = room.players?.[opponentAId]?.name || t('playerFallback');
         const opponentBName = room.players?.[opponentBId]?.name || t('playerFallback');
         const historyItem = createHistoryItem({
-            type: 'host_rps_completed',
+            id: historyId, type: 'host_rps_completed',
             actorId: actor.id,
             actorName: actor.name,
             message: t('historyHostRpsCompleted', {
@@ -511,14 +532,14 @@ export const resolveHostRpsThrow = async (roomRef, actor, t) => {
             }
         });
 
-        transaction.update(roomRef, {
+        updateRoomInTransaction(transaction, roomRef, room, {
             'hostRps.status': 'complete',
             'hostRps.choices': {},
             'hostRps.throws': throws,
             'hostRps.wins': wins,
             'hostRps.resultHistoryId': historyItem.id,
             'hostRps.completedAt': Date.now(),
-            history: arrayUnion(historyItem)
+            history: [historyItem]
         });
     });
 };
@@ -526,7 +547,7 @@ export const resolveHostRpsThrow = async (roomRef, actor, t) => {
 export const closeHostRps = async (roomRef, hostRps) => {
     if (hostRps?.status !== 'complete') return;
 
-    await updateDoc(roomRef, {
+    await updateRoom(roomRef, {
         hostRps: deleteField()
     });
 };
@@ -537,7 +558,7 @@ export const selectTieBreakerPair = async (roomRef, tieBreaker, playerAId, playe
     const availablePlayerIds = tieBreaker.roundPlayerIds || [];
     if (!availablePlayerIds.includes(playerAId) || !availablePlayerIds.includes(playerBId)) return;
 
-    await updateDoc(roomRef, {
+    await updateRoom(roomRef, {
         'tieBreaker.status': 'match',
         'tieBreaker.currentMatch': createMatch(playerAId, playerBId, tieBreaker)
     });
@@ -573,14 +594,14 @@ export const grantTieBreakerBye = async (roomRef, tieBreaker, playerId) => {
         }
     }
 
-    await updateDoc(roomRef, { tieBreaker: nextTieBreaker });
+    await updateRoom(roomRef, { tieBreaker: nextTieBreaker });
 };
 
 export const submitTieBreakerChoice = async (roomRef, tieBreaker, playerId, choice) => {
     const currentMatch = tieBreaker?.currentMatch;
     if (!currentMatch?.playerIds?.includes(playerId) || !RPS_CHOICES[choice] || currentMatch.choices?.[playerId]) return;
 
-    await updateDoc(roomRef, {
+    await updateRoom(roomRef, {
         [`tieBreaker.currentMatch.choices.${playerId}`]: choice
     });
 };
@@ -604,7 +625,7 @@ export const resolveTieBreakerThrow = async (roomRef, tieBreaker) => {
     const throws = [...(currentMatch.throws || []), throwItem];
 
     if (!throwWinnerId) {
-        await updateDoc(roomRef, {
+        await updateRoom(roomRef, {
             'tieBreaker.currentMatch': {
                 ...currentMatch,
                 choices: {},
@@ -620,7 +641,7 @@ export const resolveTieBreakerThrow = async (roomRef, tieBreaker) => {
     };
 
     if (wins[throwWinnerId] < tieBreaker.targetWins) {
-        await updateDoc(roomRef, {
+        await updateRoom(roomRef, {
             'tieBreaker.currentMatch': {
                 ...currentMatch,
                 choices: {},
@@ -640,7 +661,7 @@ export const resolveTieBreakerThrow = async (roomRef, tieBreaker) => {
         completedAt: Date.now()
     };
 
-    await updateDoc(roomRef, {
+    await updateRoom(roomRef, {
         'tieBreaker.currentMatch': completedMatch
     });
 };
@@ -668,5 +689,5 @@ export const advanceTieBreakerMatch = async (roomRef, tieBreaker) => {
         ? { ...nextTieBreaker, currentMatch: completedMatch }
         : nextTieBreaker;
 
-    await updateDoc(roomRef, { tieBreaker: updateTieBreaker });
+    await updateRoom(roomRef, { tieBreaker: updateTieBreaker });
 };

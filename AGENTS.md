@@ -77,7 +77,7 @@ The app needs valid Firebase config for authenticated/game flows. Without Fireba
 
 ## Build, Lint, And Verify
 
-There is currently no automated test script in `package.json`.
+There is currently no automated test script in `package.json`. For changes to game storage/actions/rules, run the isolated Emulator checks in `scripts/verify-game-storage.mjs`; setup and commands are in `docs/game-storage-validation.md`.
 
 Use these checks for normal code changes:
 
@@ -139,6 +139,8 @@ Do not deploy unless the user explicitly asks.
 - `src/views/game/`: game room, board, active question, and results screens.
 - `src/components/`: reusable UI and media components.
 - `src/actions/gameActions.js`: Firestore writes and game state transitions.
+- `src/actions/gameStorage.js`: Atomic history writes, legacy compatibility and frozen-pack references.
+- `src/actions/roomActions.js`: Room-code reservation, room creation and atomic game start.
 - `src/services/`: analytics and ImageKit/media storage integration.
 - `src/hooks/`: reusable React hooks.
 - `src/utils/`: pure helpers.
@@ -173,5 +175,5 @@ Do not deploy unless the user explicitly asks.
 
 ## Known Gaps
 
-- No automated unit/integration/e2e test suite is configured yet.
+- No general unit/e2e test suite is configured. A focused Firestore Emulator integration harness covers game history and frozen-pack storage.
 - Firebase, ImageKit, and Google sign-in flows require configured external services for full manual verification.
