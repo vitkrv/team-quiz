@@ -1,6 +1,8 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Shuffle, X } from 'lucide-react';
 import {
+    SURPRISE_PLAYER_DRAW_MS,
+    SURPRISE_PLAYER_DRAW_RESULT_HOLD_MS,
     advanceTieBreakerMatch,
     beginSurprisePlayerDraw,
     completeSurprisePlayerDraw,
@@ -14,6 +16,7 @@ import {
     selectTieBreakerPair,
     submitTieBreakerChoice
 } from '../../actions/gameActions';
+import SurprisePlayerDraw from '../../components/SurprisePlayerDraw';
 import HoldToConfirmButton from '../../components/HoldToConfirmButton';
 import RockPaperScissorsManager from '../../components/RockPaperScissorsManager';
 import { preloadMediaImage } from '../../hooks/useRetryableImage';
@@ -30,8 +33,6 @@ const getBoardPoints = (question) => (
 const getSurprisePlayerEntries = (players = {}) => (
     Object.entries(players).filter(([, player]) => !player.isHost)
 );
-
-const BALL_COLORS = ['#facc15', '#38bdf8', '#fb7185', '#22c55e', '#a78bfa', '#f97316', '#f8fafc', '#f472b6'];
 
 const findQuestionContext = (categories, questionId) => {
     for (const category of categories || []) {
@@ -77,83 +78,6 @@ function SurprisePlayerModal({ players, question, onPick, onClose, t }) {
                             <span className="truncate">{player.name}</span>
                         </button>
                     ))}
-                </div>
-            </div>
-        </div>
-    );
-}
-
-function SurprisePlayerDrawModal({ draw, players, serverNow, t }) {
-    const [now, setNow] = useState(() => serverNow());
-    const candidatePlayers = useMemo(() => (
-        (draw?.candidatePlayerIds || [])
-            .map((playerId) => [playerId, players[playerId]])
-            .filter(([, player]) => player)
-    ), [draw?.candidatePlayerIds, players]);
-    const selectedPlayer = players[draw?.answererId];
-    const durationMs = Number(draw?.durationMs) || 4000;
-    const elapsedMs = Math.max(0, now - (Number(draw?.startedAt) || now));
-    const isResultVisible = elapsedMs >= durationMs;
-
-    useEffect(() => {
-        const intervalId = window.setInterval(() => setNow(serverNow()), 80);
-        return () => window.clearInterval(intervalId);
-    }, [serverNow]);
-
-    return (
-        <div className="fixed inset-0 z-[55] flex items-center justify-center bg-black/80 p-4 backdrop-blur-sm">
-            <div className="flex w-full max-w-3xl flex-col items-center bg-transparent text-center">
-                <div className="mb-5 text-sm font-black uppercase tracking-[0.24em] text-yellow-200 md:text-base">
-                    {isResultVisible ? t('surpriseDrawPickedTitle') : t('surpriseDrawTitle')}
-                </div>
-
-                <div className={`surprise-draw-machine ${isResultVisible ? 'surprise-draw-machine--result' : ''}`} aria-live="polite">
-                    <div className="surprise-draw-machine__top" />
-                    <div className="surprise-draw-machine__glass">
-                        {!isResultVisible && (
-                            <div className="surprise-draw-machine__rotor">
-                                {candidatePlayers.length === 0 ? (
-                                    <div className="surprise-draw-machine__empty">{t('surpriseDrawNoPlayers')}</div>
-                                ) : candidatePlayers.map(([playerId, player], index) => (
-                                    <div
-                                        key={playerId}
-                                        className="surprise-draw-ball surprise-draw-ball--spinning"
-                                        style={{
-                                            '--ball-color': BALL_COLORS[index % BALL_COLORS.length],
-                                            '--ball-index': index,
-                                            '--ball-angle': `${(360 / Math.max(candidatePlayers.length, 1)) * index}deg`
-                                        }}
-                                        title={player.name}
-                                    >
-                                        <span>{player.avatar}</span>
-                                    </div>
-                                ))}
-                            </div>
-                        )}
-                        {isResultVisible && selectedPlayer && (
-                            <div
-                                className="surprise-draw-ball surprise-draw-ball--winner"
-                                style={{ '--ball-color': BALL_COLORS[Math.max(0, (draw?.candidatePlayerIds || []).indexOf(draw.answererId)) % BALL_COLORS.length] }}
-                                title={selectedPlayer.name}
-                            >
-                                <span>{selectedPlayer.avatar}</span>
-                            </div>
-                        )}
-                    </div>
-                    <div className="surprise-draw-machine__base" />
-                </div>
-
-                <div className="mt-5 min-h-16">
-                    {isResultVisible && selectedPlayer ? (
-                        <>
-                            <div className="text-sm font-bold uppercase tracking-[0.18em] text-slate-300">{t('surpriseDrawPickedLabel')}</div>
-                            <div className="mt-2 max-w-[90vw] break-words text-3xl font-black leading-tight text-yellow-300 md:text-5xl">
-                                {selectedPlayer.name || t('playerFallback')}
-                            </div>
-                        </>
-                    ) : (
-                        <div className="text-lg font-bold text-slate-200 md:text-2xl">{t('surpriseDrawInProgress')}</div>
-                    )}
                 </div>
             </div>
         </div>
@@ -256,8 +180,8 @@ export default function BoardView({ room, roomRef, user, isHost, isSpectator = f
         if (!isHost || !surprisePlayerDraw?.id) return undefined;
 
         const completeAt = (Number(surprisePlayerDraw.startedAt) || serverNow())
-            + (Number(surprisePlayerDraw.durationMs) || 4000)
-            + (Number(surprisePlayerDraw.resultHoldMs) || 1400);
+            + (Number(surprisePlayerDraw.durationMs) || SURPRISE_PLAYER_DRAW_MS)
+            + (Number(surprisePlayerDraw.resultHoldMs) || SURPRISE_PLAYER_DRAW_RESULT_HOLD_MS);
         const delayMs = Math.max(0, completeAt - serverNow());
         const timeoutId = window.setTimeout(() => {
             const { category, question } = findQuestionContext(categories, surprisePlayerDraw.questionId);
@@ -279,7 +203,8 @@ export default function BoardView({ room, roomRef, user, isHost, isSpectator = f
     return (
         <div className="flex h-full min-h-0 flex-1 flex-col">
             {surprisePlayerDraw && (
-                <SurprisePlayerDrawModal
+                <SurprisePlayerDraw
+                    key={surprisePlayerDraw.id}
                     draw={surprisePlayerDraw}
                     players={room.players}
                     serverNow={serverNow}

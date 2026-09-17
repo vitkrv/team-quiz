@@ -13,7 +13,7 @@ export const RPS_MODES = {
 };
 
 export const SURPRISE_PLAYER_DRAW_MS = 4000;
-export const SURPRISE_PLAYER_DRAW_RESULT_HOLD_MS = 1400;
+export const SURPRISE_PLAYER_DRAW_RESULT_HOLD_MS = 2000;
 
 const normalizeRpsMode = (mode) => (RPS_MODES[mode] ? mode : 'one');
 

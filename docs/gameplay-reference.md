@@ -100,7 +100,7 @@ Example: on a 300-point ordinary question, Alice answers incorrectly and Bob ans
 
 ### Assignment and answering
 
-When the host selects a surprise question, they choose a specific non-host contestant or a random contestant. The shared draw presentation runs for four seconds and holds the chosen result for another 1.4 seconds; the host client then opens the question.
+When the host selects a surprise question, they choose a specific non-host contestant or a random contestant. The shared avatar reel runs for four seconds with player names hidden, then holds the chosen avatar and player name for another two seconds; the host client then opens the question.
 
 Only the assigned contestant answers. There is no ordinary buzzer contest or buzz-triggered ten-second countdown for this question. The host marks their answer correct or incorrect, revealing the solution, marking the question done, and assigning them the next selection turn. This prepares the scoring activity; judging alone does not add/subtract the printed board value.
 
