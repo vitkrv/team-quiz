@@ -1,4 +1,5 @@
 import { X } from 'lucide-react';
+import { createPortal } from 'react-dom';
 import { useLanguage } from '../useLanguage';
 import { getMediaUrl } from '../services/imageStorage';
 import RetryableImage from './RetryableImage';
@@ -7,7 +8,8 @@ export default function MediaLightbox({ media, alt, onClose }) {
     const { t } = useLanguage();
     if (!media) return null;
 
-    return (
+    // Keep fullscreen positioning independent of animated/transformed game containers.
+    return createPortal(
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 p-4">
             <button
                 type="button"
@@ -15,7 +17,7 @@ export default function MediaLightbox({ media, alt, onClose }) {
                 aria-label={t('closeMediaBackdrop')}
                 onClick={onClose}
             />
-            <div className="relative z-10 max-h-full max-w-full">
+            <div className="relative z-10 shrink-0">
                 <button
                     type="button"
                     onClick={onClose}
@@ -27,10 +29,11 @@ export default function MediaLightbox({ media, alt, onClose }) {
                 <RetryableImage
                     src={getMediaUrl(media, 'full')}
                     alt={alt}
-                    imageClassName="max-h-[90vh] max-w-[92vw] rounded-xl object-contain shadow-2xl"
-                    fallbackClassName="h-[60vh] max-h-[90vh] w-[92vw] max-w-5xl rounded-xl shadow-2xl"
+                    imageClassName="max-h-[calc(100dvh-3rem)] max-w-[calc(100vw-3rem)] rounded-xl object-contain shadow-2xl"
+                    fallbackClassName="h-[60vh] max-h-[calc(100dvh-3rem)] w-[calc(100vw-3rem)] max-w-5xl rounded-xl shadow-2xl"
                 />
             </div>
-        </div>
+        </div>,
+        document.body
     );
 }
