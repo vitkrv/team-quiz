@@ -480,6 +480,10 @@ export default function ActiveQuestionView({ room, roomCode, roomRef, user, isHo
                 setStoredEarlyBuzzUnlockAt(earlyBuzzDelayStorageKey, nextEarlyBuzzDelayUnlockAt);
                 setEarlyBuzzNoticeQuestionId(activeQ.id);
             }
+            if (room.recapVersion === 1) await updateRoom(roomRef, {
+                history: [createHistoryItem({ id: historyId, type: 'player_buzzed_early', actorId: user.uid, actorName,
+                    message: t('recapEarlyBuzz'), details: { actorName, clickedAt, questionId: activeQ.id } })]
+            });
             return;
         }
 
@@ -505,7 +509,7 @@ export default function ActiveQuestionView({ room, roomCode, roomRef, user, isHo
                 && Number(existingAttempt.clickedAt) <= clickedAt;
 
             if (!latestRoom.buzzedPlayerId) {
-                updateRoomInTransaction(transaction, roomRef, latestRoom, {
+                await updateRoomInTransaction(transaction, roomRef, latestRoom, {
                     buzzedPlayerId: user.uid,
                     buzzTimestamp: clickedAt,
                     buzzAttempts: {
@@ -536,7 +540,7 @@ export default function ActiveQuestionView({ room, roomCode, roomRef, user, isHo
             if (buzzDelta > 0 && buzzDelta <= LATE_BUZZ_WINDOW_MS) {
                 const firstBuzzPlayerName = latestRoom.players?.[latestRoom.buzzedPlayerId]?.name || t('playerFallback');
                 const delta = formatBuzzDelta(buzzDelta);
-                updateRoomInTransaction(transaction, roomRef, latestRoom, {
+                await updateRoomInTransaction(transaction, roomRef, latestRoom, {
                     buzzAttempts: {
                         ...buzzAttempts,
                         [user.uid]: { clickedAt, questionId: activeQ.id }
@@ -626,7 +630,7 @@ export default function ActiveQuestionView({ room, roomCode, roomRef, user, isHo
                     message: isCorrect
                         ? t('historySurpriseAnswerCorrect', { playerName })
                         : t('historySurpriseAnswerIncorrect', { playerName }),
-                    details: { playerName }
+                    details: { playerName, playerId: surpriseAnswererId, questionId: activeQ.id }
                 })]
             });
             return;
@@ -653,6 +657,7 @@ export default function ActiveQuestionView({ room, roomCode, roomRef, user, isHo
                         points: activeQ.points
                     }),
                     details: {
+                        playerId: pId, questionId: activeQ.id,
                         playerName: room.players[pId]?.name || t('playerFallback'),
                         points: activeQ.points
                     }
@@ -661,7 +666,7 @@ export default function ActiveQuestionView({ room, roomCode, roomRef, user, isHo
         } else {
             // Mark incorrect, reset buzz
             const penalty = room.trueCompetitiveMode ? Number(activeQ.points) || 0 : 0;
-            const historyDetails = { playerName: buzzedPlayerName || t('playerFallback') };
+            const historyDetails = { playerId: room.buzzedPlayerId, questionId: activeQ.id, playerName: buzzedPlayerName || t('playerFallback') };
             if (penalty) {
                 historyDetails.points = -penalty;
             }
@@ -712,6 +717,7 @@ export default function ActiveQuestionView({ room, roomCode, roomRef, user, isHo
                     points: activeQ.points
                 }),
                 details: {
+                    questionId: activeQ.id,
                     categoryName: activeCatName,
                     points: activeQ.points
                 }
@@ -768,6 +774,7 @@ export default function ActiveQuestionView({ room, roomCode, roomRef, user, isHo
                         points: result > 0 ? `+${result}` : result
                     }),
                     details: {
+                        playerId: surpriseAnswererId, questionId: activeQ.id,
                         playerName: player?.name || t('playerFallback'),
                         points: result
                     }
@@ -779,7 +786,8 @@ export default function ActiveQuestionView({ room, roomCode, roomRef, user, isHo
                     await updateRoom(roomRef, {
                         [`players.${surpriseAnswererId}.score`]: increment(result),
                         currentTurn: surpriseAnswererId,
-                        'surpriseRound.scoreAppliedAt': Date.now()
+                        'surpriseRound.scoreAppliedAt': Date.now(),
+                        history: [createHistoryItem({ type: 'surprise_wheel_scored', actorId: user.uid, actorName, message: t('recapWheelScored'), details: { playerId: surpriseAnswererId, playerName: player?.name || t('playerFallback'), questionId: activeQ.id, points: result, rolledAt } })]
                     });
                 } catch (err) {
                     console.error('Failed to apply surprise wheel score:', err);
@@ -834,7 +842,7 @@ export default function ActiveQuestionView({ room, roomCode, roomRef, user, isHo
                 }
             });
 
-            updateRoomInTransaction(transaction, roomRef, latestRoom, {
+            await updateRoomInTransaction(transaction, roomRef, latestRoom, {
                 [`players.${surpriseAnswererId}.score`]: increment(pickedCell.value),
                 currentTurn: surpriseAnswererId,
                 'surpriseRound.tablePickedCellId': cellId,

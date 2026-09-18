@@ -131,6 +131,26 @@ Validate and deploy `firestore.rules` with the frontend release. Older clients m
 reload before creating new rooms; neither rules nor hosting are deployed by the
 validation commands. See [storage validation](docs/game-storage-validation.md).
 
+## Post-game recap and achievements
+
+New games also use `recapVersion: 1`. Gameplay atomically maintains separate recap
+statistics and score entries. Results show eight possible achievements (shared on
+ties), performance by player/category, and score-progression charts. The all-player chart
+below achievements shares one event timeline, with player colors and an interactive legend;
+selecting a line or legend entry highlights that player. English and Ukrainian
+are supported.
+
+Finishing saves each awarded player's achievement details, game ID, invitation code,
+and completion date under their profile's `gameAchievements` subcollection. It freezes
+the recap and deletes the frozen pack in the same transaction, so achievements and
+performance statistics survive pack deletion. Question/answer content and media are
+not retained in the recap.
+Profile controls are deferred. Existing games without the recap marker show only
+their original results, with the compact layout; no historical awards are inferred.
+
+Deploy the updated rules and frontend together when authorized. Run the existing
+storage validation command to include the recap/achievement scenarios.
+
 ## Firebase Auth Troubleshooting
 
 `auth/configuration-not-found` means the Firebase project in `.env.local` does not have Authentication configured for the requested sign-in method. Enable Google sign-in for that same project, verify the `VITE_FIREBASE_PROJECT_ID` value matches it, and restart the Vite dev server after changing `.env.local`.

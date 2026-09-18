@@ -1,3 +1,4 @@
+import { verifyGameRecap } from './verify-game-recap.mjs';
 // Isolated integration checks. Requires a running Firestore Emulator, never production.
 import assert from 'node:assert/strict';
 import { readFile, mkdir } from 'node:fs/promises';
@@ -139,7 +140,7 @@ try {
     const buzz = async (db, uid, clickedAt, type) => runTransaction(db, async (transaction) => {
         const target = roomRef(db, id);
         const before = (await transaction.get(target)).data();
-        actions.updateRoomInTransaction(transaction, target, before, {
+        await actions.updateRoomInTransaction(transaction, target, before, {
             ...(type === 'player_buzzed' ? { buzzedPlayerId: uid, buzzTimestamp: clickedAt } : {}),
             buzzAttempts: { ...before.buzzAttempts, [uid]: { clickedAt, questionId: 'q1' } },
             history: [event(type, uid, { actorName: uid, ...(type === 'player_buzzed_late' ? { playerName: 'player', deltaMs: clickedAt - before.buzzTimestamp } : {}) })]
@@ -158,7 +159,7 @@ try {
         await actions.updateRoom(roomRef(playerDb, id), { 'players.player.score': 100, currentTurn: 'player', 'surpriseRound.tablePickedCellId': 'cell', 'surpriseRound.tablePickedBy': 'player', 'surpriseRound.tablePickedAt': 4000, 'surpriseRound.scoreAppliedAt': 4000, history: [event('surprise_table_picked', 'player', { playerName: 'player', points: 100, cellIndex: 0 })] });
         await denied(actions.updateRoom(roomRef(playerDb, id), { history: [event('surprise_table_picked', 'player', { playerName: 'player', points: 100, cellIndex: 0 })] }));
         await updateDoc(hostRoom, { surpriseRound: { questionId: 'q1', answererId: 'player', judgeResult: 'correct', wheelValues: [100, -100], rollResult: null } });
-        await actions.updateRoom(roomRef(playerDb, id), { 'surpriseRound.rollResult': -100, 'surpriseRound.rolledBy': 'player', 'surpriseRound.rolledAt': 5000, 'surpriseRound.scoreAppliedAt': null, history: [event('surprise_wheel_rolled', 'player', { playerName: 'player', points: -100 })] });
+        await actions.updateRoom(roomRef(playerDb, id), { 'surpriseRound.rollResult': -100, 'surpriseRound.rolledBy': 'player', 'surpriseRound.rolledAt': 5000, 'surpriseRound.scoreAppliedAt': null, history: [event('surprise_wheel_rolled', 'player', { playerName: 'player', points: -100, questionId: 'q1' })] });
     });
     await check('host score edits and paginated history preserve all events', async () => {
         for (let i = 0; i < 55; i++) await actions.adjustScore(hostRoom, 'player', 100 + i, 1, event('score_adjusted'));
@@ -225,6 +226,7 @@ try {
         await denied(actions.startGame(roomRef(hostDb, pendingId), { id: 'host', name: 'host' }, t));
         assert.equal((await getDocFromServer(roomRef(hostDb, pendingId))).data().status, 'lobby');
     });
+    await verifyGameRecap({ actions, check, denied, hostDb, playerDb, lateDb, spectatorDb, adminDb, seedDb, namespace, ref, roomRef, event, t });
     console.log(`${checks} scenario groups passed. Namespace: ${namespace}`);
 } finally {
     await Promise.all(clients.map(async ({ db, app }) => { await terminate(db); await deleteApp(app); }));

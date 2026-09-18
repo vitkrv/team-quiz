@@ -112,27 +112,31 @@ export default function BoardView({ room, roomRef, user, isHost, isSpectator = f
     }, [categories, questionImagePreloadVariant, room.questionStates]);
 
     const handleHostEndGame = async () => {
-        await handleEndGame(roomRef, createHistoryItem({
-            type: 'game_finished',
-            actorId: user.uid,
-            actorName,
-            message: t('historyGameEnded', { actorName }),
-            details: { actorName }
-        }));
-        trackEvent('game_finished', getRoomAnalyticsSummary(room));
+        try {
+            await handleEndGame(roomRef, createHistoryItem({
+                type: 'game_finished',
+                actorId: user.uid,
+                actorName,
+                message: t('historyGameEnded', { actorName }),
+                details: { actorName }
+            }));
+            trackEvent('game_finished', getRoomAnalyticsSummary(room));
+        } catch { window.alert(t('recapFinishFailed')); }
     };
     const handleFinishTieBreakerGame = async () => {
-        await handleEndGame(roomRef, createHistoryItem({
-            type: 'game_finished',
-            actorId: user.uid,
-            actorName,
-            message: t('historyGameEnded', { actorName }),
-            details: {
+        try {
+            await handleEndGame(roomRef, createHistoryItem({
+                type: 'game_finished',
+                actorId: user.uid,
                 actorName,
-                tieBreakerChampionName: room.players[room.tieBreaker?.championId]?.name || t('playerFallback')
-            }
-        }));
-        trackEvent('game_finished', getRoomAnalyticsSummary(room));
+                message: t('historyGameEnded', { actorName }),
+                details: {
+                    actorName,
+                    tieBreakerChampionName: room.players[room.tieBreaker?.championId]?.name || t('playerFallback')
+                }
+            }));
+            trackEvent('game_finished', getRoomAnalyticsSummary(room));
+        } catch { window.alert(t('recapFinishFailed')); }
     };
     const handleStartTieBreaker = async (mode) => {
         await initializeTieBreaker(roomRef, topTiedPlayerIds, mode, createHistoryItem({
@@ -155,6 +159,8 @@ export default function BoardView({ room, roomRef, user, isHost, isSpectator = f
         }),
         details: {
             actorName: pickerName,
+            questionId: q.id,
+            categoryId: cat.id,
             categoryName: cat.name,
             points: q.points
         }

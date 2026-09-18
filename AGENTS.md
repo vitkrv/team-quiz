@@ -149,6 +149,8 @@ Coordinate storage-related rule and frontend releases. Older clients must reload
 - `src/components/`: reusable UI and media components.
 - `src/actions/gameActions.js`: Firestore writes and game state transitions.
 - `src/actions/gameStorage.js`: Atomic history writes, legacy compatibility and frozen-pack references.
+- `src/actions/gameRecap.js`: Atomic recap projections and immutable profile achievement finalization.
+- `src/hooks/useGameRecap.js`: Results summary and score-progression loading.
 - `src/actions/roomActions.js`: Room-code reservation, room creation and atomic game start.
 - `src/services/`: analytics and ImageKit/media storage integration.
 - `src/hooks/`: reusable React hooks.

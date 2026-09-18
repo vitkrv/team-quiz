@@ -1,3 +1,4 @@
+import { prepareFinalRecap } from './gameRecap';
 import { packVersionRef, readRoomPack, updateRoom, updateRoomInTransaction } from './gameStorage';
 import { deleteField, getDocFromServer, runTransaction } from 'firebase/firestore';
 import { generateId } from '../utils/ids';
@@ -134,7 +135,7 @@ export const createHistoryItem = ({ id = generateId(), type, actorId, actorName,
     actorId,
     actorName,
     message,
-    details,
+    details: { ...details, operationId: id },
     timestamp: Date.now()
 });
 
@@ -144,7 +145,7 @@ export const adjustScore = async (roomRef, playerId, currentScore, delta, histor
     };
 
     if (historyItem) {
-        update.history = [historyItem];
+        update.history = [{ ...historyItem, details: { ...historyItem.details, playerId, delta } }];
     }
 
     await updateRoom(roomRef, update);
@@ -156,7 +157,7 @@ export const setPlayerScore = async (roomRef, playerId, score, historyItem) => {
     };
 
     if (historyItem) {
-        update.history = [historyItem];
+        update.history = [{ ...historyItem, details: { ...historyItem.details, playerId, nextScore: score } }];
     }
 
     await updateRoom(roomRef, {
@@ -201,7 +202,7 @@ export const handlePickQuestion = async (roomRef, qId, actorId, historyItem, ext
             update.history = [historyItem];
         }
 
-        updateRoomInTransaction(transaction, roomRef, room, update);
+        await updateRoomInTransaction(transaction, roomRef, room, update);
         didPickQuestion = true;
     });
 
@@ -237,7 +238,7 @@ export const beginSurprisePlayerDraw = async (roomRef, qId, actorId, requestedPl
             return;
         }
 
-        updateRoomInTransaction(transaction, roomRef, room, {
+        await updateRoomInTransaction(transaction, roomRef, room, {
             surprisePlayerDraw: {
                 id: generateId(),
                 questionId: qId,
@@ -313,7 +314,7 @@ export const completeSurprisePlayerDraw = async (roomRef, drawId, actorId, histo
             update.history = [historyItem];
         }
 
-        updateRoomInTransaction(transaction, roomRef, room, update);
+        await updateRoomInTransaction(transaction, roomRef, room, update);
         didCompleteDraw = true;
     });
 
@@ -340,7 +341,7 @@ export const pulseQuestionSelection = async (roomRef, qId, actorId) => {
             return;
         }
 
-        updateRoomInTransaction(transaction, roomRef, room, {
+        await updateRoomInTransaction(transaction, roomRef, room, {
             questionPulse: {
                 id: generateId(),
                 questionId: qId,
@@ -366,10 +367,12 @@ export const handleEndGame = async (roomRef, historyItem, extraUpdate = {}) => {
         if (!snapshot.exists()) return;
         const room = snapshot.data();
         if (room.status === 'finished') return;
+        const finalizeRecap = await prepareFinalRecap(transaction, roomRef, room);
+        finalizeRecap();
         if (room.dataVersion === 2 && room.packVersionId) {
             transaction.delete(packVersionRef(roomRef, room.packVersionId));
         }
-        updateRoomInTransaction(transaction, roomRef, room, update);
+        await updateRoomInTransaction(transaction, roomRef, room, update);
     }).catch(async (error) => {
         if (error.code === 'permission-denied') {
             const current = await getDocFromServer(roomRef);
@@ -443,7 +446,7 @@ export const startHostRps = async (roomRef, playerIds, mode = 'one') => {
         const [playerAId, playerBId] = uniquePlayerIds;
         if (!room.players?.[playerAId] || !room.players?.[playerBId]) return;
 
-        updateRoomInTransaction(transaction, roomRef, room, {
+        await updateRoomInTransaction(transaction, roomRef, room, {
             hostRps: createHostRps(playerAId, playerBId, normalizedMode)
         });
     });
@@ -488,7 +491,7 @@ export const resolveHostRpsThrow = async (roomRef, actor, t) => {
         const throws = [...(hostRps.throws || []), throwItem];
 
         if (!throwWinnerId) {
-            updateRoomInTransaction(transaction, roomRef, room, {
+            await updateRoomInTransaction(transaction, roomRef, room, {
                 'hostRps.choices': {},
                 'hostRps.throws': throws
             });
@@ -501,7 +504,7 @@ export const resolveHostRpsThrow = async (roomRef, actor, t) => {
         };
 
         if (wins[throwWinnerId] < hostRps.targetWins) {
-            updateRoomInTransaction(transaction, roomRef, room, {
+            await updateRoomInTransaction(transaction, roomRef, room, {
                 'hostRps.choices': {},
                 'hostRps.throws': throws,
                 'hostRps.wins': wins
@@ -532,7 +535,7 @@ export const resolveHostRpsThrow = async (roomRef, actor, t) => {
             }
         });
 
-        updateRoomInTransaction(transaction, roomRef, room, {
+        await updateRoomInTransaction(transaction, roomRef, room, {
             'hostRps.status': 'complete',
             'hostRps.choices': {},
             'hostRps.throws': throws,

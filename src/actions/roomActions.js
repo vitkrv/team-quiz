@@ -1,3 +1,5 @@
+import { createRecapSummary } from '../utils/achievements';
+import { recapRef } from './gameRecap';
 import { collection, doc, getDocFromServer, runTransaction, serverTimestamp } from 'firebase/firestore';
 import { appendHistory, getPackSummary, packVersionRef, updateRoomInTransaction } from './gameStorage';
 import { createHistoryItem } from './gameActions';
@@ -25,7 +27,7 @@ export async function createRoom(roomData) {
                 if (!previous.exists() || previous.data().status !== 'finished') return false;
             }
             transaction.set(roomRef, {
-                ...liveData, roomCode, dataVersion: 2,
+                ...liveData, roomCode, dataVersion: 2, recapVersion: 1,
                 packSummary: getPackSummary(pack), packVersionId: null, questionStates: {}
             });
             transaction.set(codeRef, { gameId: roomRef.id });
@@ -75,6 +77,7 @@ export async function startGame(roomRef, actor, t) {
                 details: { actorName: actor.name, playerName: room.players[starterId]?.name || t('hostLabel') }
             })]
         };
+        if (room.recapVersion === 1) transaction.set(recapRef(roomRef), createRecapSummary(room.players));
         if (room.dataVersion === 2) {
             transaction.set(packVersionRef(roomRef, versionRef.id), {
                 gameId: roomRef.id, sourcePackId: room.packId, schemaVersion: 1,
@@ -83,7 +86,7 @@ export async function startGame(roomRef, actor, t) {
             update.packVersionId = versionRef.id;
             update.packSummary = getPackSummary(pack);
         }
-        updateRoomInTransaction(transaction, roomRef, room, update);
+        await updateRoomInTransaction(transaction, roomRef, room, update);
         return { pack, players: room.players };
     }).catch(async (error) => {
         // Rules can reject a losing concurrent start before Firestore retries it.

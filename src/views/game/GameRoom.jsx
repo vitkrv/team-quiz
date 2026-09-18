@@ -187,6 +187,7 @@ function ScoreEditorModal({ players, roomRef, host, onClose, t }) {
                         nextScore: normalizedScore
                     }),
                     details: {
+                        playerId,
                         actorName: host.name,
                         playerName: player.name,
                         previousScore,
@@ -888,7 +889,7 @@ function GameRoomContent({ room, roomCode, user, onPrepareRoomExit, onLeaveRoom,
     }
 
     if (room.status === 'finished' || (isSpectator && showDefinedFinalResults && hasDefinedFinalResults(room))) {
-        return <ResultsView room={room} leaveRoom={leaveRoom} />;
+        return <ResultsView gameId={roomCode} room={room} leaveRoom={leaveRoom} />;
     }
 
     if (room.status === 'category_preview' || room.status === 'playing') {

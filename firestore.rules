@@ -45,7 +45,7 @@ service cloud.firestore {
         && request.resource.data.packId is string
         && canHostPack(appId, request.resource.data.packId, request.auth.uid);
       allow update: if isGoogleUser()
-        && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['roomCode', 'hostId'])
+        && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['roomCode', 'hostId', 'recapVersion'])
         && validGameStorageUpdate(appId, gameId, resource.data, request.resource.data)
         && (
           (
@@ -90,7 +90,10 @@ service cloud.firestore {
           && (after.packSummary == before.packSummary || (before.status == 'lobby' && before.hostId == request.auth.uid))
           && (after.status == before.status || before.hostId == request.auth.uid)
           && (before.status != 'finished' || after.status == 'finished')
-          && validPackLifecycle(appId, gameId, before, after);
+          && validPackLifecycle(appId, gameId, before, after)
+          && (before.get('recapVersion', 0) != 1 || before.status != 'finished' || after == before)
+          && (before.get('recapVersion', 0) != 1 || before.status == 'finished' || after.status != 'finished'
+            || getAfter(/databases/$(database)/documents/artifacts/$(appId)/public/data/rooms/$(gameId)/recap/summary).data.finalized == true);
     }
 
     function validPackLifecycle(appId, gameId, before, after) {
@@ -132,6 +135,9 @@ service cloud.firestore {
         && event.id == eventId && event.actorId == request.auth.uid
         && event.actorName is string && event.message is string && event.details is map
         && event.timestamp is number && event.recordedAt == request.time
+        && (after.get('recapVersion', 0) != 1 || after.hostId == request.auth.uid
+          || !(event.type in ['player_buzzed', 'player_buzzed_late', 'player_buzzed_early', 'surprise_table_picked', 'surprise_wheel_scored'])
+          || getAfter(/databases/$(database)/documents/artifacts/$(appId)/public/data/rooms/$(gameId)/recap/summary).data.lastEventId == eventId)
         && (after.hostId == request.auth.uid
           || (request.auth.uid in after.players
             && event.actorName == after.players[request.auth.uid].name
@@ -143,7 +149,9 @@ service cloud.firestore {
         && uid in before.players && before.players[uid].isHost == false
         && before.activeQuestionId != null && before.activeQuestionId == after.activeQuestionId
         && ((event.type in ['player_buzzed', 'player_buzzed_late'] && validBuzzEvent(before, after, event, uid))
-          || (event.type in ['surprise_table_picked', 'surprise_wheel_rolled'] && validSurpriseEvent(before, after, event, uid)));
+          || (event.type in ['surprise_table_picked', 'surprise_wheel_rolled'] && validSurpriseEvent(before, after, event, uid))
+          || (event.type == 'player_buzzed_early' && validEarlyEvent(before, after, event, uid))
+          || (event.type == 'surprise_wheel_scored' && validWheelScore(before, after, event, uid)));
     }
 
     function validBuzzEvent(before, after, event, uid) {
@@ -188,6 +196,148 @@ service cloud.firestore {
             && after.players[uid].diff(before.players[uid]).affectedKeys().hasOnly(['score'])
             && next.diff(previous).affectedKeys().hasOnly(['tablePickedCellId', 'tablePickedAt', 'tablePickedBy', 'scoreAppliedAt'])
             && after.diff(before).affectedKeys().hasOnly(['players', 'currentTurn', 'surpriseRound']));
+    }
+
+    function validEarlyEvent(before, after, event, uid) {
+      return before.get('recapVersion', 0) == 1 && before.trueCompetitiveMode
+        && !before.answerRevealed && before.buzzedPlayerId == null
+        && !(uid in before.incorrectBuzzedIds) && after == before
+        && event.details.questionId == before.activeQuestionId
+        && event.details.clickedAt is number && event.details.clickedAt < before.buzzUnlockAt;
+    }
+
+    function validWheelScore(before, after, event, uid) {
+      return before.answerRevealed && after.answerRevealed
+        && before.surpriseRound.answererId == uid && before.surpriseRound.get('scoreAppliedAt', null) == null
+        && before.surpriseRound.rollResult is number
+        && event.details.points == before.surpriseRound.rollResult
+        && event.details.rolledAt == before.surpriseRound.rolledAt
+        && after.players[uid].score == before.players[uid].score + event.details.points
+        && after.players.diff(before.players).affectedKeys().hasOnly([uid])
+        && after.players[uid].diff(before.players[uid]).affectedKeys().hasOnly(['score'])
+        && after.surpriseRound.diff(before.surpriseRound).affectedKeys().hasOnly(['scoreAppliedAt'])
+        && after.surpriseRound.scoreAppliedAt is number && after.currentTurn == uid
+        && after.diff(before).affectedKeys().hasOnly(['players', 'currentTurn', 'surpriseRound']);
+    }
+
+    match /artifacts/{appId}/public/data/rooms/{gameId}/recap/{recapId} {
+      allow read: if isGoogleUser() || isAdmin(appId);
+      allow create: if recapId == 'summary' && isGoogleUser()
+        && get(/databases/$(database)/documents/artifacts/$(appId)/public/data/rooms/$(gameId)).data.hostId == request.auth.uid
+        && get(/databases/$(database)/documents/artifacts/$(appId)/public/data/rooms/$(gameId)).data.status == 'lobby'
+        && getAfter(/databases/$(database)/documents/artifacts/$(appId)/public/data/rooms/$(gameId)).data.get('recapVersion', 0) == 1
+        && getAfter(/databases/$(database)/documents/artifacts/$(appId)/public/data/rooms/$(gameId)).data.status in ['playing', 'category_preview']
+        && request.resource.data.version == 1 && request.resource.data.finalized == false;
+      allow update: if recapId == 'summary' && isGoogleUser() && !resource.data.finalized
+        && validRecapUpdate(appId, gameId, resource.data, request.resource.data);
+      allow delete: if false;
+    }
+
+    function validRecapUpdate(appId, gameId, before, after) {
+      let path = /databases/$(database)/documents/artifacts/$(appId)/public/data/rooms/$(gameId);
+      let room = get(path).data;
+      return room.get('recapVersion', 0) == 1 && room.status in ['playing', 'category_preview']
+        && after.version == before.version
+        && (room.hostId == request.auth.uid
+          ? (after.finalized == false
+              ? validHostRecapEvent(appId, gameId, room, getAfter(path).data, after)
+              : getAfter(path).data.status == 'finished' && after.completedAt == request.time
+                && after.players == before.players && after.sequence == before.sequence)
+          : validPlayerRecap(appId, gameId, room, getAfter(path).data, before, after));
+    }
+
+    function validHostRecapEvent(appId, gameId, room, next, summary) {
+      let event = getAfter(/databases/$(database)/documents/artifacts/$(appId)/public/data/rooms/$(gameId)/history/$(summary.lastEventId)).data;
+      return event.actorId == room.hostId && event.recordedAt == request.time
+        && event.type in ['answer_correct', 'answer_incorrect', 'surprise_answer_correct', 'surprise_answer_incorrect',
+          'score_set', 'score_adjusted', 'surprise_table_picked', 'surprise_wheel_scored']
+        && next != room;
+    }
+
+    function validPlayerRecap(appId, gameId, room, nextRoom, before, after) {
+      let uid = request.auth.uid;
+      let event = getAfter(/databases/$(database)/documents/artifacts/$(appId)/public/data/rooms/$(gameId)/history/$(after.lastEventId)).data;
+      let p = before.players[uid];
+      let n = after.players[uid];
+      return event.actorId == uid && event.recordedAt == request.time
+        && validPlayerEvent(room, nextRoom, event, uid)
+        && event.details.playerId == uid && event.details.questionId == room.activeQuestionId
+        && after.diff(before).affectedKeys().hasOnly(['sequence', 'lastEventId', 'players'])
+        && after.sequence == before.sequence + 1
+        && after.players.diff(before.players).affectedKeys().hasOnly([uid])
+        && (event.type == 'player_buzzed_early'
+          ? p.lastEarlyQuestionId != room.activeQuestionId && n.lastEarlyQuestionId == room.activeQuestionId
+            && n.early == p.early + 1 && n.buzzes == p.buzzes + 1
+            && n.diff(p).affectedKeys().hasOnly(['lastEarlyQuestionId', 'early', 'buzzes'])
+          : event.type in ['player_buzzed', 'player_buzzed_late']
+            ? validBuzzRecap(room, event, p, n)
+            : event.type in ['surprise_table_picked', 'surprise_wheel_scored'] && validScoreRecap(room, nextRoom, event, p, n, uid));
+    }
+
+    function validBuzzRecap(room, event, p, n) {
+      let round = room.activeQuestionId + ':' + string(room.incorrectBuzzedIds.size());
+      let late = event.type == 'player_buzzed_late';
+      let delta = event.details.get('deltaMs', 0);
+      return n.lastBuzzRound == round
+        && (n.buzzes == p.buzzes + (p.lastBuzzRound == round ? 0 : 1)
+            && n.late == p.late + (late && p.lastBuzzRound != round ? 1 : 0)
+            && n.diff(p).affectedKeys().hasOnly(['lastBuzzRound', 'buzzes', 'late', 'closestLate'])
+            && (late && (p.closestLate == null || delta < p.closestLate.deltaMs)
+              ? n.closestLate.deltaMs == delta && n.closestLate.questionId == room.activeQuestionId
+                && n.closestLate.categoryId == event.details.categoryId
+                && n.closestLate.keys().hasOnly(['deltaMs', 'questionId', 'categoryId', 'categoryName', 'questionPoints'])
+              : n.closestLate == p.closestLate));
+    }
+
+    function validScoreRecap(room, nextRoom, event, p, n, uid) {
+      let cat = event.details.categoryId;
+      return n.diff(p).affectedKeys().hasOnly(['categories'])
+        && n.categories.diff(p.categories).affectedKeys().hasOnly([cat])
+        && n.categories[cat].keys().hasOnly(['name', 'points'])
+        && n.categories[cat].points == p.categories.get(cat, {'points': 0}).points + event.details.points
+        && nextRoom.players[uid].score == room.players[uid].score + event.details.points;
+    }
+
+    match /artifacts/{appId}/public/data/rooms/{gameId}/recapScores/{eventId} {
+      allow read: if isGoogleUser() || isAdmin(appId);
+      allow create: if isGoogleUser() && validRecapScore(appId, gameId, eventId);
+      allow update, delete: if false;
+    }
+
+    function validRecapScore(appId, gameId, eventId) {
+      let path = /databases/$(database)/documents/artifacts/$(appId)/public/data/rooms/$(gameId);
+      let room = get(path).data;
+      let next = getAfter(path).data;
+      let score = request.resource.data;
+      let event = getAfter(/databases/$(database)/documents/artifacts/$(appId)/public/data/rooms/$(gameId)/history/$(eventId)).data;
+      return room.get('recapVersion', 0) == 1 && room.status in ['playing', 'category_preview']
+        && score.id == eventId && event.recordedAt == request.time
+        && score.playerId == event.details.playerId && score.source == event.type
+        && score.before == room.players[score.playerId].score && score.after == next.players[score.playerId].score
+        && score.delta == score.after - score.before && score.sequence is int
+        && (room.hostId == request.auth.uid || (score.playerId == request.auth.uid
+          && event.type in ['surprise_table_picked', 'surprise_wheel_scored']
+          && validPlayerEvent(room, next, event, request.auth.uid)));
+    }
+
+    match /artifacts/{appId}/users/{userId}/gameAchievements/{gameId} {
+      allow read: if isGoogleUser() && (request.auth.uid == userId || isAdmin(appId));
+      allow create: if isGoogleUser() && validProfileAwards(appId, userId, gameId);
+      allow update, delete: if false;
+    }
+
+    function validProfileAwards(appId, userId, gameId) {
+      let path = /databases/$(database)/documents/artifacts/$(appId)/public/data/rooms/$(gameId);
+      let room = get(path).data;
+      let recap = getAfter(/databases/$(database)/documents/artifacts/$(appId)/public/data/rooms/$(gameId)/recap/summary).data;
+      let record = request.resource.data;
+      return room.hostId == request.auth.uid && room.status in ['playing', 'category_preview']
+        && getAfter(path).data.status == 'finished' && recap.finalized
+        && userId in room.players && !room.players[userId].isHost
+        && record.keys().hasOnly(['version', 'gameId', 'gameCode', 'completedAt', 'awards'])
+        && record.version == 1 && record.gameId == gameId && record.gameCode == room.roomCode
+        && record.completedAt == request.time && record.completedAt == recap.completedAt
+        && record.awards == recap.profileAwards[userId] && record.awards.size() > 0;
     }
 
     match /artifacts/{appId}/users/{userId} {

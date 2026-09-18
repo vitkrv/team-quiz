@@ -58,6 +58,32 @@ directory when starting Java. This validation used the standalone Firestore Emul
 - Missing, invalid or newly private source packs leave the lobby unchanged.
 - Legacy embedded-pack/history compatibility.
 
+## Recap and profile achievement checks
+
+The same command also runs `scripts/verify-game-recap.mjs`. New rooms opt into
+`recapVersion: 1`; older v2 and legacy rooms are not migrated. Recap data lives in
+`rooms/{gameId}/recap/summary` and `recapScores/{eventId}`. Private history remains
+host-only. Summary and score projections use the room's existing authenticated
+read policy. Question/answer text and media are not copied into recap storage.
+
+Finishing freezes the summary, writes awarded players' immutable
+`users/{playerId}/gameAchievements/{gameId}` records, and deletes the frozen pack in
+one transaction. Each profile record stores award IDs/values/details, the stable
+game ID, invitation code, and a server completion timestamp. Only the profile owner
+and administrators can read those profile records. No profile controls or backfill
+are included.
+
+`updateRoomInTransaction` is now asynchronous: always await it, before any other
+writes when the action can project recap data. It may read the summary and frozen
+pack for category/point metadata before issuing writes. Start/finalize perform their
+own reads before writes and have no additional projection reads for their events.
+
+Additional coverage includes achievement ties/thresholds, duplicate names, early
+attempt deduplication, buzz-round resets, penalties, repeat-safe judgments and
+manual adjustments, actual wheel scoring, 20 offline award
+recipients, finalization rollback and concurrency, immutable records, unauthorized
+access, and results surviving source/snapshot deletion and invitation-code reuse.
+
 ## Release verification
 
 Run `npm run lint` and `npm run build`. Check the host/player/spectator experience with
@@ -82,3 +108,28 @@ remain deferred.
 - These browser checks used simulated Google identities. Production Google sign-in,
   Firebase Hosting links and external media integrations were not exercised. Nothing
   was deployed.
+
+### Item 23 verification (2026-09-18)
+
+- ESLint and production build passed; the existing Vite large-chunk warning remains.
+- All 22 Emulator scenario groups passed, retaining the original 15 storage checks.
+  The 20-player finalization case passed the actual rules access-call limits.
+- An isolated browser fixture verified English desktop and Ukrainian 390px layouts,
+  the avatar to the trophy's right, long names, tied recipients, and score progression.
+- The actual host/player components completed question selection, player buzz,
+  correct judgment, answer reveal, game finish, and player refresh. Direct authenticated
+  reads confirmed two earned profile awards, the invitation code, and completion date.
+- These were Emulator identities, not production Google sign-in. Production Hosting
+  links and external media playback/storage were not exercised. No deployment occurred.
+
+### Scope update: achievements and performance only
+
+The question-review section has been removed together with its snapshot writes,
+loading/pagination, media rendering, translations, and Firestore access rules.
+Player achievements, profile persistence, and performance recap remain supported.
+Previously stored review documents are not migrated or deleted; the application no
+longer reads or writes them, and the updated rules provide no client access.
+
+After this removal, ESLint, the production build, and all 22 Emulator scenario
+groups passed again. The existing Vite large-chunk warning remains. No deployment
+or production-data cleanup was performed.
