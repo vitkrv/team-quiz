@@ -86,6 +86,42 @@ access, and results surviving source/snapshot deletion and invitation-code reuse
 
 ## Release verification
 
+### Item 03: wheel recovery and quiz transitions
+
+The combined entry point also runs `scripts/verify-wheel.mjs`; do not run it separately.
+New scenarios use only current-format rooms (`dataVersion: 2`, `recapVersion: 1`,
+`buzzerPolicyVersion: 1`). Existing legacy scenarios remain unchanged.
+
+Coverage includes concurrent starts, server rejection of early host/player completion,
+immutable spin fields, a fresh-client recovery race, duplicate completion, concurrent
+manual adjustments (including retrying batches whose first event was a no-op), positive/negative awards, stale Continue/completion calls, pending
+award finish rejection, missing-recap rollback, and transaction-derived quiz scores.
+Fixture-only owner writes move the spin clock past its deadline for recovery cases;
+authenticated early-write denials still exercise the deployed-rule boundary.
+
+User-run browser checks: host, player, and spectator; English/Ukrainian; desktop/mobile.
+Start a spin and confirm the result label stays hidden and the score stays unchanged
+until the wheel settles. Refresh during and after the spin, delay delivery, background
+and restore a tab, disconnect the initiator, and race two host tabs with the player.
+Confirm one award/history/recap entry, recovery without rerolling, visible retry feedback,
+and no Continue/Finish before the award commits. Check normal/table scoring and manual
+adjustments as regressions. Browser verification remains pending; the user-run
+Emulator results below do not verify animation or responsive presentation.
+
+Release the updated rules and frontend together only when authorized, and have clients
+reload. This change does not migrate older rooms or recover pre-update spins.
+
+User-reported verification on 2026-09-20: the combined harness passed all **39 scenario
+groups**, including all five new wheel/quiz groups, with **exit code 0**. Namespace:
+`storage-check-1789917747731`. Expected permission-denied messages accompanied negative
+cases. This is the user's Emulator run, not an agent-run check. Agent-run lint/build
+passed; browser checks remain pending and nothing was deployed.
+
+Earlier failed runs led to updated buzzer fixtures for the expected-question Continue
+contract, reduced repeated rule validation, and bounded retries when a fresh server
+read confirms a concurrent room change. The successful run above supersedes those
+failed validation attempts.
+
 Run `npm run lint` and `npm run build`. Check the host/player/spectator experience with
 isolated data: lobby/start, refresh and late spectator entry, ordinary and surprise
 questions, history loading/older pages, judging, score editing, and final results after

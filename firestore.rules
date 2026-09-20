@@ -49,6 +49,7 @@ service cloud.firestore {
         && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['roomCode', 'hostId', 'recapVersion', 'buzzerPolicyVersion'])
         && validBuzzerRoomUpdate(appId, gameId, resource.data, request.resource.data)
         && validGameStorageUpdate(appId, gameId, resource.data, request.resource.data)
+        && validWheelRoomUpdate(appId, gameId, resource.data, request.resource.data)
         && (
           (
             roomParticipantOrHost(resource.data, request.auth.uid)
@@ -64,6 +65,93 @@ service cloud.firestore {
         && get(/databases/$(database)/documents/artifacts/$(appId)/public/data/rooms/$(gameId)).data.hostId == request.auth.uid;
       allow create: if isGoogleUser() && validHistoryEvent(appId, gameId, eventId);
       allow update, delete: if false;
+    }
+
+    function pendingSurpriseAward(room) {
+      let round = room.get('surpriseRound', null);
+      return round != null && round.get('judgeResult', null) != null && round.get('scoreAppliedAt', null) == null;
+    }
+
+    function validWheelRoomUpdate(appId, gameId, before, after) {
+      return before.get('dataVersion', 0) != 2 || before.get('recapVersion', 0) != 1
+        || before.get('buzzerPolicyVersion', 0) != 1
+        || ((!pendingSurpriseAward(before)
+            || (after.status == 'playing' && after.activeQuestionId == before.activeQuestionId
+              && after.get('surpriseRound', null) != null))
+          && validWheelTransition(appId, gameId, before, after));
+    }
+
+    function validWheelTransition(appId, gameId, before, after) {
+      let previous = before.get('surpriseRound', null);
+      let next = after.get('surpriseRound', null);
+      let previousSpin = previous == null ? null : previous.get('spinId', null);
+      let nextSpin = next == null ? null : next.get('spinId', null);
+      return previousSpin == null && nextSpin == null
+        ? !(previous != null && previous.get('scoringMechanic', '') == 'wheel'
+            && pendingSurpriseAward(before) && next != previous)
+        : previousSpin == null
+          ? validWheelStart(appId, gameId, before, after)
+          : (next == previous
+            || (previous.get('scoreAppliedAt', null) != null && next == null
+              && request.auth.uid == before.hostId && after.activeQuestionId == null)
+            || (previous.get('scoreAppliedAt', null) == null && validWheelCompletion(appId, gameId, before, after)));
+    }
+
+    function validWheelStart(appId, gameId, before, after) {
+      let previous = before.surpriseRound;
+      let next = after.surpriseRound;
+      let eventId = 'wheel_' + next.spinId + '_started';
+      let event = getAfter(/databases/$(database)/documents/artifacts/$(appId)/public/data/rooms/$(gameId)/history/$(eventId)).data;
+      return before.status == 'playing' && before.answerRevealed
+        && previous.questionId == before.activeQuestionId && previous.judgeResult != null
+        && previous.scoringMechanic == 'wheel' && previous.get('rollResult', null) == null
+        && request.auth.uid in [before.hostId, previous.answererId]
+        && before.players[previous.answererId].isHost == false
+        && next.spinId is string && next.spinId.size() > 0 && next.spinId.size() <= 100
+        && next.rolledAt == request.time && next.durationMs == 6000
+        && next.rolledBy == request.auth.uid && next.scoreAppliedAt == null
+        && next.rollResult is number && next.rollResult in previous.wheelValues
+        && next.diff(previous).affectedKeys().hasOnly(['spinId', 'durationMs', 'rollResult', 'rolledAt', 'rolledBy', 'scoreAppliedAt'])
+        && after.diff(before).affectedKeys().hasOnly(['surpriseRound'])
+        && event.id == eventId && event.type == 'surprise_wheel_rolled'
+        && event.actorId == request.auth.uid && event.recordedAt == request.time
+        && event.details.spinId == next.spinId && event.details.points == next.rollResult
+        && event.details.playerId == previous.answererId && event.details.questionId == before.activeQuestionId;
+    }
+
+    function validWheelAward(before, after) {
+      let previous = before.surpriseRound;
+      let next = after.surpriseRound;
+      let uid = previous.answererId;
+      return before.status == 'playing' && before.answerRevealed
+        && previous.questionId == before.activeQuestionId && previous.judgeResult != null
+        && previous.scoringMechanic == 'wheel' && previous.get('scoreAppliedAt', null) == null
+        && request.auth.uid in [before.hostId, uid] && before.players[uid].isHost == false
+        && previous.rolledAt is timestamp && previous.durationMs == 6000
+        && request.time >= previous.rolledAt + duration.value(6000, 'ms')
+        && previous.rollResult is number && previous.rollResult in previous.wheelValues
+        && next.diff(previous).affectedKeys().hasOnly(['scoreAppliedAt'])
+        && next.scoreAppliedAt == request.time && after.currentTurn == uid
+        && after.players[uid].score == before.players[uid].score + previous.rollResult
+        && after.players.diff(before.players).affectedKeys().hasOnly([uid])
+        && after.players[uid].diff(before.players[uid]).affectedKeys().hasOnly(['score'])
+        && after.diff(before).affectedKeys().hasOnly(['players', 'currentTurn', 'surpriseRound']);
+    }
+
+    function validWheelCompletion(appId, gameId, before, after) {
+      let round = before.surpriseRound;
+      let eventId = 'wheel_' + round.spinId + '_scored';
+      let event = getAfter(/databases/$(database)/documents/artifacts/$(appId)/public/data/rooms/$(gameId)/history/$(eventId)).data;
+      let recap = getAfter(/databases/$(database)/documents/artifacts/$(appId)/public/data/rooms/$(gameId)/recap/summary).data;
+      let score = getAfter(/databases/$(database)/documents/artifacts/$(appId)/public/data/rooms/$(gameId)/recapScores/$(eventId)).data;
+      return validWheelAward(before, after)
+        && event.id == eventId && event.type == 'surprise_wheel_scored'
+        && event.actorId == request.auth.uid && event.recordedAt == request.time
+        && event.details.spinId == round.spinId && event.details.points == round.rollResult
+        && event.details.rolledAt == round.rolledAt && event.details.playerId == round.answererId
+        && event.details.questionId == before.activeQuestionId
+        && recap.lastEventId == eventId && score.id == eventId
+        && score.playerId == round.answererId && score.delta == round.rollResult;
     }
 
     // Policy v1 trusts local reaction measurements and host ranking, not arbitrary
@@ -300,7 +388,7 @@ service cloud.firestore {
           ? previous.get('rollResult', null) == null && next.rolledBy == uid
             && next.rollResult in previous.wheelValues && event.details.points == next.rollResult
             && after.diff(before).affectedKeys().hasOnly(['surpriseRound'])
-            && next.diff(previous).affectedKeys().hasOnly(['rollResult', 'rolledAt', 'rolledBy', 'scoreAppliedAt'])
+            && next.diff(previous).affectedKeys().hasOnly(['rollResult', 'rolledAt', 'rolledBy', 'scoreAppliedAt', 'spinId', 'durationMs'])
           : previous.get('tablePickedCellId', null) == null && next.tablePickedBy == uid
             && previous.scoringMechanic == 'table'
             && event.details.cellIndex is int && event.details.cellIndex >= 0 && event.details.cellIndex < previous.tableCells.size()
@@ -322,7 +410,21 @@ service cloud.firestore {
     }
 
     function validWheelScore(before, after, event, uid) {
-      return before.answerRevealed && after.answerRevealed
+      return before.surpriseRound.get('spinId', null) != null
+        // The room write validates the deadline, immutable spin and exact score
+        // delta once. Related records must accompany that same first completion;
+        // avoid repeating full validation across this multi-document commit.
+        ? before.get('dataVersion', 0) == 2 && before.get('recapVersion', 0) == 1
+          && before.get('buzzerPolicyVersion', 0) == 1
+          && before.surpriseRound.get('scoreAppliedAt', null) == null
+          && after.surpriseRound.scoreAppliedAt == request.time
+          && after.surpriseRound.spinId == before.surpriseRound.spinId
+          && uid == before.surpriseRound.answererId
+          && event.id == 'wheel_' + before.surpriseRound.spinId + '_scored'
+          && event.details.points == before.surpriseRound.rollResult
+          && event.details.spinId == before.surpriseRound.spinId
+          && event.details.rolledAt == before.surpriseRound.rolledAt
+        : before.answerRevealed && after.answerRevealed
         && before.surpriseRound.answererId == uid && before.surpriseRound.get('scoreAppliedAt', null) == null
         && before.surpriseRound.rollResult is number
         && event.details.points == before.surpriseRound.rollResult

@@ -1,4 +1,6 @@
 import useBuzzer from '../../hooks/useBuzzer';
+import useSurpriseWheel from '../../hooks/useSurpriseWheel';
+import { WHEEL_ANIMATION_MS, wheelEasing } from '../../utils/wheelPolicy';
 import { ANSWER_WINDOW_MS, EARLY_BUZZ_DELAY_MS, LATE_BUZZ_NOTICE_MS, LATE_BUZZ_WINDOW_MS, timestampMillis } from '../../utils/buzzerPolicy';
 import { updateRoom, updateRoomInTransaction } from '../../actions/gameStorage';
 import { useEffect, useMemo, useRef, useState } from 'react';
@@ -6,7 +8,7 @@ import { arrayUnion, increment, runTransaction } from 'firebase/firestore';
 import { Check, Play, RotateCw, X } from 'lucide-react';
 import { ANIMAL_AVATARS, normalizeSurpriseScoringMechanic, SURPRISE_SCORING_MECHANICS } from '../../constants';
 import { useLanguage } from '../../useLanguage';
-import { createHistoryItem } from '../../actions/gameActions';
+import { createHistoryItem, startSurpriseWheel } from '../../actions/gameActions';
 import FloatingEmojiBackground from '../../components/FloatingEmojiBackground';
 import HoldToConfirmButton from '../../components/HoldToConfirmButton';
 import QuestionMedia from '../../components/QuestionMedia';
@@ -18,7 +20,6 @@ import { generateId } from '../../utils/ids';
 const POINT_STEP = 100;
 const SURPRISE_DEFAULT_MIN_POINTS = 100;
 const SURPRISE_DEFAULT_MAX_POINTS = 500;
-const WHEEL_ANIMATION_MS = 6000;
 const ACTIVE_QUESTION_ENTRANCE_MS = 750;
 const SURPRISE_BACKGROUND_EMOJIS = ['\u{1F37F}', '\u{1F389}', '\u{1F973}', '\u{1F381}', '\u{1F37E}', '\u{1F382}', '\u{2728}', '\u{1FA84}'];
 const SURPRISE_BACKGROUND_EMOJI_COUNT = 80;
@@ -130,37 +131,31 @@ const describeSlice = (center, radius, startAngle, endAngle) => {
     return `M ${center} ${center} L ${start.x} ${start.y} A ${radius} ${radius} 0 ${largeArcFlag} 1 ${end.x} ${end.y} Z`;
 };
 
-function PointsWheel({ values, result, rolledAt, t }) {
-    const [rotation, setRotation] = useState(0);
-    const [isResultVisible, setIsResultVisible] = useState(false);
+function PointsWheel({ values, result, rolledAt, scoreAppliedAt, serverNow, clockReady, t }) {
+    const [now, setNow] = useState(() => serverNow());
     const size = 320;
     const center = size / 2;
     const radius = 150;
     const sliceAngle = values.length > 0 ? 360 / values.length : 360;
     const resultIndex = result === null || result === undefined ? -1 : values.findIndex((value) => value === result);
+    const startedAt = timestampMillis(rolledAt);
+    const progress = scoreAppliedAt ? 1 : startedAt && clockReady
+        ? Math.max(0, Math.min(1, (now - startedAt) / WHEEL_ANIMATION_MS)) : 0;
+    const rotation = resultIndex < 0 ? 0
+        : ((360 * 6) - (resultIndex * sliceAngle + sliceAngle / 2)) * wheelEasing(progress);
+    const isResultVisible = progress === 1;
 
     useEffect(() => {
-        if (resultIndex < 0) {
-            setRotation(0);
-            setIsResultVisible(false);
-            return undefined;
-        }
-
-        setRotation(0);
-        setIsResultVisible(false);
-        const frame = window.requestAnimationFrame(() => {
-            const targetCenterAngle = resultIndex * sliceAngle + (sliceAngle / 2);
-            setRotation((360 * 6) - targetCenterAngle);
-        });
-        const timeoutId = window.setTimeout(() => {
-            setIsResultVisible(true);
-        }, WHEEL_ANIMATION_MS);
-
-        return () => {
-            window.cancelAnimationFrame(frame);
-            window.clearTimeout(timeoutId);
+        if (resultIndex < 0 || !startedAt || !clockReady || scoreAppliedAt) return undefined;
+        let frame;
+        const tick = () => {
+            const current = serverNow();
+            setNow(current);
+            if (current < startedAt + WHEEL_ANIMATION_MS) frame = window.requestAnimationFrame(tick);
         };
-    }, [resultIndex, rolledAt, sliceAngle]);
+        tick();
+        return () => window.cancelAnimationFrame(frame);
+    }, [resultIndex, startedAt, scoreAppliedAt, serverNow, clockReady]);
 
     return (
         <div className="flex flex-col items-center gap-3">
@@ -170,8 +165,7 @@ function PointsWheel({ values, result, rolledAt, t }) {
                     viewBox={`0 0 ${size} ${size}`}
                     className="h-full w-full drop-shadow-2xl"
                     style={{
-                        transform: `rotate(${rotation}deg)`,
-                        transition: resultIndex >= 0 ? `transform ${WHEEL_ANIMATION_MS}ms cubic-bezier(0.12, 0.72, 0.16, 1)` : 'none'
+                        transform: `rotate(${rotation}deg)`
                     }}
                 >
                     {values.map((value, index) => {
@@ -301,6 +295,7 @@ export default function ActiveQuestionView({ room, roomCode, roomRef, user, isHo
     const [buzzUnlockNow, setBuzzUnlockNow] = useState(() => serverNow());
     const [earlyBuzzDelayUnlockAt, setEarlyBuzzDelayUnlockAt] = useState(() => getStoredEarlyBuzzUnlockAt(earlyBuzzDelayStorageKey));
     const [isRolling, setIsRolling] = useState(false);
+    const [wheelStartError, setWheelStartError] = useState(false);
     const [buzzMediaPauseSignal, setBuzzMediaPauseSignal] = useState(0);
     const [isEntranceContentVisible, setIsEntranceContentVisible] = useState(false);
     const [earlyBuzzNoticeQuestionId, setEarlyBuzzNoticeQuestionId] = useState(null);
@@ -404,6 +399,12 @@ export default function ActiveQuestionView({ room, roomCode, roomRef, user, isHo
             delta: formatBuzzDelta(attempt.deltaMs), tied: attempt.deltaMs === 0 });
     }, [buzzer.enabled, room.buzzerRoundId, room.buzzedPlayerId, room.answerRevealed, room.activeQuestionId, room.buzzAttempts, room.players, user.uid]);
 
+    const actorName = room.players[user.uid]?.name || user.displayName || t('playerFallback');
+    const wheelRecovery = useSurpriseWheel({ roomRef, round: room.surpriseRound, questionId: room.activeQuestionId,
+        actorId: user.uid, actorName,
+        canComplete: !isSpectator && (isHost || user.uid === room.surpriseRound?.answererId),
+        serverNow, clockReady: Boolean(clockQuality.ready), t });
+
     if (!activeQ) return null;
 
     const isSurpriseQuestion = Boolean(activeQ.isSurpriseQuestion);
@@ -453,7 +454,7 @@ export default function ActiveQuestionView({ room, roomCode, roomRef, user, isHo
     const buzzedPlayer = room.buzzedPlayerId ? room.players[room.buzzedPlayerId] : null;
     const buzzedPlayerName = buzzedPlayer ? buzzedPlayer.name : '';
     const buzzedPlayerAvatar = buzzedPlayer ? buzzedPlayer.avatar : '';
-    const actorName = room.players[user.uid]?.name || user.displayName || t('playerFallback');
+
     const hasQuestionText = Boolean(activeQ.text?.trim());
     const hasAnswerText = Boolean(activeQ.answer?.trim());
     const shouldShowQuestionContext = isHost || !isAnswerRevealed;
@@ -758,56 +759,20 @@ export default function ActiveQuestionView({ room, roomCode, roomRef, user, isHo
                 actorId: user.uid,
                 actorName,
                 message: t('historyBoardResumed', { actorName }),
-                details: { actorName }
+                details: { actorName, questionId: activeQ.id }
             })]
         });
     };
 
     const handleRollSurpriseWheel = async () => {
-        if (!canRollSurpriseWheel || surpriseWheelValues.length === 0 || !surpriseAnswererId) return;
-
+        if (!canRollSurpriseWheel) return;
         setIsRolling(true);
-        const result = surpriseWheelValues[Math.floor(Math.random() * surpriseWheelValues.length)];
-        const player = room.players[surpriseAnswererId];
-        const rolledAt = Date.now();
-
+        setWheelStartError(false);
         try {
-            await updateRoom(roomRef, {
-                surpriseRound: {
-                    ...surpriseRound,
-                    rollResult: result,
-                    rolledAt,
-                    rolledBy: user.uid,
-                    scoreAppliedAt: null
-                },
-                history: [createHistoryItem({
-                    type: 'surprise_wheel_rolled',
-                    actorId: user.uid,
-                    actorName,
-                    message: t('historySurpriseWheelRolled', {
-                        playerName: player?.name || t('playerFallback'),
-                        points: result > 0 ? `+${result}` : result
-                    }),
-                    details: {
-                        playerId: surpriseAnswererId, questionId: activeQ.id,
-                        playerName: player?.name || t('playerFallback'),
-                        points: result
-                    }
-                })]
-            });
-
-            window.setTimeout(async () => {
-                try {
-                    await updateRoom(roomRef, {
-                        [`players.${surpriseAnswererId}.score`]: increment(result),
-                        currentTurn: surpriseAnswererId,
-                        'surpriseRound.scoreAppliedAt': Date.now(),
-                        history: [createHistoryItem({ type: 'surprise_wheel_scored', actorId: user.uid, actorName, message: t('recapWheelScored'), details: { playerId: surpriseAnswererId, playerName: player?.name || t('playerFallback'), questionId: activeQ.id, points: result, rolledAt } })]
-                    });
-                } catch (err) {
-                    console.error('Failed to apply surprise wheel score:', err);
-                }
-            }, WHEEL_ANIMATION_MS);
+            const outcome = await startSurpriseWheel(roomRef, activeQ.id, { id: user.uid, name: actorName }, t);
+            setWheelStartError(outcome === 'stale');
+        } catch {
+            setWheelStartError(true);
         } finally {
             setIsRolling(false);
         }
@@ -824,7 +789,8 @@ export default function ActiveQuestionView({ room, roomCode, roomRef, user, isHo
             const latestRoom = roomSnap.data();
             const latestRound = latestRoom.surpriseRound;
             if (
-                latestRoom.activeQuestionId !== activeQ.id
+                latestRoom.status !== 'playing'
+                || latestRoom.activeQuestionId !== activeQ.id
                 || !latestRoom.answerRevealed
                 || latestRound?.questionId !== activeQ.id
                 || latestRound.scoringMechanic !== SURPRISE_SCORING_MECHANICS.table
@@ -975,9 +941,13 @@ export default function ActiveQuestionView({ room, roomCode, roomRef, user, isHo
                 <div className="mt-4 flex w-full flex-col items-center gap-4 md:mt-6">
                     {isSurpriseQuestion && isSurpriseJudged && isSurpriseWheelMechanic && surpriseWheelValues.length > 0 && (
                         <PointsWheel
+                            key={surpriseRound.spinId || activeQ.id}
                             values={surpriseWheelValues}
                             result={surpriseRound.rollResult}
                             rolledAt={surpriseRound.rolledAt}
+                            scoreAppliedAt={surpriseRound.scoreAppliedAt}
+                            serverNow={serverNow}
+                            clockReady={Boolean(clockQuality.ready)}
                             t={t}
                         />
                     )}
@@ -1001,6 +971,15 @@ export default function ActiveQuestionView({ room, roomCode, roomRef, user, isHo
                             <RotateCw size={24} /> {isHost && user.uid !== surpriseAnswererId ? t('forceRollWheel') : t('rollTheWheel')}
                         </button>
                     )}
+                    {isSurpriseWheelMechanic && isSurpriseRolled && !isSurpriseScoreApplied && (
+                        <div role="status" className="text-center text-slate-300">
+                            {t(wheelRecovery.error ? 'wheelScoreFailed' : 'wheelScorePending')}
+                            {wheelRecovery.error && (
+                                <button onClick={wheelRecovery.retry} className="ml-2 underline">{t('wheelRetry')}</button>
+                            )}
+                        </div>
+                    )}
+                    {wheelStartError && !isSurpriseRolled && <p role="alert" className="text-red-300">{t('wheelStartFailed')}</p>}
                     {!canRollSurpriseWheel && isSurpriseQuestion && isSurpriseWheelMechanic && isSurpriseJudged && !isSurpriseRolled && (
                         <div className="text-base font-bold text-slate-400 md:text-lg">
                             {t('waitingForWheelRoll', { playerName: surpriseAnswerer?.name || t('playerFallback') })}

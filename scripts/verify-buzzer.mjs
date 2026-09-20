@@ -122,8 +122,13 @@ export async function verifyBuzzer({ actions, check, denied, hostDb, playerDb, l
         assert.equal((await read(game.raceRef)).phase, 'cancelled');
         assert.equal(await actions.finalizeBuzz(game.host, id, 'host'), false);
         assert.equal(await actions.submitBuzz(game.late, id, 'late', 100, 'after-reveal'), false);
-        await actions.updateRoom(game.host, { activeQuestionId: null, answerRevealed: false, history: [event('board_resumed')] });
-        await actions.handlePickQuestion(game.host, 'q2', 'host', event('question_picked'));
+        await actions.updateRoom(game.host, { activeQuestionId: null, answerRevealed: false,
+            history: [event('board_resumed', 'host', { questionId: 'q1' })] });
+        assert.equal((await read(game.host)).activeQuestionId, null);
+        assert.equal(await actions.handlePickQuestion(game.host, 'q2', 'host', event('question_picked')), true);
+        assert.equal((await read(game.host)).activeQuestionId, 'q2');
+        assert.notEqual((await read(game.raceRef)).raceId, id);
+        assert.equal((await read(game.raceRef)).questionId, 'q2');
         assert.deepEqual((await read(game.raceRef)).penalties, {});
     });
     await check('buzzer: 20-player race finalizes history and recap atomically within rules access limits', async () => {
@@ -170,9 +175,14 @@ export async function verifyBuzzer({ actions, check, denied, hostDb, playerDb, l
         assert.equal((await read(game.raceRef)).phase, 'cancelled');
         assert.equal(await actions.finalizeBuzz(game.host, id, 'host'), false);
         game = await make();
-        await actions.updateRoom(game.host, { activeQuestionId: null, history: [event('board_resumed')] });
-        await actions.handlePickQuestion(game.host, 'surprise', 'host', event('question_picked'));
+        await actions.updateRoom(game.host, { answerRevealed: true, buzzedPlayerId: null, buzzTimestamp: null, buzzAttempts: {},
+            'questionStates.q1': 'done', history: [event('question_skipped', 'host', { questionId: 'q1' })] });
+        await actions.updateRoom(game.host, { activeQuestionId: null, answerRevealed: false,
+            history: [event('board_resumed', 'host', { questionId: 'q1' })] });
+        assert.equal((await read(game.host)).activeQuestionId, null);
+        assert.equal(await actions.handlePickQuestion(game.host, 'surprise', 'host', event('question_picked')), true);
         const room = await read(game.host);
+        assert.equal(room.activeQuestionId, 'surprise');
         assert.equal(room.buzzerRoundId, null);
         assert.equal((await read(game.raceRef)).phase, 'cancelled');
         id = (await read(game.raceRef)).raceId;

@@ -1,7 +1,9 @@
 import { BUZZ_OPEN_DELAY_MS } from '../utils/buzzerPolicy';
 import { prepareFinalRecap } from './gameRecap';
-import { packVersionRef, readRoomPack, updateRoom, updateRoomInTransaction } from './gameStorage';
-import { deleteField, getDocFromServer, runTransaction } from 'firebase/firestore';
+import { packVersionRef, readRoomPack, runRoomTransaction, updateRoom, updateRoomInTransaction } from './gameStorage';
+import { deleteField, getDocFromServer, runTransaction, serverTimestamp } from 'firebase/firestore';
+import { timestampMillis } from '../utils/buzzerPolicy';
+import { hasPendingSurpriseAward, isCurrentGame, WHEEL_ANIMATION_MS } from '../utils/wheelPolicy';
 import { generateId } from '../utils/ids';
 
 export const RPS_CHOICES = {
@@ -139,6 +141,82 @@ export const createHistoryItem = ({ id = generateId(), type, actorId, actorName,
     details: { ...details, operationId: id },
     timestamp: Date.now()
 });
+
+export async function startSurpriseWheel(roomRef, questionId, actor, t) {
+    const spinId = generateId();
+    // Keep the random choice stable if Firestore retries this transaction.
+    const random = Math.random();
+    return runRoomTransaction(roomRef, async (transaction, room) => {
+        const round = room?.surpriseRound;
+        if (!room || !isCurrentGame(room) || room.status !== 'playing' || !room.answerRevealed
+            || room.activeQuestionId !== questionId || round?.questionId !== questionId
+            || !round.judgeResult || round.scoringMechanic !== 'wheel'
+            || (actor.id !== room.hostId && actor.id !== round.answererId)
+            || !room.players[round.answererId] || room.players[round.answererId].isHost) return 'stale';
+        if (round.rollResult != null) return 'already-started';
+        const values = round.wheelValues;
+        if (!values?.length || !values.every(Number.isFinite)) return 'stale';
+        const points = values[Math.floor(random * values.length)];
+        const playerName = room.players[round.answererId].name;
+        await updateRoomInTransaction(transaction, roomRef, room, {
+            'surpriseRound.spinId': spinId,
+            'surpriseRound.durationMs': WHEEL_ANIMATION_MS,
+            'surpriseRound.rollResult': points,
+            'surpriseRound.rolledAt': serverTimestamp(),
+            'surpriseRound.rolledBy': actor.id,
+            'surpriseRound.scoreAppliedAt': null,
+            history: [createHistoryItem({ id: `wheel_${spinId}_started`, type: 'surprise_wheel_rolled',
+                actorId: actor.id, actorName: actor.name,
+                message: t('historySurpriseWheelRolled', { playerName, points }),
+                details: { spinId, playerId: round.answererId, playerName, questionId, points } })]
+        });
+        return 'started';
+    }).catch(async (error) => {
+        if (error.code === 'permission-denied') {
+            const room = (await getDocFromServer(roomRef)).data();
+            const round = room?.surpriseRound;
+            if (room?.activeQuestionId === questionId && round?.spinId && round.rollResult != null
+                && (actor.id === room.hostId || actor.id === round.answererId)) return 'already-started';
+        }
+        throw error;
+    });
+}
+
+export async function completeSurpriseWheel(roomRef, questionId, spinId, actor, t, now = Date.now) {
+    try {
+        return await runRoomTransaction(roomRef, async (transaction, room) => {
+            const round = room?.surpriseRound;
+            if (!room || !isCurrentGame(room) || !spinId || room.status !== 'playing'
+                || room.activeQuestionId !== questionId || round?.questionId !== questionId
+                || round.spinId !== spinId || !room.answerRevealed || !round.judgeResult
+                || round.scoringMechanic !== 'wheel'
+                || (actor.id !== room.hostId && actor.id !== round.answererId)
+                || !room.players[round.answererId] || room.players[round.answererId].isHost) return 'stale';
+            if (round.scoreAppliedAt) return 'already-applied';
+            const startedAt = timestampMillis(round.rolledAt);
+            if (!startedAt || round.durationMs !== WHEEL_ANIMATION_MS
+                || !Number.isFinite(round.rollResult) || !round.wheelValues?.includes(round.rollResult)) return 'stale';
+            if (now() < startedAt + WHEEL_ANIMATION_MS) return 'not-ready';
+            await updateRoomInTransaction(transaction, roomRef, room, {
+                [`players.${round.answererId}.score`]: (Number(room.players[round.answererId].score) || 0) + round.rollResult,
+                currentTurn: round.answererId,
+                'surpriseRound.scoreAppliedAt': serverTimestamp(),
+                history: [createHistoryItem({ id: `wheel_${spinId}_scored`, type: 'surprise_wheel_scored',
+                    actorId: actor.id, actorName: actor.name, message: t('recapWheelScored'),
+                    details: { spinId, playerId: round.answererId, playerName: room.players[round.answererId].name,
+                        questionId, points: round.rollResult, rolledAt: round.rolledAt } })]
+            });
+            return 'applied';
+        });
+    } catch (error) {
+        // Concurrent immutable-event creation may fail before the SDK retries.
+        if (error.code === 'permission-denied') {
+            const room = (await getDocFromServer(roomRef)).data();
+            if (room?.surpriseRound?.spinId === spinId && room.surpriseRound.scoreAppliedAt) return 'already-applied';
+        }
+        throw error;
+    }
+}
 
 export const adjustScore = async (roomRef, playerId, currentScore, delta, historyItem) => {
     const update = {
@@ -368,6 +446,7 @@ export const handleEndGame = async (roomRef, historyItem, extraUpdate = {}) => {
         if (!snapshot.exists()) return;
         const room = snapshot.data();
         if (room.status === 'finished') return;
+        if (isCurrentGame(room) && hasPendingSurpriseAward(room)) throw new Error('Surprise award is pending');
         const finalizeRecap = await prepareFinalRecap(transaction, roomRef, room);
         await updateRoomInTransaction(transaction, roomRef, room, update);
         finalizeRecap();

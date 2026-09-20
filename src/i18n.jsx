@@ -7,6 +7,10 @@ export const LANGUAGES = [
 
 const translations = {
     en: {
+        wheelScorePending: 'Wheel points will be saved after the spin ends. Waiting for confirmation…',
+        wheelScoreFailed: 'Could not save the wheel points. Reconnect; retrying automatically…',
+        wheelStartFailed: 'Could not start the wheel. Check your connection and try again.',
+        wheelRetry: 'Retry',
         recapReactionTimingNote: "Buzz totals count distinct attempts. Reaction gaps compare device-reported time after each player’s personal unlock. Submissions must arrive within the 2-second collection window; device measurements are trusted.",
         historyReactionTie: "tied in reaction time with {playerName}; server acceptance order, then player ID, broke the tie",
         historyReactionLate: "reported a reaction {delta} slower than {playerName}",
@@ -402,6 +406,10 @@ const translations = {
         historyViewHostRpsVs: 'and'
     },
     uk: {
+        wheelScorePending: 'Бали колеса буде збережено після завершення обертання. Очікуємо підтвердження…',
+        wheelScoreFailed: 'Не вдалося зберегти бали колеса. Відновіть з’єднання; повторюємо автоматично…',
+        wheelStartFailed: 'Не вдалося запустити колесо. Перевірте з’єднання та спробуйте ще раз.',
+        wheelRetry: 'Повторити',
         recapReactionTimingNote: "Враховуються окремі спроби. Різниця реакції порівнює час на пристроях після особистого розблокування кнопки. Натискання мають надійти протягом 2 секунд збору; вимірам пристроїв довіряємо.",
         historyReactionTie: "показав такий самий час реакції, як {playerName}; переможця визначено за порядком прийняття сервером, а потім за ID",
         historyReactionLate: "зафіксував реакцію на {delta} повільнішу, ніж {playerName}",

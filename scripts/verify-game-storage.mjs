@@ -1,4 +1,5 @@
 import { verifyBuzzer } from './verify-buzzer.mjs';
+import { verifyWheel } from './verify-wheel.mjs';
 import { verifyGameRecap } from './verify-game-recap.mjs';
 // Isolated integration checks. Requires a running Firestore Emulator, never production.
 import assert from 'node:assert/strict';
@@ -18,8 +19,8 @@ assert.match(endpoint || '', /^(127\.0\.0\.1|localhost):\d+$/, 'Set FIRESTORE_EM
 const projectId = 'demo-game-storage';
 const namespace = `storage-check-${Date.now()}`;
 const clients = [];
-const client = (uid, owner = false) => {
-    const app = initializeApp({ projectId, apiKey: 'emulator-only' }, `${namespace}-${uid}`);
+const client = (uid, owner = false, instance = uid) => {
+    const app = initializeApp({ projectId, apiKey: 'emulator-only' }, `${namespace}-${instance}`);
     const db = getFirestore(app);
     const [host, port] = endpoint.split(':');
     connectFirestoreEmulator(db, host, Number(port), {
@@ -235,6 +236,7 @@ try {
     });
     await verifyGameRecap({ actions, check, denied, hostDb, playerDb, lateDb, spectatorDb, adminDb, seedDb, namespace, ref, roomRef, event, t });
     await verifyBuzzer({ actions, check, denied, hostDb, playerDb, lateDb, spectatorDb, seedDb, namespace, ref, roomRef, event, t, client });
+    await verifyWheel({ actions, check, denied, hostDb, playerDb, spectatorDb, seedDb, ref, roomRef, event, t, client });
     console.log(`${checks} scenario groups passed. Namespace: ${namespace}`);
 } finally {
     await Promise.all(clients.map(async ({ db, app }) => { await terminate(db); await deleteApp(app); }));

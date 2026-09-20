@@ -131,7 +131,9 @@ A correct answer can still lose points; an incorrect answer can still gain point
 
 ### Wheel
 
-The assigned contestant or host starts the wheel after judging. The app randomly selects one remaining entry, persists the result, and animates for six seconds. The initiating client then applies the signed score change. Continuing to the board is gated on the animation/result and score application being complete.
+The assigned contestant or host starts the wheel after judging. In current-format rooms (`dataVersion: 2`, `recapVersion: 1`, `buzzerPolicyVersion: 1`), the app persists one selected entry and a server-stamped spin identity/start time without changing scores. Everyone uses the same six-second animation timeline. Refreshing or receiving a late snapshot resumes at the elapsed position; after the deadline the wheel is shown settled. The result label stays hidden until the animation ends, and a committed award settles the wheel before its score is displayed.
+
+After the deadline, either the host or selected contestant can complete the award. The score, application marker, history, and recap commit together exactly once; Firestore rejects early completion even if a client clock runs ahead. Mounted authorized clients retry after refresh/reconnect and show pending/retry feedback. If both are disconnected, the pending award waits for either to return. Continue and explicit Finish cannot discard an unresolved judged surprise award. These guarantees require updated clients and rules; older room formats and pre-update spins are not upgraded or recovered.
 
 ### Hidden table
 
@@ -209,7 +211,7 @@ Do not present the following as stronger guarantees than the code provides:
 - Much of the host/player workflow is enforced in client controls and handlers. Current room-update security rules broadly allow participant/host updates, with a dedicated competitive-setting restriction; they do not enforce every scoring or turn rule independently.
 - Answers and hidden surprise values are included in shared room data. Hiding them in the UI is not confidentiality from a technically inspecting participant.
 - Buzz ordering depends on transaction success and estimated client timing, not a dedicated authoritative game server that sorts all clicks.
-- Wheel scoring uses a delayed write from the initiating browser. Interruption before that write can leave score application incomplete. The table path commits selection and score together; do not assume the wheel has the same transactional guarantees.
+- Current wheel scoring separates the persisted selection from the atomic award, which is permitted only after the shared animation deadline. Recovery still requires the host or selected contestant online; it is not a scheduled backend job. Result concealment is interface-only, and clock synchronization does not guarantee identical display timing across devices. Table selection and scoring still commit together.
 - Host presence is needed for normal progression. Automatic timer adjudication, automatic host replacement, and comprehensive interruption recovery are not established gameplay features.
 
 These are current limitations, not requirements to preserve bugs. Addressing them should be an explicit change with suitable validation and corresponding documentation updates.
