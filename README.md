@@ -18,6 +18,8 @@ To play, sign in, create or choose an owned/public pack, host a room, and share 
 
 ## Setup
 
+Use Node.js 20 or newer (required by Firebase 12). The frontend uses the modular Firebase SDK and Vite's existing production build targets.
+
 1. Install dependencies:
 
    ```sh

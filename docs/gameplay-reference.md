@@ -186,6 +186,16 @@ The host is excluded from final standings. A finished game counts as having defi
 
 ## 8. Review checks for future changes
 
+### Active room connection recovery
+
+The active room subscription checks for current server state when the page returns to the foreground, gains focus, comes online, or is restored through browser navigation. A foreground fallback checks every ten seconds when the last server confirmation is at least five seconds old. An unchanged room is not itself a connection failure.
+
+Cached room data may remain visible while reconnecting, but only server-confirmed data can close a room, remove a participant from the view, or clear the remembered room. A translated connection banner appears after prolonged syncing or immediately on a failed request, and includes a Reconnect action. It clears when the live room listener confirms server data again.
+
+Recoverable listener failures retry with bounded delays; exhausted retries can be restarted manually or when returning to the foreground/coming online. Access and authentication errors require attention instead of indefinite retries. Safari can suspend background pages, so recovery cannot guarantee updates while the page is suspended. This recovery applies only to the active room subscription; buzzer, history, and recap subscriptions keep their existing behavior.
+
+After changes to room recovery or the Firebase SDK, manually compare Safari with a second participant through screen lock, app/tab switching, back/forward navigation, offline/online transitions, and room switching. Confirm questions and scores recover and remain live, idle rooms do not show false warnings, and access-denied/missing-room outcomes remain distinct. Also verify sign-in/out, pack operations, normal play, results, and existing buzzer behavior; run the isolated storage validation harness as an SDK regression check.
+
 These are manual acceptance scenarios, not claims of automated coverage. Use a host and at least two contestant sessions where applicable.
 
 | ID | Scenario and expected result |

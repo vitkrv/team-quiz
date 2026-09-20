@@ -1,7 +1,8 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { GoogleAuthProvider, onAuthStateChanged, signInWithPopup, signOut } from 'firebase/auth';
-import { doc, getDocFromServer, onSnapshot, setDoc } from 'firebase/firestore';
-import { X } from 'lucide-react';
+import { doc, onSnapshot, setDoc } from 'firebase/firestore';
+import { RefreshCw, X } from 'lucide-react';
+import useRoomSubscription from './hooks/useRoomSubscription';
 import FirebaseSetupMissing from './components/FirebaseSetupMissing';
 import { appId, auth, db, hasFirebaseConfig } from './firebase';
 import LanguageProvider from './LanguageProvider';
@@ -20,8 +21,6 @@ import GameRoom from './views/game/GameRoom';
 
 const LAST_ROOM_CODE_KEY = 'cortex-rush:lastRoomCode';
 const LANGUAGE_CACHE_KEY = 'cortex-rush:language';
-const ROOM_STALE_SNAPSHOT_MS = 5000;
-const ROOM_RECONCILE_INTERVAL_MS = 10000;
 const getRoomCodeFromUrl = () => new URLSearchParams(window.location.search).get('room')?.trim().toUpperCase() || '';
 // Game IDs are case-sensitive; six-digit IDs keep legacy results links working.
 const isRoomId = (id) => /^(?:[A-Za-z0-9]{20}|[0-9]{6})$/.test(id || '');
@@ -78,8 +77,11 @@ export default function App() {
     const [roomData, setRoomData] = useState(null);
     const [editingPack, setEditingPack] = useState(null);
     const [error, setError] = useState('');
-    const roomSnapshotReceivedAtRef = useRef(0);
-    const roomReconcilePromiseRef = useRef(null);
+    const activeRoomRef = useMemo(() => hasFirebaseConfig && user?.uid && currentRoomCode
+        ? doc(db, 'artifacts', appId, 'public', 'data', 'rooms', currentRoomCode)
+        : null, [user?.uid, currentRoomCode]);
+    const roomSync = useRoomSubscription(activeRoomRef, user?.uid);
+    const roomSnapshot = roomSync.snapshot;
     const expectedRoomExitCodeRef = useRef(null);
 
     useEffect(() => {
@@ -273,16 +275,10 @@ export default function App() {
         return () => unsubscribe();
     }, [currentRoomCode, latestActiveRoomCode, user]);
 
-    // --- 2. Room Listener ---
+    // Subscription lifecycle is independent of navigation and translation effects.
     useEffect(() => {
-        if (!hasFirebaseConfig || !user || !currentRoomCode) {
-            roomSnapshotReceivedAtRef.current = 0;
-            roomReconcilePromiseRef.current = null;
-            return undefined;
-        }
-
-        const roomRef = doc(db, 'artifacts', appId, 'public', 'data', 'rooms', currentRoomCode);
-        let isRoomListenerActive = true;
+        if (!user || !currentRoomCode || !roomSnapshot) return;
+        const serverConfirmed = !roomSnapshot.metadata.fromCache && !roomSnapshot.metadata.hasPendingWrites;
         const applyRoomSnapshot = (snapshot) => {
             if (snapshot.exists()) {
                 const room = snapshot.data();
@@ -295,7 +291,7 @@ export default function App() {
                     || room.status === 'finished'
                     || hasLinkedDefinedFinalResults;
 
-                if (!isParticipant && !canSpectate) {
+                if (serverConfirmed && !isParticipant && !canSpectate) {
                     if (expectedRoomExitCodeRef.current === currentRoomCode) {
                         expectedRoomExitCodeRef.current = null;
                     } else {
@@ -318,6 +314,8 @@ export default function App() {
                     setGameCodeInUrl(currentRoomCode);
                 }
 
+                if (!serverConfirmed) return;
+
                 if (room.status === 'finished' || hasLinkedDefinedFinalResults) {
                     localStorage.removeItem(LAST_ROOM_CODE_KEY);
                     setLatestActiveRoomCode(null);
@@ -332,7 +330,7 @@ export default function App() {
                     setLatestActiveRoomCode(null);
                 }
 
-            } else {
+            } else if (serverConfirmed) {
                 setError(translate(language, 'roomClosed'));
                 handleSetCurrentRoomCode(null, { remember: false });
                 setLinkedGameRoomCode('');
@@ -343,61 +341,8 @@ export default function App() {
                 setView('menu');
             }
         };
-        const reconcileRoomFromServer = async ({ force = false } = {}) => {
-            if (document.hidden) return;
-
-            const elapsedMs = Date.now() - roomSnapshotReceivedAtRef.current;
-            if (!force && roomSnapshotReceivedAtRef.current && elapsedMs < ROOM_STALE_SNAPSHOT_MS) return;
-            if (roomReconcilePromiseRef.current) return;
-
-            const reconcilePromise = getDocFromServer(roomRef)
-                .then((serverSnapshot) => {
-                    if (!isRoomListenerActive) return;
-
-                    roomSnapshotReceivedAtRef.current = Date.now();
-                    applyRoomSnapshot(serverSnapshot);
-                })
-                .catch((err) => {
-                    console.error("Room server reconcile error:", err);
-                })
-                .finally(() => {
-                    if (roomReconcilePromiseRef.current === reconcilePromise) {
-                        roomReconcilePromiseRef.current = null;
-                    }
-                });
-            roomReconcilePromiseRef.current = reconcilePromise;
-
-            await roomReconcilePromiseRef.current;
-        };
-        const reconcileOnVisible = () => {
-            if (!document.hidden) {
-                reconcileRoomFromServer({ force: true });
-            }
-        };
-        const unsubscribe = onSnapshot(roomRef, (snapshot) => {
-            roomSnapshotReceivedAtRef.current = Date.now();
-            applyRoomSnapshot(snapshot);
-        }, (err) => {
-            console.error("Room sync error:", err);
-            setError(translate(language, 'roomSyncLost'));
-        });
-        const intervalId = window.setInterval(() => reconcileRoomFromServer(), ROOM_RECONCILE_INTERVAL_MS);
-
-        document.addEventListener('visibilitychange', reconcileOnVisible);
-        window.addEventListener('focus', reconcileOnVisible);
-        window.addEventListener('online', reconcileOnVisible);
-        window.addEventListener('pageshow', reconcileOnVisible);
-
-        return () => {
-            isRoomListenerActive = false;
-            unsubscribe();
-            window.clearInterval(intervalId);
-            document.removeEventListener('visibilitychange', reconcileOnVisible);
-            window.removeEventListener('focus', reconcileOnVisible);
-            window.removeEventListener('online', reconcileOnVisible);
-            window.removeEventListener('pageshow', reconcileOnVisible);
-        };
-    }, [user, currentRoomCode, language, view, linkedGameRoomCode]);
+        applyRoomSnapshot(roomSnapshot);
+    }, [roomSnapshot, user, currentRoomCode, language, view, linkedGameRoomCode]);
 
     if (!hasFirebaseConfig) {
         return <FirebaseSetupMissing />;
@@ -433,6 +378,17 @@ export default function App() {
                 <div className="fixed top-4 left-1/2 transform -translate-x-1/2 bg-red-500 text-white px-6 py-3 rounded-lg shadow-xl z-50 flex items-center gap-2">
                     <span>{error}</span>
                     <button onClick={() => setError('')} className="hover:text-red-200"><X size={18} /></button>
+                </div>
+            )}
+
+            {view === 'room' && currentRoomCode && ['reconnecting', 'failed', 'blocked'].includes(roomSync.status) && (
+                <div role="status" className="sticky top-0 z-40 flex flex-wrap items-center justify-center gap-3 bg-amber-950 px-4 py-3 text-amber-100">
+                    <span>{translate(language, roomSync.status === 'blocked'
+                        ? (['permission-denied', 'unauthenticated'].includes(roomSync.errorCode) ? 'roomSyncAccessError' : 'roomSyncRequestError')
+                        : roomSync.status === 'failed' ? 'roomSyncFailed' : 'roomSyncReconnecting')}</span>
+                    <button type="button" onClick={roomSync.reconnect} className="flex items-center gap-2 rounded border border-amber-300/50 px-3 py-1 hover:bg-amber-900">
+                        <RefreshCw size={16} />{translate(language, 'roomSyncReconnect')}
+                    </button>
                 </div>
             )}
 

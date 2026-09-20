@@ -32,6 +32,8 @@ For product or gameplay changes, read [the app baseline](docs/app-overview.md) a
 
 ## Setup
 
+Use Node.js 20 or newer, as required by Firebase 12.
+
 Install dependencies:
 
 ```sh
@@ -93,11 +95,13 @@ Agents may automatically run lint and production builds as part of implementatio
 
 Agents may also run any read-only Git checks without additional permission, including status, diff, log, show, and whitespace checks such as `git diff --check`. This permission does not authorize staging, committing, or other Git operations that modify repository state.
 
-Other verification is user-run. Agents must not automatically launch verification scripts, tests, Emulators, or browser verification sessions. The user launches and analyzes those checks manually, then provides the results. Only run these other checks when the user explicitly asks the agent to execute them; a general implementation or fix request is not permission. This policy also applies to commands described in other repository documentation.
+Agents may automatically run non-browser testing and verification scripts as part of implementation and fixes, including reruns after resolving failures. They may start and stop a dedicated local Emulator required by those scripts, following the isolation requirements below. No additional request is needed for these checks; this permission does not authorize deployment or changes to production data.
 
-After making changes, report any lint/build results and provide relevant copy-ready commands and a short checklist for the remaining user-run checks. Report those checks as pending until the user supplies results; distinguish user-reported results from agent-run results. After fixing a reported failure in a user-run check, provide the rerun command instead of launching it automatically. Reading source, reviewing diffs, and checking documentation links without executing verification tools remain part of the agent's work.
+Real-browser testing requires an additional explicit user request. Agents must not launch or control browser verification sessions, including headless browser tests, Playwright/Cypress runs, browser automation, or manual UI checks, based only on a general implementation or fix request. A test script that launches a real browser is subject to this restriction. Without an explicit request for browser testing, provide the user with the relevant manual checklist and leave those checks pending. This policy also applies to commands described in other repository documentation.
 
-There is currently no automated test script in `package.json`. For changes to game storage/actions/rules, include the isolated Emulator checks in `scripts/verify-game-storage.mjs` in the user-run plan; setup and commands are in `docs/game-storage-validation.md`. This entry point includes storage, recap, and buzzer checks; do not run the recap/buzzer modules separately.
+After making changes, report lint/build and testing-script results, and provide relevant copy-ready commands and a short checklist for remaining checks. Distinguish user-reported results from agent-run results, and report unexecuted checks as pending. After fixing a reported failure, agents may rerun non-browser scripts automatically; browser reruns require explicit browser-testing authorization for the task. Reading source, reviewing diffs, and checking documentation links remain part of the agent's work.
+
+There is currently no automated test script in `package.json`. For changes to game storage/actions/rules, run the isolated Emulator checks in `scripts/verify-game-storage.mjs` when prerequisites are available; otherwise report the blocker and provide the user with the commands. Setup and commands are in `docs/game-storage-validation.md`. This entry point includes storage, recap, buzzer, and wheel checks; do not run those modules separately.
 
 The harness requires Java, the Firebase CLI, and a dedicated local Firestore Emulator. It targets `demo-game-storage`, requires a loopback `FIRESTORE_EMULATOR_HOST`, and loads this checkout's rules into the emulator project. Do not share that emulator with other active tests. It covers room reservations, concurrent starts/finishes, history permissions/pagination, frozen packs, player events, and legacy compatibility; it does not deploy rules or Hosting.
 
@@ -149,7 +153,7 @@ Manual verification should match the changed surface area. Common flows:
 - Game mechanics: standard/competitive wrong answers, late-buzz feedback, surprise draw and wheel/table scoring, side-match/final RPS, and host exclusion from standings.
 - Storage lifecycle: concurrent start, frozen content after source edits, host history loading/older pages, participant/spectator refresh, and retained results after explicit finish deletes the snapshot. Check legacy rooms separately.
 
-For Firestore security rule changes, user-run Emulator validation of the checked-in rules is required before considering them verified. For Worker changes, include both frontend media calls and ownership authorization in the user's checklist, following the [Worker guide](imagekit-auth-worker/README.md). Deploy only when explicitly requested, using the commands below; `wrangler tail` can inspect deployed Worker logs.
+For Firestore security rule changes, Emulator validation of the checked-in rules is required before considering them verified; agents may run it under the policy above. For Worker changes, include both frontend media calls and ownership authorization in the verification plan, following the [Worker guide](imagekit-auth-worker/README.md); browser checks still require an explicit request. Deploy only when explicitly requested, using the commands below; `wrangler tail` can inspect deployed Worker logs.
 
 ## Deployment
 
@@ -191,6 +195,7 @@ Coordinate storage-related rule and frontend releases. Older clients must reload
 - `src/actions/roomActions.js`: Room-code reservation, room creation and atomic game start.
 - `src/services/`: analytics and ImageKit/media storage integration.
 - `src/hooks/`: reusable React hooks.
+- `src/hooks/useRoomSubscription.js`: active-room listener metadata, foreground recovery, bounded retries, and connection status.
 - `src/hooks/useGamePack.js`: one-time frozen-pack loading per version/load, retries, and legacy/finished-room fallbacks.
 - `src/hooks/useGameHistory.js`: host dialog history subscription and cursor pagination in pages of 50.
 - `src/utils/`: pure helpers.
