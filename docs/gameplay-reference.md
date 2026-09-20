@@ -59,6 +59,8 @@ Selection turns follow these rules:
 
 Selection priority does not restrict who may buzz on an ordinary question.
 
+During play, contestants see their own leaderboard tile with a muted slate highlight and a subtle neutral outline around their avatar on desktop and mobile. The blue current-turn highlight takes priority over the tile background; buzz timing temporarily replaces the outlined avatar as usual. Hosts and spectators do not receive a personal tile highlight.
+
 ## 4. Ordinary question sequence
 
 ### Opening and buzzing

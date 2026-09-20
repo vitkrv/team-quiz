@@ -388,7 +388,7 @@ function LobbyLeaveConfirmModal({ isLeaving, onCancel, onConfirm, t }) {
     );
 }
 
-function LeaderboardContent({ room, roomRef, isHost, now, createScoreAdjustmentHistory, t }) {
+function LeaderboardContent({ room, roomRef, isHost, viewerId, now, createScoreAdjustmentHistory, t }) {
     return (
         <div className="space-y-1 p-2">
             {Object.entries(room.players)
@@ -397,12 +397,13 @@ function LeaderboardContent({ room, roomRef, isHost, now, createScoreAdjustmentH
                 .map(([pid, player]) => {
                     const buzzDeltaLabel = getBuzzDeltaLabel(room, pid, now);
                     const playerNameStyle = getPlayerNameStyle(player.name);
+                    const isSelf = !isHost && pid === viewerId;
 
                     return (
                         <div key={pid} className={`group flex items-center justify-between rounded-lg border p-3 ${room.currentTurn === pid ? 'bg-blue-900/30 border-blue-500/50 shadow-[inset_2px_0_0_0_#3b82f6]' : 'bg-slate-800/50 border-transparent'}`}>
                             <div className="flex min-w-0 items-center gap-2 pr-2">
                                 <span className="relative flex h-8 w-14 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-transparent">
-                                    <span className={`absolute inset-0 flex items-center justify-center text-2xl transition-all duration-200 ${buzzDeltaLabel ? 'scale-90 opacity-0' : 'scale-100 opacity-100'}`}>
+                                    <span className={`absolute inset-0 flex items-center justify-center rounded-lg text-2xl transition-all duration-200 ${isSelf ? 'bg-slate-900/40 ring-1 ring-inset ring-slate-400/30' : ''} ${buzzDeltaLabel ? 'scale-90 opacity-0' : 'scale-100 opacity-100'}`}>
                                         {player.avatar}
                                     </span>
                                     <span className={`absolute inset-0 flex items-center justify-center rounded-lg bg-yellow-400/10 px-1 font-mono text-xs font-black text-yellow-300 ring-1 ring-inset ring-yellow-300/25 transition-all duration-200 ${buzzDeltaLabel ? 'scale-100 opacity-100' : 'scale-90 opacity-0'}`}>
@@ -444,7 +445,7 @@ function LeaderboardContent({ room, roomRef, isHost, now, createScoreAdjustmentH
     );
 }
 
-function MobileLeaderboardDrawer({ room, roomRef, isHost, now, createScoreAdjustmentHistory, onClose, t }) {
+function MobileLeaderboardDrawer({ room, roomRef, isHost, viewerId, now, createScoreAdjustmentHistory, onClose, t }) {
     return (
         <div className="fixed inset-0 z-40 md:hidden" role="dialog" aria-modal="true" aria-labelledby="mobile-leaderboard-title">
             <button
@@ -465,6 +466,7 @@ function MobileLeaderboardDrawer({ room, roomRef, isHost, now, createScoreAdjust
                         room={room}
                         roomRef={roomRef}
                         isHost={isHost}
+                        viewerId={viewerId}
                         now={now}
                         createScoreAdjustmentHistory={createScoreAdjustmentHistory}
                         t={t}
@@ -927,6 +929,7 @@ function GameRoomContent({ room, roomCode, user, onPrepareRoomExit, onLeaveRoom,
                         room={room}
                         roomRef={roomRef}
                         isHost={isHost}
+                        viewerId={user.uid}
                         now={now}
                         createScoreAdjustmentHistory={createScoreAdjustmentHistory}
                         onClose={() => setIsLeaderboardOpen(false)}
@@ -1020,6 +1023,7 @@ function GameRoomContent({ room, roomCode, user, onPrepareRoomExit, onLeaveRoom,
                             room={room}
                             roomRef={roomRef}
                             isHost={isHost}
+                            viewerId={user.uid}
                             now={now}
                             createScoreAdjustmentHistory={createScoreAdjustmentHistory}
                             t={t}
