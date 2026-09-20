@@ -91,6 +91,8 @@ The app needs valid Firebase config for authenticated/game flows. Without Fireba
 
 Agents may automatically run lint and production builds as part of implementation and fixes, including reruns after resolving failures. No additional permission is required for these two checks. This does not authorize deployment.
 
+Agents may also run any read-only Git checks without additional permission, including status, diff, log, show, and whitespace checks such as `git diff --check`. This permission does not authorize staging, committing, or other Git operations that modify repository state.
+
 Other verification is user-run. Agents must not automatically launch verification scripts, tests, Emulators, or browser verification sessions. The user launches and analyzes those checks manually, then provides the results. Only run these other checks when the user explicitly asks the agent to execute them; a general implementation or fix request is not permission. This policy also applies to commands described in other repository documentation.
 
 After making changes, report any lint/build results and provide relevant copy-ready commands and a short checklist for the remaining user-run checks. Report those checks as pending until the user supplies results; distinguish user-reported results from agent-run results. After fixing a reported failure in a user-run check, provide the rerun command instead of launching it automatically. Reading source, reviewing diffs, and checking documentation links without executing verification tools remain part of the agent's work.
@@ -129,7 +131,7 @@ Write-Host "Verification exit code: $LASTEXITCODE"
 
 Stop the Emulator with Ctrl+C when finished. Expected permission-denied messages from negative cases do not by themselves indicate failure; inspect the final summary and exit code. Share the commands run, their exit codes, the final summary, and any failed assertions or unexpected errors. For UI checks, share the role, language, viewport/device, steps, and observed behavior.
 
-For documentation-only changes, agents review source accuracy and relative links, then provide this user-run whitespace check; lint/build are not needed to validate prose:
+For documentation-only changes, agents review source accuracy and relative links, then run this Git whitespace check; lint/build are not needed to validate prose:
 
 ```powershell
 git -c core.autocrlf=false diff --check
