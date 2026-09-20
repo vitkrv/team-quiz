@@ -41,7 +41,7 @@ export async function prepareRecap(transaction, roomRef, room, update, readPack)
             }
             // An earlier timestamp can replace an already accepted late attempt.
             // Improve its minimum without counting a second attempt in that round.
-            if (event.type === 'player_buzzed_late' && (!p.closestLate || d.deltaMs < p.closestLate.deltaMs)) {
+            if (event.type === 'player_buzzed_late' && d.deltaMs > 0 && (!p.closestLate || d.deltaMs < p.closestLate.deltaMs)) {
                 p.closestLate = { deltaMs: d.deltaMs, questionId: question.id, categoryId: category.id,
                     categoryName: category.name, questionPoints: question.points };
             }

@@ -1,5 +1,7 @@
+import useBuzzer from '../../hooks/useBuzzer';
+import { ANSWER_WINDOW_MS, EARLY_BUZZ_DELAY_MS, LATE_BUZZ_NOTICE_MS, LATE_BUZZ_WINDOW_MS, timestampMillis } from '../../utils/buzzerPolicy';
 import { updateRoom, updateRoomInTransaction } from '../../actions/gameStorage';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { arrayUnion, increment, runTransaction } from 'firebase/firestore';
 import { Check, Play, RotateCw, X } from 'lucide-react';
 import { ANIMAL_AVATARS, normalizeSurpriseScoringMechanic, SURPRISE_SCORING_MECHANICS } from '../../constants';
@@ -17,9 +19,6 @@ const POINT_STEP = 100;
 const SURPRISE_DEFAULT_MIN_POINTS = 100;
 const SURPRISE_DEFAULT_MAX_POINTS = 500;
 const WHEEL_ANIMATION_MS = 6000;
-const LATE_BUZZ_WINDOW_MS = 3500;
-const LATE_BUZZ_NOTICE_MS = 3500;
-const EARLY_BUZZ_DELAY_MS = 2500;
 const ACTIVE_QUESTION_ENTRANCE_MS = 750;
 const SURPRISE_BACKGROUND_EMOJIS = ['\u{1F37F}', '\u{1F389}', '\u{1F973}', '\u{1F381}', '\u{1F37E}', '\u{1F382}', '\u{2728}', '\u{1FA84}'];
 const SURPRISE_BACKGROUND_EMOJI_COUNT = 80;
@@ -280,7 +279,7 @@ function SpaceBuzzHandler({ enabled, onBuzz }) {
         if (!enabled) return undefined;
 
         const handleSpaceBuzz = (event) => {
-            if (event.repeat || document.hidden) return;
+            if (event.repeat || document.hidden || event.target?.closest?.('input, textarea, select, [contenteditable]:not([contenteditable="false"])')) return;
             if (event.code !== 'Space' && event.key !== ' ') return;
 
             event.preventDefault();
@@ -294,10 +293,11 @@ function SpaceBuzzHandler({ enabled, onBuzz }) {
     return null;
 }
 
-export default function ActiveQuestionView({ room, roomCode, roomRef, user, isHost, isSpectator = false, serverNow = Date.now, clockSyncKey = 0 }) {
+export default function ActiveQuestionView({ room, roomCode, roomRef, user, isHost, isSpectator = false, serverNow = Date.now, clockSyncKey = 0, resumedQuestion = false, clockQuality = {} }) {
     const { t } = useLanguage();
+    const buzzer = useBuzzer({ room, roomRef, uid: user.uid, isHost, isSpectator, serverNow, resumedQuestion });
     const earlyBuzzDelayStorageKey = `cortex-rush:early-buzz:${roomCode || 'room'}:${room.activeQuestionId || 'question'}:${user.uid}`;
-    const [timeLeft, setTimeLeft] = useState(10);
+    const [timeLeft, setTimeLeft] = useState(ANSWER_WINDOW_MS / 1000);
     const [buzzUnlockNow, setBuzzUnlockNow] = useState(() => serverNow());
     const [earlyBuzzDelayUnlockAt, setEarlyBuzzDelayUnlockAt] = useState(() => getStoredEarlyBuzzUnlockAt(earlyBuzzDelayStorageKey));
     const [isRolling, setIsRolling] = useState(false);
@@ -305,6 +305,7 @@ export default function ActiveQuestionView({ room, roomCode, roomRef, user, isHo
     const [isEntranceContentVisible, setIsEntranceContentVisible] = useState(false);
     const [earlyBuzzNoticeQuestionId, setEarlyBuzzNoticeQuestionId] = useState(null);
     const [lateBuzzNotice, setLateBuzzNotice] = useState(null);
+    const shownBuzzRace = useRef(null);
     const surpriseBackgroundItems = useMemo(
         () => createFloatingBackgroundItems({
             seed: room.activeQuestionId || 'question',
@@ -337,12 +338,12 @@ export default function ActiveQuestionView({ room, roomCode, roomRef, user, isHo
         let interval;
         if (room.buzzedPlayerId && room.buzzTimestamp) {
             interval = setInterval(() => {
-                const elapsed = (serverNow() - room.buzzTimestamp) / 1000;
-                const remaining = Math.max(0, 10 - elapsed);
+                const elapsed = (serverNow() - timestampMillis(room.buzzTimestamp)) / 1000;
+                const remaining = Math.max(0, ANSWER_WINDOW_MS / 1000 - elapsed);
                 setTimeLeft(remaining);
             }, 100);
         } else {
-            setTimeLeft(10);
+            setTimeLeft(ANSWER_WINDOW_MS / 1000);
         }
         return () => clearInterval(interval);
     }, [room.buzzedPlayerId, room.buzzTimestamp, serverNow]);
@@ -394,6 +395,15 @@ export default function ActiveQuestionView({ room, roomCode, roomRef, user, isHo
         preloadMedia(activeQ.answerMedia, isHost ? 'host' : 'game').catch(() => {});
     }, [activeQ?.answerMedia, isHost]);
 
+    useEffect(() => {
+        if (!buzzer.enabled || !room.buzzedPlayerId || room.answerRevealed || shownBuzzRace.current === room.buzzerRoundId) return;
+        const attempt = room.buzzAttempts?.[user.uid];
+        if (!attempt || room.buzzedPlayerId === user.uid || attempt.deltaMs > LATE_BUZZ_WINDOW_MS) return;
+        shownBuzzRace.current = room.buzzerRoundId;
+        setLateBuzzNotice({ questionId: room.activeQuestionId, playerName: room.players[room.buzzedPlayerId]?.name,
+            delta: formatBuzzDelta(attempt.deltaMs), tied: attempt.deltaMs === 0 });
+    }, [buzzer.enabled, room.buzzerRoundId, room.buzzedPlayerId, room.answerRevealed, room.activeQuestionId, room.buzzAttempts, room.players, user.uid]);
+
     if (!activeQ) return null;
 
     const isSurpriseQuestion = Boolean(activeQ.isSurpriseQuestion);
@@ -434,10 +444,10 @@ export default function ActiveQuestionView({ room, roomCode, roomRef, user, isHo
         && (user.uid === surpriseAnswererId || isHost);
     const hasBuzzed = !!room.buzzedPlayerId;
     const amIIncorrect = (room.incorrectBuzzedIds || []).includes(user.uid);
-    const isBuzzUnlocked = !effectiveBuzzUnlockAt || buzzUnlockNow >= effectiveBuzzUnlockAt;
+    const isBuzzUnlocked = buzzer.enabled ? buzzer.unlocked : !effectiveBuzzUnlockAt || buzzUnlockNow >= effectiveBuzzUnlockAt;
     const canAttemptBuzz = !isSurpriseQuestion && !isHost && !isSpectator && !hasBuzzed && !amIIncorrect;
-    const canIBuzz = canAttemptBuzz && isBuzzUnlocked;
-    const canClickBuzzButton = canIBuzz || (room.trueCompetitiveMode && canAttemptBuzz);
+    const canIBuzz = buzzer.enabled ? buzzer.canClick && buzzer.unlocked : canAttemptBuzz && isBuzzUnlocked;
+    const canClickBuzzButton = buzzer.enabled ? buzzer.canClick : canIBuzz || (room.trueCompetitiveMode && canAttemptBuzz);
     const shouldShowBuzzButton = !isHost && !isSpectator && !amIIncorrect;
     const didIBuzz = room.buzzedPlayerId === user.uid;
     const buzzedPlayer = room.buzzedPlayerId ? room.players[room.buzzedPlayerId] : null;
@@ -468,6 +478,11 @@ export default function ActiveQuestionView({ room, roomCode, roomRef, user, isHo
 
     const handleBuzzIn = async () => {
         if (!canClickBuzzButton) return;
+        if (buzzer.enabled) {
+            if (buzzer.unlocked) setBuzzMediaPauseSignal((signal) => signal + 1);
+            await buzzer.press();
+            return;
+        }
         const clickedAt = serverNow();
         let didRegisterBuzzAttempt = false;
         const historyId = generateId();
@@ -869,14 +884,14 @@ export default function ActiveQuestionView({ room, roomCode, roomRef, user, isHo
 
     return (
         <>
-            {earlyBuzzNoticeQuestionId === activeQ.id && !isBuzzUnlocked && (
+            {(buzzer.enabled ? buzzer.penalized : earlyBuzzNoticeQuestionId === activeQ.id && !isBuzzUnlocked) && (
                 <div className="pointer-events-none fixed left-1/2 top-4 z-50 w-[calc(100%-2rem)] max-w-md -translate-x-1/2 rounded-xl border border-red-500/40 bg-red-950/95 px-4 py-3 text-sm font-bold text-red-100 shadow-2xl shadow-black/40">
                     {t('buzzClickedTooEarly')}
                 </div>
             )}
             {lateBuzzNotice?.questionId === activeQ.id && (
                 <div className="pointer-events-none fixed left-1/2 top-4 z-50 w-[calc(100%-2rem)] max-w-md -translate-x-1/2 rounded-xl border border-yellow-400/40 bg-yellow-950/95 px-4 py-3 text-sm font-bold text-yellow-100 shadow-2xl shadow-black/40">
-                    {t('buzzClickedLater', {
+                    {t(lateBuzzNotice.tied ? 'buzzReactionTie' : buzzer.enabled ? 'buzzReactionLater' : 'buzzClickedLater', {
                         playerName: lateBuzzNotice.playerName,
                         delta: lateBuzzNotice.delta
                     })}
@@ -886,7 +901,7 @@ export default function ActiveQuestionView({ room, roomCode, roomRef, user, isHo
                 key={room.activeQuestionId}
                 className="active-question-enter-shell relative z-10 mx-auto flex min-h-0 w-full max-w-4xl flex-1 flex-col items-center justify-start pb-4 text-center"
             >
-            <SpaceBuzzHandler enabled={canIBuzz} onBuzz={handleBuzzIn} />
+            <SpaceBuzzHandler enabled={buzzer.enabled ? canClickBuzzButton : canIBuzz} onBuzz={handleBuzzIn} />
             {isSurpriseQuestion && (
                 <FloatingEmojiBackground
                     items={surpriseBackgroundItems}
@@ -1073,7 +1088,7 @@ export default function ActiveQuestionView({ room, roomCode, roomRef, user, isHo
                         <svg viewBox="0 0 128 128" className="h-full w-full -rotate-90 transform">
                             <circle cx="64" cy="64" r="60" className="stroke-slate-700 fill-none" strokeWidth="8"/>
                             <circle cx="64" cy="64" r="60" className={`fill-none stroke-blue-500 transition-all duration-100 ${timeLeft < 3 ? 'stroke-red-500' : ''}`} strokeWidth="8"
-                                    strokeDasharray="377" strokeDashoffset={377 - (377 * timeLeft / 10)}
+                                    strokeDasharray="377" strokeDashoffset={377 - (377 * timeLeft / (ANSWER_WINDOW_MS / 1000))}
                             />
                         </svg>
                         <div className={`absolute inset-0 flex items-center justify-center font-mono text-3xl font-black md:text-4xl ${timeLeft < 3 ? 'text-red-400' : 'text-blue-400'}`}>
@@ -1104,7 +1119,7 @@ export default function ActiveQuestionView({ room, roomCode, roomRef, user, isHo
             {!hasBuzzed && !isAnswerRevealed && !isSurpriseQuestion && (
                 <div className="mt-4 flex w-full max-w-md shrink-0 flex-col items-center md:mt-6">
                     {isHost ? (
-                        <div className="mb-4 text-slate-400 md:mb-6">{t('waitingForBuzz')}</div>
+                        !buzzer.collecting && <div className="mb-4 text-slate-400 md:mb-6">{t('waitingForBuzz')}</div>
                     ) : isSpectator ? (
                         <div className="w-full rounded-xl border-2 border-dashed border-slate-700 p-5 text-lg font-bold text-slate-500 md:p-8 md:text-xl">
                             {t('spectatorWatching')}
@@ -1141,6 +1156,17 @@ export default function ActiveQuestionView({ room, roomCode, roomRef, user, isHo
                             {t('skipRevealAnswer')}
                         </HoldToConfirmButton>
                     )}
+                </div>
+            )}
+
+            {buzzer.enabled && !isSurpriseQuestion && !isAnswerRevealed && (
+                <div className="mt-3 shrink-0 text-center text-sm text-slate-400" role="status" aria-live="polite">
+                    {buzzer.error ? <p className="text-red-300">{t(buzzer.error)}</p> : null}
+                    {!buzzer.online ? <p>{t('buzzOffline')}</p> : !clockQuality.ready ? <p>{t('buzzClockSyncing')}</p>
+                        : Date.now() - clockQuality.lastSyncedAt > 6 * 60 * 1000 ? <p>{t('buzzClockStale')}</p>
+                        : clockQuality.roundTripMs > 750 ? <p>{t('buzzConnectionSlow')}</p> : null}
+                    {buzzer.pending ? <p>{t('buzzSubmitting')}</p> : null}
+                    {buzzer.collecting ? <p className="font-bold">{t(buzzer.waitingForHost ? 'buzzWaitingHost' : 'buzzCollecting')}</p> : null}
                 </div>
             )}
 

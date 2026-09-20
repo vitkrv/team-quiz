@@ -89,18 +89,51 @@ The app needs valid Firebase config for authenticated/game flows. Without Fireba
 
 ## Build, Lint, And Verify
 
-There is currently no automated test script in `package.json`. For changes to game storage/actions/rules, run the isolated Emulator checks in `scripts/verify-game-storage.mjs`; setup and commands are in `docs/game-storage-validation.md`.
+Agents may automatically run lint and production builds as part of implementation and fixes, including reruns after resolving failures. No additional permission is required for these two checks. This does not authorize deployment.
+
+Other verification is user-run. Agents must not automatically launch verification scripts, tests, Emulators, or browser verification sessions. The user launches and analyzes those checks manually, then provides the results. Only run these other checks when the user explicitly asks the agent to execute them; a general implementation or fix request is not permission. This policy also applies to commands described in other repository documentation.
+
+After making changes, report any lint/build results and provide relevant copy-ready commands and a short checklist for the remaining user-run checks. Report those checks as pending until the user supplies results; distinguish user-reported results from agent-run results. After fixing a reported failure in a user-run check, provide the rerun command instead of launching it automatically. Reading source, reviewing diffs, and checking documentation links without executing verification tools remain part of the agent's work.
+
+There is currently no automated test script in `package.json`. For changes to game storage/actions/rules, include the isolated Emulator checks in `scripts/verify-game-storage.mjs` in the user-run plan; setup and commands are in `docs/game-storage-validation.md`. This entry point includes storage, recap, and buzzer checks; do not run the recap/buzzer modules separately.
 
 The harness requires Java, the Firebase CLI, and a dedicated local Firestore Emulator. It targets `demo-game-storage`, requires a loopback `FIRESTORE_EMULATOR_HOST`, and loads this checkout's rules into the emulator project. Do not share that emulator with other active tests. It covers room reservations, concurrent starts/finishes, history permissions/pagination, frozen packs, player events, and legacy compatibility; it does not deploy rules or Hosting.
 
-Use these checks for normal code changes:
+Agent-allowed checks for normal code changes (from the repository root):
 
 ```sh
 npm run lint
 npm run build
 ```
 
-For documentation-only changes, check source accuracy, relative links, and `git diff --check`; lint/build are not needed to validate prose.
+If `npm` is unavailable but Node and repository dependencies are installed, use:
+
+```powershell
+node node_modules/eslint/bin/eslint.js . --ext js,jsx --report-unused-disable-directives --max-warnings 0
+node node_modules/vite/bin/vite.js build --mode production
+```
+
+For storage/actions/rules changes, with Java and the Firebase CLI installed, start the dedicated Emulator in PowerShell terminal 1 from the repository root:
+
+```powershell
+firebase emulators:start --only firestore --project demo-game-storage
+```
+
+In PowerShell terminal 2, also from the repository root (replace `8080` if the Emulator prints another port):
+
+```powershell
+$env:FIRESTORE_EMULATOR_HOST = '127.0.0.1:8080'
+node scripts/verify-game-storage.mjs
+Write-Host "Verification exit code: $LASTEXITCODE"
+```
+
+Stop the Emulator with Ctrl+C when finished. Expected permission-denied messages from negative cases do not by themselves indicate failure; inspect the final summary and exit code. Share the commands run, their exit codes, the final summary, and any failed assertions or unexpected errors. For UI checks, share the role, language, viewport/device, steps, and observed behavior.
+
+For documentation-only changes, agents review source accuracy and relative links, then provide this user-run whitespace check; lint/build are not needed to validate prose:
+
+```powershell
+git -c core.autocrlf=false diff --check
+```
 
 Manual verification should match the changed surface area. Common flows:
 
@@ -114,7 +147,7 @@ Manual verification should match the changed surface area. Common flows:
 - Game mechanics: standard/competitive wrong answers, late-buzz feedback, surprise draw and wheel/table scoring, side-match/final RPS, and host exclusion from standings.
 - Storage lifecycle: concurrent start, frozen content after source edits, host history loading/older pages, participant/spectator refresh, and retained results after explicit finish deletes the snapshot. Check legacy rooms separately.
 
-For Firestore security rule changes, validate the checked-in rules with the Emulator before relying on app behavior. For Worker changes, check both frontend media calls and ownership authorization against the [Worker guide](imagekit-auth-worker/README.md). Deploy only when explicitly requested, using the commands below; `wrangler tail` can inspect deployed Worker logs.
+For Firestore security rule changes, user-run Emulator validation of the checked-in rules is required before considering them verified. For Worker changes, include both frontend media calls and ownership authorization in the user's checklist, following the [Worker guide](imagekit-auth-worker/README.md). Deploy only when explicitly requested, using the commands below; `wrangler tail` can inspect deployed Worker logs.
 
 ## Deployment
 
@@ -149,6 +182,8 @@ Coordinate storage-related rule and frontend releases. Older clients must reload
 - `src/components/`: reusable UI and media components.
 - `src/actions/gameActions.js`: Firestore writes and game state transitions.
 - `src/actions/gameStorage.js`: Atomic history writes, legacy compatibility and frozen-pack references.
+- `src/actions/buzzerActions.js` and `buzzerState.js`: policy-v1 submissions, penalties, host finalization, and atomic race lifecycle.
+- `src/hooks/useBuzzer.js` and `src/utils/buzzerPolicy.js`: local reaction origins, shared timing, and buzzer feedback.
 - `src/actions/gameRecap.js`: Atomic recap projections and immutable profile achievement finalization.
 - `src/hooks/useGameRecap.js`: Results summary and score-progression loading.
 - `src/actions/roomActions.js`: Room-code reservation, room creation and atomic game start.
@@ -186,6 +221,8 @@ Coordinate storage-related rule and frontend releases. Older clients must reload
 - Use `gameStorage.js` helpers for atomic action/history writes and transaction pack reads. Complete transaction reads before writes. Preserve legacy embedded pack/history behavior without migrating existing rooms.
 - New-format history is append-only under `rooms/{gameId}/history`, readable only by the host (not unrelated admins). Player buzz/surprise events must accompany their validated action. Enable history subscriptions only while the host dialog is open.
 - Frozen packs still expose full answers to authorized readers; hiding answers in the UI is not confidentiality. Room-update rules do not independently enforce every gameplay/scoring rule.
+
+New rooms also use immutable `buzzerPolicyVersion: 1`. Keep race lifecycle writes atomic with room transitions; contestants only write their own immutable submission/early penalty to `rooms/{gameId}/buzzer/current`. Host finalization writes winner/history/recap together after the strict two-second server commit window. Reaction measurements and host ranking are trusted; do not describe them as server-verified reactions. Preserve pre-policy room behavior without migration.
 
 ## Dependency Guidance
 

@@ -133,3 +133,13 @@ longer reads or writes them, and the updated rules provide no client access.
 After this removal, ESLint, the production build, and all 22 Emulator scenario
 groups passed again. The existing Vite large-chunk warning remains. No deployment
 or production-data cleanup was performed.
+
+## Buzzer policy v1
+
+The same command also runs `scripts/verify-buzzer.mjs` against the checked-in rules and real action modules. New rooms are asserted to have the immutable policy marker. The original storage/recap fixtures explicitly remove that marker using the isolated seed identity, preserving compatibility coverage for rooms created before this policy.
+
+The buzzer checks cover local-clock restoration, server-stamped opening, reordered arrivals, fixed penalties, immutable/idempotent submissions, strict deadline rejection, duplicate host finalization, exact ties, host-only history, wrong-answer reopening, cancellation, surprise exclusion, forged writes, and recap integration. Twenty clients submit concurrently against the real two-second window; contention can legitimately exclude late commits. A separate seeded 20-accepted-attempt fixture verifies maximum-size atomic finalization and rule access limits, without claiming that every contended request must arrive within two seconds.
+
+Validation on 2026-09-19: all 34 scenario groups passed, along with ESLint and production build (existing Vite large-chunk warning). Browser checks used the actual game components, simulated Google identities, isolated Emulator data, and a test-only 1.5-second submission delay. English/Ukrainian mobile-width sessions and desktop controls covered refresh, early Space, collection, winner/judging/history, host-reconnect resolution with a fresh answer timer, and immediate pause of a silent local audio fixture. Separate loopback endpoints avoided sharing one browser HTTP connection pool among simulated clients. Production sign-in, deployed routing, external media, and physical multi-device latency were not exercised.
+
+Release the rules and frontend together when deployment is authorized. Existing rooms are not migrated. No new indexes, Functions, or Worker deployment are required. Device reaction durations and host ranking are intentionally trusted; Firestore commits determine acceptance deadlines. A connected host app is required to finalize after the deadline.

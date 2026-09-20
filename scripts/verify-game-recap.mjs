@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { collection, deleteDoc, doc, getDocFromServer, getDocs, increment, runTransaction, setDoc, updateDoc, writeBatch } from 'firebase/firestore';
+import { collection, deleteDoc, deleteField, doc, getDocFromServer, getDocs, increment, runTransaction, setDoc, updateDoc, writeBatch } from 'firebase/firestore';
 import { createRecapSummary, getAchievements } from '../src/utils/achievements.js';
 
 export async function verifyGameRecap({ actions, check, denied, hostDb, playerDb, lateDb, spectatorDb, adminDb, seedDb, namespace, ref, roomRef, event, t }) {
@@ -23,6 +23,8 @@ export async function verifyGameRecap({ actions, check, denied, hostDb, playerDb
     const id = await actions.createRoom({ hostId: 'host', packId: 'recap-pack', pack, status: 'lobby', trueCompetitiveMode: true,
         players, activeQuestionId: null, answerRevealed: false, buzzedPlayerId: null, buzzTimestamp: null,
         buzzUnlockAt: 0, buzzAttempts: {}, incorrectBuzzedIds: [], history: [event('room_created')] });
+    // Existing recap scenarios also exercise rooms created before buzzer policy v1.
+    await updateDoc(roomRef(seedDb, id), { buzzerPolicyVersion: deleteField(), buzzerRoundId: deleteField() });
     const hostRoom = roomRef(hostDb, id), summaryRef = doc(hostRoom, 'recap', 'summary');
     const read = async () => (await getDocFromServer(summaryRef)).data();
     await actions.startGame(hostRoom, { id: 'host', name: 'host' }, t);

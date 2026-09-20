@@ -33,6 +33,7 @@ service cloud.firestore {
       allow read: if isAdmin(appId) || isGoogleUser();
       allow create: if isGoogleUser()
         && request.resource.data.hostId == request.auth.uid
+        && request.resource.data.buzzerPolicyVersion == 1 && request.resource.data.buzzerRoundId == null
         && request.resource.data.dataVersion == 2
         && !request.resource.data.keys().hasAny(['pack', 'history'])
         && request.resource.data.packVersionId == null
@@ -45,7 +46,8 @@ service cloud.firestore {
         && request.resource.data.packId is string
         && canHostPack(appId, request.resource.data.packId, request.auth.uid);
       allow update: if isGoogleUser()
-        && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['roomCode', 'hostId', 'recapVersion'])
+        && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['roomCode', 'hostId', 'recapVersion', 'buzzerPolicyVersion'])
+        && validBuzzerRoomUpdate(appId, gameId, resource.data, request.resource.data)
         && validGameStorageUpdate(appId, gameId, resource.data, request.resource.data)
         && (
           (
@@ -62,6 +64,117 @@ service cloud.firestore {
         && get(/databases/$(database)/documents/artifacts/$(appId)/public/data/rooms/$(gameId)).data.hostId == request.auth.uid;
       allow create: if isGoogleUser() && validHistoryEvent(appId, gameId, eventId);
       allow update, delete: if false;
+    }
+
+    // Policy v1 trusts local reaction measurements and host ranking, not arbitrary
+    // contestant room writes. All acceptance boundaries use Firestore commit time.
+    function validBuzzerRoomUpdate(appId, gameId, before, after) {
+      return before.get('buzzerPolicyVersion', 0) != 1
+        || (!after.diff(before).affectedKeys().hasAny(['buzzerRoundId', 'buzzedPlayerId', 'buzzTimestamp',
+              'buzzAttempts', 'buzzUnlockAt', 'incorrectBuzzedIds', 'activeQuestionId', 'answerRevealed',
+              'questionStates', 'status'])
+          || (request.auth.uid == before.hostId && hostBuzzerRoomUpdate(appId, gameId, before, after))
+          || (before.status == 'lobby' && after.status == 'lobby' && canJoinLobby(before, after, request.auth.uid)));
+    }
+
+    function hostBuzzerRoomUpdate(appId, gameId, before, after) {
+      let race = getAfter(/databases/$(database)/documents/artifacts/$(appId)/public/data/rooms/$(gameId)/buzzer/current);
+      return after.get('buzzerRoundId', null) == null
+        || (race.data.raceId == after.buzzerRoundId
+          && (after.status == 'finished' || after.answerRevealed || after.activeQuestionId == null
+            ? race.data.phase == 'cancelled'
+            : race.data.questionId == after.activeQuestionId
+              && (after.buzzedPlayerId == null ? race.data.phase in ['open', 'collecting']
+                : race.data.phase == 'resolved' && after.buzzedPlayerId in race.data.attempts)));
+    }
+
+    match /artifacts/{appId}/public/data/rooms/{gameId}/buzzer/{buzzerId} {
+      allow read: if isGoogleUser();
+      allow create: if buzzerId == 'current' && isGoogleUser() && validBuzzerOpen(appId, gameId, false);
+      allow update: if buzzerId == 'current' && isGoogleUser()
+        && (validBuzzerHostWrite(appId, gameId) || validBuzzerPlayerWrite(appId, gameId));
+      allow delete: if false;
+    }
+
+    function validBuzzerOpen(appId, gameId, replacing) {
+      let before = get(/databases/$(database)/documents/artifacts/$(appId)/public/data/rooms/$(gameId)).data;
+      let room = getAfter(/databases/$(database)/documents/artifacts/$(appId)/public/data/rooms/$(gameId)).data;
+      let race = request.resource.data;
+      let pack = get(/databases/$(database)/documents/artifacts/$(appId)/public/data/gamePackVersions/$(room.packVersionId)).data.content;
+      let question = pack.categories[race.categoryIndex].questions[race.questionIndex];
+      return room.hostId == request.auth.uid && room.buzzerPolicyVersion == 1 && room.status == 'playing'
+        && race.keys().hasOnly(['raceId', 'questionId', 'categoryIndex', 'questionIndex', 'phase', 'openedAt',
+          'openingDelayMs', 'firstAcceptedAt', 'attempts', 'penalties', 'earlyOperations'])
+        && race.raceId is string && race.raceId == room.buzzerRoundId && race.raceId != before.get('buzzerRoundId', null)
+        && race.questionId == room.activeQuestionId && question.id == race.questionId && !question.get('isSurpriseQuestion', false)
+        && !room.answerRevealed && room.buzzedPlayerId == null && race.phase == 'open'
+        && race.openedAt == request.time && race.firstAcceptedAt == null && race.attempts == {}
+        && (replacing && before.activeQuestionId == room.activeQuestionId
+          ? race.openingDelayMs == 0 && race.penalties == resource.data.penalties && race.earlyOperations == resource.data.earlyOperations
+            && before.buzzedPlayerId != null && before.buzzedPlayerId in room.incorrectBuzzedIds
+          : race.openingDelayMs == 2000 && race.penalties == {} && race.earlyOperations == {});
+    }
+
+    function validBuzzerHostWrite(appId, gameId) {
+      let before = resource.data;
+      let after = request.resource.data;
+      let room = getAfter(/databases/$(database)/documents/artifacts/$(appId)/public/data/rooms/$(gameId)).data;
+      return request.auth.uid == room.hostId && room.buzzerPolicyVersion == 1
+        && (after.raceId != before.raceId ? validBuzzerOpen(appId, gameId, true)
+          : after.diff(before).affectedKeys().hasOnly(['phase'])
+            && (after.phase == 'cancelled'
+              ? room.status == 'finished' || room.answerRevealed || room.activeQuestionId != before.questionId || room.get('buzzerRoundId', null) == null
+              : before.phase == 'collecting' && after.phase == 'resolved'
+                && request.time >= before.firstAcceptedAt + duration.value(2000, 'ms')
+                && room.buzzerRoundId == before.raceId && room.buzzedPlayerId in before.attempts
+                && room.buzzTimestamp == request.time));
+    }
+
+    function validBuzzerPlayerWrite(appId, gameId) {
+      let room = get(/databases/$(database)/documents/artifacts/$(appId)/public/data/rooms/$(gameId)).data;
+      let before = resource.data;
+      let after = request.resource.data;
+      let uid = request.auth.uid;
+      return room.buzzerPolicyVersion == 1 && room.status == 'playing' && !room.answerRevealed
+        && room.buzzedPlayerId == null && room.buzzerRoundId == before.raceId && room.activeQuestionId == before.questionId
+        && uid in room.players && room.players[uid].isHost == false && !(uid in room.incorrectBuzzedIds)
+        && (validBuzzerSubmission(before, after, uid) || validBuzzerPenalty(appId, gameId, room, before, after, uid));
+    }
+
+    function validBuzzerSubmission(before, after, uid) {
+      let attempt = after.attempts[uid];
+      return before.phase in ['open', 'collecting'] && after.phase == 'collecting'
+        && after.diff(before).affectedKeys().hasOnly(['phase', 'firstAcceptedAt', 'attempts'])
+        && !(uid in before.attempts) && after.attempts.size() <= 20
+        && after.attempts.diff(before.attempts).affectedKeys().hasOnly([uid])
+        && attempt.keys().hasOnly(['playerId', 'reactionMs', 'operationId', 'acceptedAt'])
+        && attempt.playerId == uid && attempt.operationId is string && attempt.operationId.size() > 0
+        && attempt.operationId.size() <= 128 && attempt.acceptedAt == request.time
+        && attempt.reactionMs is number && attempt.reactionMs >= 0 && attempt.reactionMs < 1000000000000000
+        && request.time >= before.openedAt + duration.value(before.openingDelayMs, 'ms')
+        && request.time.toMillis() >= before.penalties.get(uid, 0)
+        && (before.phase == 'open' ? after.firstAcceptedAt == request.time
+          : after.firstAcceptedAt == before.firstAcceptedAt
+            && request.time < before.firstAcceptedAt + duration.value(2000, 'ms'));
+    }
+
+    function validBuzzerPenalty(appId, gameId, room, before, after, uid) {
+      let event = getAfter(/databases/$(database)/documents/artifacts/$(appId)/public/data/rooms/$(gameId)/history/$(after.earlyOperations[uid])).data;
+      return room.trueCompetitiveMode && before.phase == 'open' && before.openingDelayMs == 2000
+        && !(uid in before.penalties) && after.diff(before).affectedKeys().hasOnly(['penalties', 'earlyOperations'])
+        && after.penalties.diff(before.penalties).affectedKeys().hasOnly([uid])
+        && after.earlyOperations.diff(before.earlyOperations).affectedKeys().hasOnly([uid])
+        && after.penalties[uid] == before.openedAt.toMillis() + 4500
+        && event.actorId == uid && event.type == 'player_buzzed_early' && event.details.raceId == before.raceId
+        && event.recordedAt == request.time;
+    }
+
+    function validPolicyEarlyEvent(appId, gameId, event, uid) {
+      let path = /databases/$(database)/documents/artifacts/$(appId)/public/data/rooms/$(gameId)/buzzer/current;
+      let before = get(path).data;
+      let after = getAfter(path).data;
+      return event.type == 'player_buzzed_early' && before.raceId == event.details.raceId
+        && !(uid in before.penalties) && after.earlyOperations[uid] == event.id;
     }
 
     match /artifacts/{appId}/public/data/gamePackVersions/{versionId} {
@@ -141,7 +254,9 @@ service cloud.firestore {
         && (after.hostId == request.auth.uid
           || (request.auth.uid in after.players
             && event.actorName == after.players[request.auth.uid].name
-            && validPlayerEvent(get(roomPath).data, after, event, request.auth.uid)));
+            && (after.get('buzzerPolicyVersion', 0) == 1 && event.type == 'player_buzzed_early'
+              ? validPolicyEarlyEvent(appId, gameId, event, request.auth.uid)
+              : validPlayerEvent(get(roomPath).data, after, event, request.auth.uid))));
     }
 
     function validPlayerEvent(before, after, event, uid) {
@@ -249,8 +364,10 @@ service cloud.firestore {
     function validHostRecapEvent(appId, gameId, room, next, summary) {
       let event = getAfter(/databases/$(database)/documents/artifacts/$(appId)/public/data/rooms/$(gameId)/history/$(summary.lastEventId)).data;
       return event.actorId == room.hostId && event.recordedAt == request.time
-        && event.type in ['answer_correct', 'answer_incorrect', 'surprise_answer_correct', 'surprise_answer_incorrect',
+        && (event.type in ['answer_correct', 'answer_incorrect', 'surprise_answer_correct', 'surprise_answer_incorrect',
           'score_set', 'score_adjusted', 'surprise_table_picked', 'surprise_wheel_scored']
+          || (room.get('buzzerPolicyVersion', 0) == 1 && event.type in ['player_buzzed', 'player_buzzed_late']
+            && event.details.raceId == room.buzzerRoundId))
         && next != room;
     }
 
@@ -260,7 +377,8 @@ service cloud.firestore {
       let p = before.players[uid];
       let n = after.players[uid];
       return event.actorId == uid && event.recordedAt == request.time
-        && validPlayerEvent(room, nextRoom, event, uid)
+        && (room.get('buzzerPolicyVersion', 0) == 1 && event.type == 'player_buzzed_early'
+          ? validPolicyEarlyEvent(appId, gameId, event, uid) : validPlayerEvent(room, nextRoom, event, uid))
         && event.details.playerId == uid && event.details.questionId == room.activeQuestionId
         && after.diff(before).affectedKeys().hasOnly(['sequence', 'lastEventId', 'players'])
         && after.sequence == before.sequence + 1

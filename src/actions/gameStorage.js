@@ -1,3 +1,4 @@
+import { prepareBuzzerLifecycle } from './buzzerState';
 import { prepareRecap } from './gameRecap';
 import { arrayUnion, collection, doc, getDocFromServer, runTransaction, serverTimestamp, updateDoc } from 'firebase/firestore';
 
@@ -13,8 +14,10 @@ export function appendHistory(writer, roomRef, events) {
 
 // Await this before any other writes: recap projection may need additional reads.
 export async function updateRoomInTransaction(transaction, roomRef, room, update) {
+    const writeBuzzer = await prepareBuzzerLifecycle(transaction, roomRef, room, update, readRoomPack);
     const project = await prepareRecap(transaction, roomRef, room, update, readRoomPack);
     if (project === null) return false;
+    writeBuzzer();
     project();
     const { history, ...fields } = update;
     if (history?.length) {

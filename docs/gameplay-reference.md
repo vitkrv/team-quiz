@@ -6,6 +6,8 @@ Last checked against repository code: 2026-09-17.
 
 This document captures the current gameplay baseline for manual and AI-assisted changes. Read [App overview](app-overview.md) for product context and the change-review process. Rules describe the implemented UI workflow, with implementation limitations called out separately. Verification for this document was source-based; no live multiplayer session was run.
 
+For dark-themed selection and timing diagrams, see [How the Buzz winner is determined](buzzer-winner-selection.md), including a User A / User B example.
+
 ## 1. Modes and optional mechanics
 
 There is one host-led category-board game, with an optional competitive setting. Surprise questions are a question type within that game. Rock-paper-scissors (RPS) is a side activity or a final tie-breaker.
@@ -61,24 +63,23 @@ Selection priority does not restrict who may buzz on an ordinary question.
 
 ### Opening and buzzing
 
-Opening a question clears the previous buzz, attempts, wrong-answer exclusions, reveal state, and question media state. The shared buzzer unlock is set to two seconds after the opening action's synchronized time.
+New rooms use buzzer policy v1. Opening an ordinary question creates a race with a server-stamped opening time and a two-second unlock delay. Eligible contestants use the button or Space; the host, spectators, and contestants already judged incorrect on this question cannot buzz.
 
-Eligible contestants can buzz using the button or Space after unlock. The host and spectators cannot buzz. A contestant who has already answered this question incorrectly cannot buzz again on it.
+Each client measures reaction time from its own enabled-button render using a monotonic clock. The first submission committed by Firestore opens a **two-second collection window**. Clients disable further input once they observe collection, but already captured in-flight presses may still commit strictly before the deadline. Collection does not announce a provisional winner.
 
-The first successful Firestore transaction to claim the empty buzzer becomes the active answerer. The implementation does not collect every click and then elect the earliest timestamp across devices. Once a winner is visible in local state, the ordinary buzz control is disabled.
+After the deadline, the host client transaction selects the lowest reported reaction time. Exact ties use server acceptance time, then stable player ID. For example, a reported 0.5-second reaction beats a 1-second reaction even if the faster player's request arrives later, provided both commit within the window. The winner, private history, and recap counts commit together. If the host disconnects, submissions still close at the original deadline; resolution resumes when the host reconnects. Reveal, question change, and explicit finish cancel unresolved races.
 
-Near-simultaneous attempts that reach the transaction after another contestant won can still be recorded as late attempts if their click timestamp is more than zero and at most 3.5 seconds after the winning timestamp. Such an attempt:
+A losing accepted press never queues another answerer or affects scores. Reaction gaps of at most 3.5 seconds receive a personal notice for 3.5 seconds and the existing scoreboard indicator during the visual answer window. Exact ties receive tie-break feedback and do not qualify as a positive closest-late achievement. Every accepted submission counts once per race in the recap. Requests outside the collection deadline receive failure feedback and cannot change the result or recap.
 
-- Does not replace the active answerer, award points, or queue an automatic next answerer.
-- Records a history event and the attempt timing.
-- Shows the losing contestant a personal notice naming the winner and their delay.
-- Supports a temporary delay indicator beside the contestant in the scoreboard.
+Refresh restores the original reaction origin from browser storage and promptly enables the button if the race remains open. Without stored timing, the shared personal unlock time is the fallback. A wrong answer starts a fresh race and local reaction origin immediately, retaining any unexpired personal penalty.
 
-The acceptance window and scoreboard timing window are both 3.5 seconds. The personal notice also lasts 3.5 seconds from being shown. This is a race-feedback mechanism, not a continuously available secondary buzzer after the winner is known.
+Firestore enforces submission ownership, eligibility, recorded penalties, and server commit deadlines. Browser reaction measurements, reporting of early presses, and the host's ranking implementation remain trusted; this is not a tamper-resistant measurement of human reaction speed. In-flight-only behavior is enforced by the normal client. Network delay and transaction retries can cause a press to miss the deadline. The collection window lasts two seconds; displaying the result can take longer. Connection/clock messages describe syncing, stale clocks, slow samples, offline state, pending submissions, and failures; clock estimates do not rank reactions.
+
+Rooms without the policy marker retain the previous first-successful-transaction winner and client-timestamp late feedback. Existing rooms are not migrated.
 
 ### Answer timer and judging
 
-A ten-second countdown starts from the winning buzz timestamp. It is a visual timer: reaching zero does not automatically mark an answer wrong, deduct points, reveal the answer, or select another contestant. The host judges the answer.
+A ten-second countdown starts from the server timestamp of winner finalization in policy-v1 rooms (the winning click timestamp in older rooms). It is a visual timer: reaching zero does not automatically mark an answer wrong, deduct points, reveal the answer, or select another contestant. The host judges the answer.
 
 | Host decision | Standard play | True Competitive Mode | Shared outcome |
 | --- | --- | --- | --- |
@@ -94,7 +95,9 @@ The host can see answer content before public reveal. Players and spectators see
 
 In True Competitive Mode, clicking the buzz button before it unlocks sets that contestant's personal unlock to the shared unlock time plus 2.5 seconds. For example, if a question opens at time 0, normal unlock is time 2.0 seconds and the penalized contestant unlocks at time 4.5 seconds. The penalty is not measured from the premature click and does not deduct points.
 
-Repeated early clicks do not keep extending the delay. The delay is stored locally by room, question, and user so a refresh in the same browser can retain it. Space is enabled only when buzzing is allowed, so a premature Space press does not follow the button's penalty path. This is client behavior, not a server-enforced anti-cheat guarantee.
+In policy-v1 rooms, both button and Space follow this rule. The first early report persists one penalty in shared race state, surviving refresh and device changes. Repeated presses during the penalty do not extend it or add recap counts. Presses during collection, answering, or reveal are ignored rather than treated as early attempts. Auto-repeat and Space inside editable controls are ignored.
+
+A penalized contestant's reaction is measured from their personal unlock without adding 2.5 seconds to their ranking duration. The early report is client-trusted because the server cannot observe when a button appeared enabled locally; once stored, rules enforce the penalty before accepting a submission. Older rooms retain browser-local penalties and ignore premature Space presses.
 
 Example: on a 300-point ordinary question, Alice answers incorrectly and Bob answers correctly. Standard play gives Alice 0 and Bob +300. Competitive play gives Alice -300 and Bob +300. Bob receives the next selection turn in either case.
 

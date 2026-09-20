@@ -10,7 +10,7 @@ Question packs are owner-only by default. Authors can mark a pack as available t
 - Pack editing with category/question reordering, board previews, image/audio/video questions and answers, and optional concealed/revealed prize images.
 - Host-led rooms for up to 20 contestants plus the host, with six-digit invitations, remembered rooms, and spectator support after play starts.
 - Category previews, a shared question board, contestant question suggestions, and host judging/reveal controls. Answers are given outside the app; the app does not evaluate free-text answers or provide voice chat.
-- Standard scoring or optional True Competitive Mode with wrong-answer deductions and early-buzz delays. Near-simultaneous losing buzzes can receive personal feedback within a 3.5-second window.
+- Standard scoring or optional True Competitive Mode with wrong-answer deductions and early-buzz delays. New rooms collect in-flight buzzes for two seconds and rank device-reported local reaction times; accepted losing presses retain personal reaction-gap feedback.
 - Surprise questions with animated contestant selection and wheel or hidden-table scoring; host score adjustments and paginated game history.
 - Rock-paper-scissors side matches and final top-score tie-breakers, plus shareable results that exclude the host from contestant standings.
 
@@ -156,3 +156,9 @@ storage validation command to include the recap/achievement scenarios.
 `auth/configuration-not-found` means the Firebase project in `.env.local` does not have Authentication configured for the requested sign-in method. Enable Google sign-in for that same project, verify the `VITE_FIREBASE_PROJECT_ID` value matches it, and restart the Vite dev server after changing `.env.local`.
 
 `Missing or insufficient permissions` means Firestore Security Rules are still denying the write. Deploy `firestore.rules` to the same Firebase project used by `.env.local`, then retry saving the pack.
+
+## Buzzer policy v1
+
+New rooms use `buzzerPolicyVersion: 1` and a bounded `rooms/{gameId}/buzzer/current` document. The first server-committed submission starts a two-second collection window. The host resolves accepted submissions by reported local reaction duration, then server acceptance timestamp and player ID. Device measurements and host ranking are trusted; there is no new backend service or latency estimate. Shared penalties apply to button and Space, and the answer countdown begins only when the winner is finalized. Existing rooms keep their previous policy.
+
+Rules and frontend require a coordinated release; older clients must reload before creating new rooms. No migration or new indexes are required. The existing storage verification command also runs `scripts/verify-buzzer.mjs`. See the [gameplay reference](docs/gameplay-reference.md#4-ordinary-question-sequence) for refresh, penalties, deadlines, and host recovery.

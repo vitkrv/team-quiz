@@ -48,7 +48,7 @@ export default function ResultsRecap({ room, gameId, playerEntries }) {
                     </div>)}</div>
                 </article>;
             })}</div>
-            <p className="text-xs text-slate-400 mt-4">{t('recapTimingNote')}</p>
+            <p className="text-xs text-slate-400 mt-4">{t(room.buzzerPolicyVersion === 1 ? 'recapReactionTimingNote' : 'recapTimingNote')}</p>
         </section>
         <section className={panel}>
             <h3 className="text-xl font-bold mb-4">{t('recapAllProgression')}</h3>

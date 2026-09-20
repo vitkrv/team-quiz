@@ -1,8 +1,9 @@
+import { ANSWER_WINDOW_MS, LATE_BUZZ_WINDOW_MS, timestampMillis } from '../../utils/buzzerPolicy';
 import { startGame } from '../../actions/roomActions';
 import useGamePack from '../../hooks/useGamePack';
 import useGameHistory from '../../hooks/useGameHistory';
 import { updateRoom } from '../../actions/gameStorage';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { deleteField, doc } from 'firebase/firestore';
 import { ArrowLeft, ArrowRight, Check, Copy, Gift, Link, Play, PlusCircle, MinusCircle, Users, SlidersHorizontal, ScrollText, Swords, Trophy, X } from 'lucide-react';
 import { HOST_AVATAR } from '../../constants';
@@ -20,8 +21,6 @@ import ActiveQuestionView from './ActiveQuestionView';
 import BoardView from './BoardView';
 import ResultsView from './ResultsView';
 
-const ANSWER_WINDOW_MS = 10000;
-const LATE_BUZZ_WINDOW_MS = 3500;
 const BOARD_CLOCK_RESYNC_INTERVAL_MS = 2 * 60 * 1000;
 
 const getPlayerEntries = (players) => Object.entries(players).filter(([, player]) => !player.isHost);
@@ -146,13 +145,13 @@ const getBuzzDeltaLabel = (room, playerId, now) => {
         return null;
     }
 
-    const answerElapsed = now - room.buzzTimestamp;
+    const answerElapsed = now - timestampMillis(room.buzzTimestamp);
     if (answerElapsed < 0 || answerElapsed > ANSWER_WINDOW_MS) return null;
 
     const attempt = room.buzzAttempts?.[playerId];
     if (attempt?.questionId !== room.activeQuestionId) return null;
 
-    const deltaMs = Number(attempt.clickedAt) - room.buzzTimestamp;
+    const deltaMs = room.buzzerPolicyVersion === 1 ? attempt.deltaMs : Number(attempt.clickedAt) - room.buzzTimestamp;
     if (deltaMs <= 0 || deltaMs > LATE_BUZZ_WINDOW_MS) return null;
 
     return formatBuzzDelta(deltaMs);
@@ -285,10 +284,12 @@ const renderHistoryMessage = (item, t) => {
             return <><PlayerName>{details.actorName || fallbackName}</PlayerName> {t('historyViewEndedGame')}</>;
         case 'question_picked':
             return <><PlayerName>{details.actorName || fallbackName}</PlayerName> {t('historyViewPicked')} &quot;{details.categoryName || t('question')}&quot; {t('historyViewFor')} <PointValue value={details.points} /></>;
+        case 'player_buzzed_early':
+            return <><PlayerName>{details.actorName || fallbackName}</PlayerName> {t('recapEarlyBuzz')}</>;
         case 'player_buzzed':
             return <><PlayerName>{details.actorName || fallbackName}</PlayerName> {t('historyViewBuzzed')}</>;
         case 'player_buzzed_late':
-            return <><PlayerName>{details.actorName || fallbackName}</PlayerName> {t('historyViewBuzzedLate', {
+            return <><PlayerName>{details.actorName || fallbackName}</PlayerName> {t(details.timingPolicy === 1 ? (details.deltaMs === 0 ? 'historyReactionTie' : 'historyReactionLate') : 'historyViewBuzzedLate', {
                 playerName: details.playerName || t('playerFallback'),
                 delta: formatBuzzDelta(Number(details.deltaMs) || 0)
             })}</>;
@@ -595,8 +596,9 @@ function GameRoomContent({ room, roomCode, user, onPrepareRoomExit, onLeaveRoom,
     const invitationCode = room.roomCode || roomCode;
     const isHost = user.uid === room.hostId;
     const isSpectator = !isHost && !room.players?.[user.uid];
-    const roomRef = doc(db, 'artifacts', appId, 'public', 'data', 'rooms', roomCode);
-    const { offsetMs, lastSyncedAt, serverNow, syncClock } = useServerClock(user.uid);
+    const roomRef = useMemo(() => doc(db, 'artifacts', appId, 'public', 'data', 'rooms', roomCode), [roomCode]);
+    const initialQuestion = useRef(room.activeQuestionId);
+    const { offsetMs, lastSyncedAt, serverNow, syncClock, ready, roundTripMs } = useServerClock(user.uid);
     const [now, setNow] = useState(() => serverNow());
     const wasBoardViewRef = useRef(false);
     const [copiedRoomCode, setCopiedRoomCode] = useState(false);
@@ -1029,7 +1031,7 @@ function GameRoomContent({ room, roomCode, user, onPrepareRoomExit, onLeaveRoom,
                         {room.status === 'category_preview' ? (
                             <CategoryPreviewView room={room} roomRef={roomRef} isHost={isHost} t={t} />
                         ) : room.activeQuestionId ? (
-                            <ActiveQuestionView room={room} roomCode={roomCode} roomRef={roomRef} user={user} isHost={isHost} isSpectator={isSpectator} serverNow={serverNow} clockSyncKey={clockSyncKey} />
+                            <ActiveQuestionView room={room} roomCode={roomCode} roomRef={roomRef} user={user} isHost={isHost} isSpectator={isSpectator} serverNow={serverNow} clockSyncKey={clockSyncKey} resumedQuestion={initialQuestion.current === room.activeQuestionId} clockQuality={{ ready, lastSyncedAt, roundTripMs }} />
                         ) : (
                             <BoardView room={room} roomRef={roomRef} user={user} isHost={isHost} isSpectator={isSpectator} serverNow={serverNow} />
                         )}

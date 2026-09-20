@@ -1,3 +1,4 @@
+import { BUZZ_OPEN_DELAY_MS } from '../utils/buzzerPolicy';
 import { prepareFinalRecap } from './gameRecap';
 import { packVersionRef, readRoomPack, updateRoom, updateRoomInTransaction } from './gameStorage';
 import { deleteField, getDocFromServer, runTransaction } from 'firebase/firestore';
@@ -187,7 +188,7 @@ export const handlePickQuestion = async (roomRef, qId, actorId, historyItem, ext
             answerRevealed: false,
             buzzedPlayerId: null,
             buzzTimestamp: null,
-            buzzUnlockAt: now() + 2000,
+            buzzUnlockAt: now() + BUZZ_OPEN_DELAY_MS,
             buzzAttempts: {},
             incorrectBuzzedIds: [],
             mediaPlayback: null,
@@ -292,7 +293,7 @@ export const completeSurprisePlayerDraw = async (roomRef, drawId, actorId, histo
             answerRevealed: false,
             buzzedPlayerId: null,
             buzzTimestamp: null,
-            buzzUnlockAt: now() + 2000,
+            buzzUnlockAt: now() + BUZZ_OPEN_DELAY_MS,
             buzzAttempts: {},
             incorrectBuzzedIds: [],
             mediaPlayback: null,
@@ -368,11 +369,11 @@ export const handleEndGame = async (roomRef, historyItem, extraUpdate = {}) => {
         const room = snapshot.data();
         if (room.status === 'finished') return;
         const finalizeRecap = await prepareFinalRecap(transaction, roomRef, room);
+        await updateRoomInTransaction(transaction, roomRef, room, update);
         finalizeRecap();
         if (room.dataVersion === 2 && room.packVersionId) {
             transaction.delete(packVersionRef(roomRef, room.packVersionId));
         }
-        await updateRoomInTransaction(transaction, roomRef, room, update);
     }).catch(async (error) => {
         if (error.code === 'permission-denied') {
             const current = await getDocFromServer(roomRef);

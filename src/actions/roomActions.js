@@ -1,3 +1,4 @@
+import { BUZZER_POLICY_VERSION } from '../utils/buzzerPolicy';
 import { createRecapSummary } from '../utils/achievements';
 import { recapRef } from './gameRecap';
 import { collection, doc, getDocFromServer, runTransaction, serverTimestamp } from 'firebase/firestore';
@@ -27,7 +28,7 @@ export async function createRoom(roomData) {
                 if (!previous.exists() || previous.data().status !== 'finished') return false;
             }
             transaction.set(roomRef, {
-                ...liveData, roomCode, dataVersion: 2, recapVersion: 1,
+                ...liveData, roomCode, dataVersion: 2, recapVersion: 1, buzzerPolicyVersion: BUZZER_POLICY_VERSION, buzzerRoundId: null,
                 packSummary: getPackSummary(pack), packVersionId: null, questionStates: {}
             });
             transaction.set(codeRef, { gameId: roomRef.id });

@@ -1,3 +1,4 @@
+import { verifyBuzzer } from './verify-buzzer.mjs';
 import { verifyGameRecap } from './verify-game-recap.mjs';
 // Isolated integration checks. Requires a running Firestore Emulator, never production.
 import assert from 'node:assert/strict';
@@ -7,7 +8,7 @@ import { resolve } from 'node:path';
 import { build } from 'esbuild';
 import { initializeApp, deleteApp } from 'firebase/app';
 import {
-    collection, connectFirestoreEmulator, deleteDoc, doc, documentId, getDocFromServer,
+    collection, connectFirestoreEmulator, deleteDoc, deleteField, doc, documentId, getDocFromServer,
     getDocs, getFirestore, limit, orderBy, query, runTransaction, serverTimestamp,
     setDoc, startAfter, terminate, updateDoc, writeBatch
 } from 'firebase/firestore';
@@ -55,7 +56,7 @@ try {
     globalThis.__gameStorageTest = { db: hostDb, appId: namespace };
     await mkdir('.firebase/validation', { recursive: true });
     await build({
-        stdin: { contents: "export * from './src/actions/roomActions.js'; export * from './src/actions/gameActions.js'; export * from './src/actions/gameStorage.js';", resolveDir: process.cwd() },
+        stdin: { contents: "export * from './src/actions/roomActions.js'; export * from './src/actions/gameActions.js'; export * from './src/actions/gameStorage.js'; export * from './src/actions/buzzerActions.js';", resolveDir: process.cwd() },
         bundle: true, platform: 'node', format: 'esm', external: ['firebase/firestore'],
         outfile: '.firebase/validation/actions.mjs',
         plugins: [{ name: 'emulator-config', setup(builder) {
@@ -68,13 +69,19 @@ try {
     const pack = { ownerId: 'host', isPublic: false, name: 'Initial', iconEmoji: '🧠', categories: [{ id: 'cat', name: 'Category', questions: [{ id: 'q1', text: 'Before start', answer: 'A', points: 100, isSurpriseQuestion: true }] }] };
     await setDoc(ref(hostDb, 'packs', 'pack'), pack);
     await setDoc(doc(seedDb, 'artifacts', namespace, 'users', 'admin'), { admin: true });
-    const newRoom = () => actions.createRoom({
+    const newRoom = async () => {
+        const id = await actions.createRoom({
         hostId: 'host', packId: 'pack', pack, status: 'lobby', trueCompetitiveMode: false,
         players: { host: { name: 'host', score: 0, isHost: true }, player: { name: 'player', score: 0, isHost: false }, late: { name: 'late', score: 0, isHost: false } },
         questionStates: {}, activeQuestionId: null, answerRevealed: false, buzzedPlayerId: null,
         buzzTimestamp: null, buzzUnlockAt: 0, buzzAttempts: {}, incorrectBuzzedIds: [],
         history: [event('room_created')]
-    });
+        });
+        assert.equal((await getDocFromServer(roomRef(hostDb, id))).data().buzzerPolicyVersion, 1);
+        // Keep the pre-policy scenarios as explicit compatibility coverage.
+        await updateDoc(roomRef(seedDb, id), { buzzerPolicyVersion: deleteField(), buzzerRoundId: deleteField() });
+        return id;
+    };
     const id = await newRoom();
     const hostRoom = roomRef(hostDb, id);
     await check('new room and invitation reservation are compact and atomic', async () => {
@@ -227,6 +234,7 @@ try {
         assert.equal((await getDocFromServer(roomRef(hostDb, pendingId))).data().status, 'lobby');
     });
     await verifyGameRecap({ actions, check, denied, hostDb, playerDb, lateDb, spectatorDb, adminDb, seedDb, namespace, ref, roomRef, event, t });
+    await verifyBuzzer({ actions, check, denied, hostDb, playerDb, lateDb, spectatorDb, seedDb, namespace, ref, roomRef, event, t, client });
     console.log(`${checks} scenario groups passed. Namespace: ${namespace}`);
 } finally {
     await Promise.all(clients.map(async ({ db, app }) => { await terminate(db); await deleteApp(app); }));
