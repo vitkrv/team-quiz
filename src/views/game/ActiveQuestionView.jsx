@@ -22,7 +22,8 @@ const SURPRISE_DEFAULT_MIN_POINTS = 100;
 const SURPRISE_DEFAULT_MAX_POINTS = 500;
 const ACTIVE_QUESTION_ENTRANCE_MS = 750;
 const SURPRISE_BACKGROUND_EMOJIS = ['\u{1F37F}', '\u{1F389}', '\u{1F973}', '\u{1F381}', '\u{1F37E}', '\u{1F382}', '\u{2728}', '\u{1FA84}'];
-const SURPRISE_BACKGROUND_EMOJI_COUNT = 80;
+const NORMAL_BACKGROUND_EMOJIS = ['\u{2754}'];
+const QUESTION_BACKGROUND_EMOJI_COUNT = 80;
 
 const getStoredEarlyBuzzUnlockAt = (storageKey) => {
     try {
@@ -318,18 +319,6 @@ export default function ActiveQuestionView({ room, roomCode, roomRef, user, isHo
     const [earlyBuzzNoticeQuestionId, setEarlyBuzzNoticeQuestionId] = useState(null);
     const [lateBuzzNotice, setLateBuzzNotice] = useState(null);
     const shownBuzzRace = useRef(null);
-    const surpriseBackgroundItems = useMemo(
-        () => createFloatingBackgroundItems({
-            seed: room.activeQuestionId || 'question',
-            count: SURPRISE_BACKGROUND_EMOJI_COUNT,
-            emojis: SURPRISE_BACKGROUND_EMOJIS,
-            sizeMin: 1,
-            sizeRange: 2,
-            opacityRange: 0.14,
-            rotationRange: 80
-        }),
-        [room.activeQuestionId]
-    );
     const buzzUnlockAt = Number(room.buzzUnlockAt) || 0;
     const effectiveBuzzUnlockAt = Math.max(buzzUnlockAt, earlyBuzzDelayUnlockAt);
 
@@ -344,6 +333,20 @@ export default function ActiveQuestionView({ room, roomCode, roomRef, user, isHo
             break;
         }
     }
+
+    const isSurpriseQuestion = Boolean(activeQ?.isSurpriseQuestion);
+    const questionBackgroundItems = useMemo(
+        () => createFloatingBackgroundItems({
+            seed: room.activeQuestionId || 'question',
+            count: QUESTION_BACKGROUND_EMOJI_COUNT,
+            emojis: isSurpriseQuestion ? SURPRISE_BACKGROUND_EMOJIS : NORMAL_BACKGROUND_EMOJIS,
+            sizeMin: 1,
+            sizeRange: 2,
+            opacityRange: 0.14,
+            rotationRange: 80
+        }),
+        [room.activeQuestionId, isSurpriseQuestion]
+    );
 
     // Timer logic
     useEffect(() => {
@@ -424,7 +427,6 @@ export default function ActiveQuestionView({ room, roomCode, roomRef, user, isHo
 
     if (!activeQ) return null;
 
-    const isSurpriseQuestion = Boolean(activeQ.isSurpriseQuestion);
     const surpriseScoringMechanic = normalizeSurpriseScoringMechanic(room.pack?.surpriseScoringMechanic);
     const isSurpriseTableMechanic = surpriseScoringMechanic === SURPRISE_SCORING_MECHANICS.table;
     const isSurpriseWheelMechanic = surpriseScoringMechanic === SURPRISE_SCORING_MECHANICS.wheel;
@@ -882,15 +884,13 @@ export default function ActiveQuestionView({ room, roomCode, roomRef, user, isHo
             )}
             <div
                 key={room.activeQuestionId}
-                className="active-question-enter-shell relative z-10 mx-auto flex min-h-0 w-full max-w-4xl flex-1 flex-col items-center justify-start pb-4 text-center"
+                className={`active-question-enter-shell ${isSurpriseQuestion ? 'active-question-enter-shell--surprise' : ''} relative z-10 mx-auto flex min-h-0 w-full max-w-4xl flex-1 flex-col items-center justify-start pb-4 text-center`}
             >
             <SpaceBuzzHandler enabled={buzzer.enabled ? canClickBuzzButton : canIBuzz} onBuzz={handleBuzzIn} />
-            {isSurpriseQuestion && (
-                <FloatingEmojiBackground
-                    items={surpriseBackgroundItems}
-                    className="left-1/2 top-1/2 -z-10 h-screen w-screen -translate-x-1/2 -translate-y-1/2"
-                />
-            )}
+            <FloatingEmojiBackground
+                items={questionBackgroundItems}
+                className={`left-1/2 top-1/2 -z-10 h-screen w-screen -translate-x-1/2 -translate-y-1/2 ${isSurpriseQuestion ? '' : 'grayscale brightness-50'}`}
+            />
 
             <div className={`active-question-enter-content relative z-10 flex min-h-0 w-full flex-1 flex-col items-center ${isAnswerFocused ? 'justify-center' : 'justify-start'} ${isEntranceContentVisible ? 'active-question-enter-content--visible' : ''}`}>
             {shouldShowQuestionContext && (
