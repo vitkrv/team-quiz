@@ -26,7 +26,7 @@ Competitive mode does not replace surprise scoring with the ordinary right/wrong
 ## 2. Lobby and starting play
 
 1. The host creates a room from an owned or public pack. New lobbies store pack display metadata; scores begin at zero and the host has a crown avatar.
-2. Contestants join using the six-digit code or join link. Names are limited to 18 characters. New contestants receive an unused animal avatar; an existing participant can retain their avatar and score.
+2. Contestants join using the six-digit code or join link. Names are limited to 18 characters. A saved profile username prefills the editable nickname; otherwise the Google display name or email prefix is used. The host name still defaults to the localized Host label. Profile edits do not rename existing room entries or historical records. New contestants receive an unused animal avatar; an existing participant can retain their avatar and score.
 3. The lobby allows 20 contestants plus one host. A contestant can explicitly leave the lobby, removing their entry.
 4. Only the host can change competitive mode, and only while the room remains in the lobby.
 5. The start control requires at least one contestant. For new rooms, starting freezes the latest saved pack in a separate immutable version and initializes its questions as `available`. A missing, inaccessible or invalid pack leaves the room in the lobby. A random non-host contestant receives the first selection turn.

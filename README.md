@@ -147,7 +147,18 @@ and completion date under their profile's `gameAchievements` subcollection. It f
 the recap and deletes the frozen pack in the same transaction, so achievements and
 performance statistics survive pack deletion. Question/answer content and media are
 not retained in the recap.
-Profile controls are deferred. Existing games without the recap marker show only
+Open **My Profile** beside the main menu account controls to save a username and
+view the best saved achievement of each earned type. The highest value wins,
+except closest-late awards use the smallest positive gap. Equal values keep the
+most recent game, with game ID breaking date ties. Other occurrences stay saved
+but are hidden on the profile.
+Usernames are private account preferences of 1–18 characters, with surrounding
+whitespace trimmed and no uniqueness requirement. They appear on the menu and
+prefill the editable join-game nickname; the host name still defaults to Host.
+Existing room names and historical results do not change. The profile includes
+award values, completion dates, and stable game-results links, without performance
+recaps or charts. Only the signed-in user's profile is available in this UI.
+Existing games without the recap marker show only
 their original results, with the compact layout; no historical awards are inferred.
 
 Deploy the updated rules and frontend together when authorized. Run the existing

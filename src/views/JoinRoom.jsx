@@ -8,10 +8,11 @@ import { getRoomByCode } from '../actions/roomActions';
 import { trackEvent } from '../services/analytics';
 import { useLanguage } from '../useLanguage';
 
-export default function JoinRoom({ initialCode = '', setView, user, setCurrentRoomCode, setError, onCodeConsumed }) {
+export default function JoinRoom({ initialCode = '', setView, user, username, setCurrentRoomCode, setError, onCodeConsumed }) {
     const { t } = useLanguage();
     const [code, setCode] = useState(() => initialCode.replace(/\D/g, '').slice(0, 6));
-    const [playerName, setPlayerName] = useState(() => (user.displayName || user.email?.split('@')[0] || '').substring(0, 18));
+    const [nameDraft, setPlayerName] = useState(null);
+    const playerName = nameDraft ?? (username || user.displayName || user.email?.split('@')[0] || '').substring(0, 18);
     const [isJoining, setIsJoining] = useState(false);
     const [roomPreview, setRoomPreview] = useState({ loading: false, pack: null, status: null });
 

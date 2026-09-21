@@ -560,6 +560,14 @@ service cloud.firestore {
         && record.awards == recap.profileAwards[userId] && record.awards.size() > 0;
     }
 
+    function validUserPreferences(data) {
+      return (!('language' in data) || data.language in ['en', 'uk'])
+        && (!('username' in data) || (data.username is string
+          && data.username.size() >= 1 && data.username.size() <= 18
+          && data.username.matches('.*[^\\s].*')
+          && !data.username.matches('^\\s.*|.*\\s$')));
+    }
+
     match /artifacts/{appId}/users/{userId} {
       allow read: if isAdmin(appId)
         || (
@@ -568,14 +576,14 @@ service cloud.firestore {
         );
       allow create: if isGoogleUser()
         && request.auth.uid == userId
-        && request.resource.data.keys().hasOnly(['language', 'updatedAt'])
-        && request.resource.data.language in ['en', 'uk'];
+        && request.resource.data.keys().hasOnly(['language', 'username', 'updatedAt'])
+        && validUserPreferences(request.resource.data);
       allow update: if isGoogleUser()
         && request.auth.uid == userId
         && (
           (
-            request.resource.data.diff(resource.data).changedKeys().hasOnly(['language', 'updatedAt'])
-            && request.resource.data.language in ['en', 'uk']
+            request.resource.data.diff(resource.data).affectedKeys().hasOnly(['language', 'username', 'updatedAt'])
+            && validUserPreferences(request.resource.data)
           )
           || (
             isAdmin(appId)

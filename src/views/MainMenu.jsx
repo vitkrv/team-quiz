@@ -1,22 +1,33 @@
-import { FolderOpen, LogOut, RotateCcw, Send } from 'lucide-react';
+import { FolderOpen, LogOut, RotateCcw, Send, UserRound } from 'lucide-react';
 import packageJson from '../../package.json';
 import { useLanguage } from '../useLanguage';
 import LanguagePicker from '../components/LanguagePicker';
 
-export default function MainMenu({ setView, user, lastRoomCode, onCreatePack, onReturnToRoom, onSignOut }) {
+export default function MainMenu({ setView, user, username, lastRoomCode, onCreatePack, onReturnToRoom, onSignOut }) {
     const { t } = useLanguage();
 
     return (
-        <div className="relative flex flex-col items-center justify-center min-h-screen p-6 pb-40">
-            <div className="absolute top-4 right-4 flex items-center gap-3">
-                <div className="text-right hidden sm:block">
-                    <div className="text-sm font-bold text-slate-200">{user.displayName || t('playerFallback')}</div>
-                    <div className="text-xs text-slate-500">{user.email}</div>
-                </div>
+        <div className="relative flex flex-col items-center justify-center min-h-screen p-6 pt-24 pb-40">
+            <div className="absolute top-4 inset-x-4 flex items-center justify-end gap-2 sm:gap-3">
                 <button
+                    type="button"
+                    onClick={() => setView('profile')}
+                    title={t('myProfile')}
+                    aria-label={`${t('myProfile')}: ${username || user.displayName || t('playerFallback')}`}
+                    className="flex min-h-11 min-w-0 max-w-xs items-center gap-2 rounded-xl border border-slate-700 bg-slate-800 px-3 py-2 text-left text-slate-200 transition-colors hover:border-slate-500 hover:bg-slate-700 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 sm:max-w-sm sm:gap-3"
+                >
+                    <UserRound size={20} className="shrink-0" aria-hidden="true" />
+                    <span className="min-w-0">
+                        <span className="block truncate text-sm font-bold">{username || user.displayName || t('playerFallback')}</span>
+                        {user.email && <span className="block truncate text-xs text-slate-400">{user.email}</span>}
+                    </span>
+                </button>
+                <button
+                    type="button"
                     onClick={onSignOut}
-                    className="p-2 text-slate-400 hover:text-white hover:bg-slate-800 rounded-lg transition-colors"
+                    className="flex min-h-11 min-w-11 shrink-0 items-center justify-center text-slate-400 hover:text-white hover:bg-slate-800 rounded-lg transition-colors"
                     title={t('signOut')}
+                    aria-label={t('signOut')}
                 >
                     <LogOut size={20} />
                 </button>

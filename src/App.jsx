@@ -13,6 +13,7 @@ import { getAuthErrorMessage } from './utils/errors';
 import { hasDefinedFinalResults } from './utils/gameResults';
 import Login from './views/Login';
 import MainMenu from './views/MainMenu';
+import UserProfile from './views/UserProfile';
 import PackCreator from './views/PackCreator';
 import PackManager from './views/PackManager';
 import HostSetup from './views/HostSetup';
@@ -61,9 +62,14 @@ const saveUserLanguagePreference = (userId, language) => setDoc(
 
 export default function App() {
     const [user, setUser] = useState(null);
+    const [profile, setProfile] = useState(null);
+    const [profileAttempt, setProfileAttempt] = useState(0);
+    const profileUserIdRef = useRef(null);
+    const currentProfile = profile?.userId === user?.uid ? profile : null;
+    const username = currentProfile?.username || null;
     const [authReady, setAuthReady] = useState(false);
     const [language, setLanguage] = useState(() => normalizeLanguage(localStorage.getItem(LANGUAGE_CACHE_KEY)));
-    const [view, setView] = useState('menu'); // menu, createPack, managePacks, hostSetup, joinRoom, room
+    const [view, setView] = useState('menu'); // menu, profile, createPack, managePacks, hostSetup, joinRoom, room
     const [joinRoomCode, setJoinRoomCode] = useState(() => getRoomCodeFromUrl());
     const [gameRoomCode, setGameRoomCode] = useState(() => getGameCodeFromUrl());
     const [linkedGameRoomCode, setLinkedGameRoomCode] = useState(() => getGameCodeFromUrl());
@@ -100,6 +106,10 @@ export default function App() {
         if (!hasFirebaseConfig) return undefined;
 
         const unsubscribe = onAuthStateChanged(auth, (u) => {
+            if (profileUserIdRef.current !== (u?.uid || null)) {
+                setProfile(null);
+                profileUserIdRef.current = u?.uid || null;
+            }
             const isGoogleUser = u?.providerData?.some((provider) => provider.providerId === 'google.com');
 
             if (u && !isGoogleUser) {
@@ -126,16 +136,21 @@ export default function App() {
         }
 
         const userRef = doc(db, 'artifacts', appId, 'users', user.uid);
+        let active = true;
         const unsubscribe = onSnapshot(userRef, (snapshot) => {
+            if (!active) return;
+            setProfile({ userId: user.uid, username: snapshot.data()?.username || null });
             const nextLanguage = normalizeLanguage(snapshot.data()?.language);
             setLanguage(nextLanguage);
             localStorage.setItem(LANGUAGE_CACHE_KEY, nextLanguage);
         }, (err) => {
-            console.error("Language preference sync error:", err);
+            if (!active) return;
+            setProfile({ userId: user.uid, error: err });
+            console.error("User preference sync error:", err);
         });
 
-        return () => unsubscribe();
-    }, [user]);
+        return () => { active = false; unsubscribe(); };
+    }, [user, profileAttempt]);
 
     const handleLanguageChange = async (nextLanguage) => {
         const normalizedLanguage = normalizeLanguage(nextLanguage);
@@ -396,12 +411,17 @@ export default function App() {
                 <MainMenu
                     setView={setView}
                     user={user}
+                    username={username}
                     lastRoomCode={latestActiveRoomCode ? latestInvitationCode : ''}
                     onCreatePack={handleCreatePack}
                     onReturnToRoom={handleReturnToRoom}
                     onSignOut={handleSignOut}
                 />
             )}
+
+            {view === 'profile' && <UserProfile key={user.uid} user={user} username={username}
+                profileLoading={!currentProfile} profileError={currentProfile?.error}
+                onRetryProfile={() => { setProfile(null); setProfileAttempt((value) => value + 1); }} setView={setView} />}
 
             {view === 'createPack' && (
                 <PackCreator
@@ -437,6 +457,8 @@ export default function App() {
 
             {view === 'joinRoom' && (
                 <JoinRoom
+                    key={user.uid}
+                    username={username}
                     initialCode={joinRoomCode}
                     setView={setView}
                     user={user}

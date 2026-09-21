@@ -39,6 +39,17 @@ The normal application requires Google sign-in. Public packs are available to ot
 
 New arrivals after the lobby view the game as spectators. Existing participants retain their role when reopening their room. A `?game=` link supports viewing a game and its defined results; see the gameplay reference for the precise result condition.
 
+The main menu account area also opens **My Profile** for the signed-in user. A saved
+username (1–18 characters after trimming surrounding whitespace, not necessarily
+unique) appears on the menu and prefills the editable join-game nickname. Hosting
+still defaults to the localized Host label. Saving a username leaves existing room
+names and historical results unchanged. The profile shows one best saved achievement
+per earned type: the highest value, or smallest positive gap for closest-late awards.
+Equal values keep the most recent game, with game ID breaking date ties. Other
+occurrences remain stored but hidden. Each displayed award includes its value, completion
+dates, and stable game-results links. It has no performance recap or charts; older
+games without saved awards are not backfilled.
+
 ## Question packs
 
 A pack contains a title, optional emoji icon, ownership/sharing information, ordered categories, and ordered questions. Authors can add, remove, reorder, and preview categories and questions.
