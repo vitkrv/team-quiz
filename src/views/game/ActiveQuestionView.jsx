@@ -1112,7 +1112,7 @@ export default function ActiveQuestionView({ room, roomCode, roomRef, user, isHo
                                 type="button"
                                 onClick={handleBuzzIn}
                                 disabled={!canClickBuzzButton}
-                                className={`h-36 w-36 rounded-full border-[6px] text-2xl font-black transition-all md:h-48 md:w-48 md:border-8 md:text-4xl ${
+                                className={`h-36 w-36 touch-none select-none rounded-full border-[6px] text-2xl font-black transition-all md:h-48 md:w-48 md:border-8 md:text-4xl ${
                                     canIBuzz
                                         ? 'border-red-800 bg-red-600 text-white shadow-[0_8px_0_0_#7f1d1d,inset_0_10px_20px_rgba(255,255,255,0.3)] hover:bg-red-500 active:translate-y-[8px] active:shadow-[0_0px_0_0_#7f1d1d,inset_0_10px_20px_rgba(255,255,255,0.3)] md:shadow-[0_10px_0_0_#7f1d1d,inset_0_10px_20px_rgba(255,255,255,0.3)] md:active:translate-y-[10px]'
                                         : `${canClickBuzzButton ? '' : 'cursor-not-allowed '}border-slate-700 bg-slate-600 text-slate-300 shadow-[0_8px_0_0_#334155,inset_0_10px_20px_rgba(255,255,255,0.08)] md:shadow-[0_10px_0_0_#334155,inset_0_10px_20px_rgba(255,255,255,0.08)]`

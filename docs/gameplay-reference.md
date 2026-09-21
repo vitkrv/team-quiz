@@ -67,6 +67,8 @@ During play, contestants see their own leaderboard tile with a muted slate highl
 
 New rooms use buzzer policy v1. Opening an ordinary question creates a race with a server-stamped opening time and a two-second unlock delay. Eligible contestants use the button or Space; the host, spectators, and contestants already judged incorrect on this question cannot buzz.
 
+The Buzz button accepts clicks and taps while preventing touch scrolling, swiping, and text selection that begin on its surface. Touch scrolling outside the button and keyboard buzzing remain available.
+
 Each client measures reaction time from its own enabled-button render using a monotonic clock. The first submission committed by Firestore opens a **two-second collection window**. Clients disable further input once they observe collection, but already captured in-flight presses may still commit strictly before the deadline. Collection does not announce a provisional winner.
 
 After the deadline, the host client transaction selects the lowest reported reaction time. Exact ties use server acceptance time, then stable player ID. For example, a reported 0.5-second reaction beats a 1-second reaction even if the faster player's request arrives later, provided both commit within the window. The winner, private history, and recap counts commit together. If the host disconnects, submissions still close at the original deadline; resolution resumes when the host reconnects. Reveal, question change, and explicit finish cancel unresolved races.
