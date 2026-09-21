@@ -5,7 +5,7 @@ import { ANSWER_WINDOW_MS, EARLY_BUZZ_DELAY_MS, LATE_BUZZ_NOTICE_MS, LATE_BUZZ_W
 import { updateRoom, updateRoomInTransaction } from '../../actions/gameStorage';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { arrayUnion, increment, runTransaction } from 'firebase/firestore';
-import { Check, Play, RotateCw, X } from 'lucide-react';
+import { Check, Disc3, Grid2X2, Play, RotateCw, Sparkles, X } from 'lucide-react';
 import { ANIMAL_AVATARS, normalizeSurpriseScoringMechanic, SURPRISE_SCORING_MECHANICS } from '../../constants';
 import { useLanguage } from '../../useLanguage';
 import { createHistoryItem, startSurpriseWheel } from '../../actions/gameActions';
@@ -23,8 +23,6 @@ const SURPRISE_DEFAULT_MAX_POINTS = 500;
 const ACTIVE_QUESTION_ENTRANCE_MS = 750;
 const SURPRISE_BACKGROUND_EMOJIS = ['\u{1F37F}', '\u{1F389}', '\u{1F973}', '\u{1F381}', '\u{1F37E}', '\u{1F382}', '\u{2728}', '\u{1FA84}'];
 const SURPRISE_BACKGROUND_EMOJI_COUNT = 80;
-const TABLE_PICKED_BACKGROUND_EMOJIS = ['\u{1F4B8}'];
-const TABLE_PICKED_BACKGROUND_COUNT = 8;
 
 const getStoredEarlyBuzzUnlockAt = (storageKey) => {
     try {
@@ -158,12 +156,14 @@ function PointsWheel({ values, result, rolledAt, scoreAppliedAt, serverNow, cloc
     }, [resultIndex, startedAt, scoreAppliedAt, serverNow, clockReady]);
 
     return (
-        <div className="flex flex-col items-center gap-3">
-            <div className="relative h-64 w-64 md:h-80 md:w-80">
-                <div className="absolute left-1/2 top-0 z-10 h-0 w-0 -translate-x-1/2 border-l-[16px] border-r-[16px] border-t-[28px] border-l-transparent border-r-transparent border-t-yellow-300 drop-shadow-lg" />
+        <div className="flex w-full flex-col items-center gap-5">
+            <div className="surprise-wheel">
+                <div className="surprise-wheel__pointer" />
                 <svg
                     viewBox={`0 0 ${size} ${size}`}
-                    className="h-full w-full drop-shadow-2xl"
+                    className="h-full w-full"
+                    role="img"
+                    aria-label={t('surpriseMechanicWheel')}
                     style={{
                         transform: `rotate(${rotation}deg)`
                     }}
@@ -179,14 +179,14 @@ function PointsWheel({ values, result, rolledAt, scoreAppliedAt, serverNow, cloc
                             <g key={`${value}:${index}`}>
                                 <path
                                     d={describeSlice(center, radius, startAngle, endAngle)}
-                                    fill={isPositive ? '#16a34a' : '#dc2626'}
-                                    stroke="#020617"
-                                    strokeWidth="3"
+                                    fill={isPositive ? (index % 2 ? '#115e59' : '#134e4a') : (index % 2 ? '#881337' : '#701a35')}
+                                    stroke="#0f172a"
+                                    strokeWidth="2"
                                 />
                                 <text
                                     x={labelPoint.x}
                                     y={labelPoint.y}
-                                    fill="white"
+                                    fill={isPositive ? '#ccfbf1' : '#ffe4e6'}
                                     fontSize="20"
                                     fontWeight="900"
                                     textAnchor="middle"
@@ -198,11 +198,23 @@ function PointsWheel({ values, result, rolledAt, scoreAppliedAt, serverNow, cloc
                             </g>
                         );
                     })}
-                    <circle cx={center} cy={center} r="34" fill="#0f172a" stroke="#facc15" strokeWidth="5" />
+                    {isResultVisible && resultIndex >= 0 && (
+                        <path
+                            d={describeSlice(center, radius, resultIndex * sliceAngle, (resultIndex + 1) * sliceAngle)}
+                            fill="none"
+                            stroke="#facc15"
+                            strokeWidth="3"
+                            strokeLinejoin="round"
+                            pointerEvents="none"
+                            aria-hidden="true"
+                        />
+                    )}
+                    <circle cx={center} cy={center} r="29" fill="#0f172a" stroke="#475569" strokeWidth="2" />
                 </svg>
+                <span className="surprise-wheel__hub" aria-hidden="true"><Sparkles size={24} /></span>
             </div>
             {isResultVisible && result !== null && result !== undefined && (
-                <div className={`rounded-lg px-4 py-2 text-2xl font-black md:px-5 md:text-3xl ${result >= 0 ? 'bg-green-600 text-white' : 'bg-red-600 text-white'}`}>
+                <div role="status" className={`surprise-score-result ${result >= 0 ? 'surprise-score-result--positive' : 'surprise-score-result--negative'}`}>
                     {t('wheelResult', { points: result > 0 ? `+${result}` : result })}
                 </div>
             )}
@@ -212,58 +224,63 @@ function PointsWheel({ values, result, rolledAt, scoreAppliedAt, serverNow, cloc
 
 function SurprisePointsTable({ cells, rows, columns, pickedCellId, canPick, onPick, t }) {
     const isRevealed = Boolean(pickedCellId);
-    const trophyItems = useMemo(
-        () => createFloatingBackgroundItems({
-            seed: `surprise-table:${pickedCellId || 'pending'}`,
-            count: TABLE_PICKED_BACKGROUND_COUNT,
-            emojis: TABLE_PICKED_BACKGROUND_EMOJIS
-        }),
-        [pickedCellId]
-    );
+    const pickedCell = cells.find((cell) => cell.id === pickedCellId);
     const slots = Array.from({ length: rows * columns }, (_, index) => cells[index] || null);
 
     return (
-        <div className="w-full max-w-3xl rounded-xl border-4 border-black bg-yellow-600 p-2 shadow-2xl shadow-yellow-950/50 md:p-3">
-            <div
-                className="grid gap-0 border-2 border-black bg-black"
-                style={{ gridTemplateColumns: `repeat(${columns}, minmax(0, 1fr))` }}
-            >
-                {slots.map((cell, index) => {
-                    if (!cell) {
+        <div className="flex w-full flex-col items-center gap-5">
+            {canPick && !isRevealed && <p className="text-sm text-slate-300">{t('pickTableCell')}</p>}
+            <div className="w-full overflow-x-auto p-1">
+                <div
+                    className="surprise-table"
+                    style={{ gridTemplateColumns: `repeat(${columns}, minmax(3.5rem, 1fr))`, minWidth: `${columns * 4.125 - 0.625}rem` }}
+                >
+                    {slots.map((cell, index) => {
+                        if (!cell) {
+                            return (
+                                <div
+                                    key={`blank-${index}`}
+                                    className="rounded-xl border border-dashed border-slate-800/70"
+                                    aria-hidden="true"
+                                />
+                            );
+                        }
+
+                        const isPicked = pickedCellId === cell.id;
+                        const valueClassName = cell.value >= 0 ? 'text-emerald-300' : 'text-rose-300';
+                        const cellClassName = isPicked
+                            ? 'surprise-table__cell--picked'
+                            : isRevealed ? 'surprise-table__cell--revealed' : '';
+
                         return (
-                            <div
-                                key={`blank-${index}`}
-                                className="min-h-16 border-2 border-black bg-yellow-900/30 md:min-h-20"
-                            />
+                            <button
+                                key={cell.id}
+                                type="button"
+                                onClick={() => onPick(cell.id)}
+                                disabled={!canPick || isRevealed}
+                                className={`surprise-table__cell ${cellClassName}`}
+                                aria-label={isRevealed ? `${cell.icon}: ${cell.value > 0 ? '+' : ''}${cell.value}` : `${t('pickTableCell')} ${cell.icon}`}
+                                aria-pressed={isPicked}
+                                title={!isRevealed && canPick ? t('pickTableCell') : undefined}
+                            >
+                                {isPicked && <Check size={14} className="absolute right-2 top-2 text-yellow-300" aria-hidden="true" />}
+                                <span aria-hidden="true" className={`text-4xl leading-none transition-all duration-300 motion-reduce:transition-none md:text-[2.625rem] ${isRevealed ? '-translate-y-4 scale-75 opacity-0' : 'scale-100 opacity-100'}`}>
+                                    {cell.icon}
+                                </span>
+                                <span aria-hidden="true" className={`absolute inset-0 flex items-center justify-center px-1 text-lg font-black tabular-nums transition-all duration-300 motion-reduce:transition-none sm:text-2xl ${valueClassName} ${isRevealed ? 'scale-100 opacity-100' : 'scale-75 opacity-0'}`}>
+                                    {isRevealed ? (cell.value > 0 ? `+${cell.value}` : cell.value) : null}
+                                </span>
+                            </button>
                         );
-                    }
-
-                    const isPicked = pickedCellId === cell.id;
-                    const valueClassName = cell.value >= 0 ? 'text-green-900' : 'text-red-900';
-                    const cellClassName = isPicked
-                        ? 'surprise-table-picked-cell relative z-10 overflow-hidden'
-                        : 'border-2 border-black bg-yellow-400';
-
-                    return (
-                        <button
-                            key={cell.id}
-                            type="button"
-                            onClick={() => onPick(cell.id)}
-                            disabled={!canPick || isRevealed}
-                            className={`relative flex min-h-16 items-center justify-center px-4 py-3 text-center font-black transition-colors duration-300 md:min-h-20 md:px-6 ${cellClassName} ${canPick && !isRevealed && !isPicked ? 'hover:bg-yellow-300' : ''} disabled:cursor-default`}
-                            title={!isRevealed && canPick ? t('pickTableCell') : undefined}
-                        >
-                            {isPicked && <FloatingEmojiBackground items={trophyItems} className="inset-0" />}
-                            <span className={`relative text-3xl transition-all duration-500 ease-out md:text-5xl ${isRevealed ? 'scale-75 opacity-0' : 'scale-100 opacity-100'}`}>
-                                {cell.icon}
-                            </span>
-                            <span className={`absolute inset-0 flex items-center justify-center font-mono text-2xl transition-all duration-500 ease-out md:text-4xl ${valueClassName} ${isRevealed ? 'scale-100 opacity-100' : 'scale-75 opacity-0'}`}>
-                                {cell.value > 0 ? `+${cell.value}` : cell.value}
-                            </span>
-                        </button>
-                    );
-                })}
+                    })}
+                </div>
             </div>
+            {pickedCell && (
+                <div role="status" className={`surprise-score-result ${pickedCell.value >= 0 ? 'surprise-score-result--positive' : 'surprise-score-result--negative'}`}>
+                    <span aria-hidden="true">{pickedCell.icon}</span>
+                    {t('surpriseTableResult', { points: pickedCell.value > 0 ? `+${pickedCell.value}` : pickedCell.value })}
+                </div>
+            )}
         </div>
     );
 }
@@ -939,56 +956,76 @@ export default function ActiveQuestionView({ room, roomCode, roomRef, user, isHo
 
             {isAnswerRevealed && (
                 <div className="mt-4 flex w-full flex-col items-center gap-4 md:mt-6">
-                    {isSurpriseQuestion && isSurpriseJudged && isSurpriseWheelMechanic && surpriseWheelValues.length > 0 && (
-                        <PointsWheel
-                            key={surpriseRound.spinId || activeQ.id}
-                            values={surpriseWheelValues}
-                            result={surpriseRound.rollResult}
-                            rolledAt={surpriseRound.rolledAt}
-                            scoreAppliedAt={surpriseRound.scoreAppliedAt}
-                            serverNow={serverNow}
-                            clockReady={Boolean(clockQuality.ready)}
-                            t={t}
-                        />
-                    )}
-                    {isSurpriseQuestion && isSurpriseJudged && isSurpriseTableMechanic && surpriseTableCells.length > 0 && (
-                        <SurprisePointsTable
-                            cells={surpriseTableCells}
-                            rows={surpriseTableRows}
-                            columns={surpriseTableColumns}
-                            pickedCellId={surpriseTablePickedCellId}
-                            canPick={canPickSurpriseTableCell}
-                            onPick={handlePickSurpriseTableCell}
-                            t={t}
-                        />
-                    )}
-                    {canRollSurpriseWheel && (
-                        <button
-                            onClick={handleRollSurpriseWheel}
-                            className="inline-flex items-center justify-center gap-2 rounded-xl bg-yellow-500 px-5 py-3 text-base font-black text-slate-950 shadow-lg shadow-yellow-900 transition-colors hover:bg-yellow-400 disabled:opacity-60 md:px-8 md:py-4 md:text-xl"
-                            disabled={isRolling}
-                        >
-                            <RotateCw size={24} /> {isHost && user.uid !== surpriseAnswererId ? t('forceRollWheel') : t('rollTheWheel')}
-                        </button>
-                    )}
-                    {isSurpriseWheelMechanic && isSurpriseRolled && !isSurpriseScoreApplied && (
-                        <div role="status" className="text-center text-slate-300">
-                            {t(wheelRecovery.error ? 'wheelScoreFailed' : 'wheelScorePending')}
-                            {wheelRecovery.error && (
-                                <button onClick={wheelRecovery.retry} className="ml-2 underline">{t('wheelRetry')}</button>
-                            )}
-                        </div>
-                    )}
-                    {wheelStartError && !isSurpriseRolled && <p role="alert" className="text-red-300">{t('wheelStartFailed')}</p>}
-                    {!canRollSurpriseWheel && isSurpriseQuestion && isSurpriseWheelMechanic && isSurpriseJudged && !isSurpriseRolled && (
-                        <div className="text-base font-bold text-slate-400 md:text-lg">
-                            {t('waitingForWheelRoll', { playerName: surpriseAnswerer?.name || t('playerFallback') })}
-                        </div>
-                    )}
-                    {!canPickSurpriseTableCell && isSurpriseQuestion && isSurpriseTableMechanic && isSurpriseJudged && !isSurpriseTablePicked && (
-                        <div className="text-base font-bold text-slate-400 md:text-lg">
-                            {t('waitingForTablePick', { playerName: surpriseAnswerer?.name || t('playerFallback') })}
-                        </div>
+                    {isSurpriseQuestion && isSurpriseJudged && (
+                        <section className="surprise-scoring" aria-labelledby="surprise-scoring-title">
+                            <header className="surprise-scoring__header">
+                                <div className="flex min-w-0 items-center gap-3">
+                                    <span className="rounded-xl border border-yellow-500/20 bg-yellow-500/10 p-2.5 text-yellow-300" aria-hidden="true">
+                                        {isSurpriseTableMechanic ? <Grid2X2 size={20} /> : <Disc3 size={20} />}
+                                    </span>
+                                    <h2 id="surprise-scoring-title" className="text-left text-base font-bold text-slate-100 sm:text-lg">
+                                        {t(isSurpriseTableMechanic ? 'surpriseMechanicTable' : 'surpriseMechanicWheel')}
+                                    </h2>
+                                </div>
+                                <div className="flex min-w-0 items-center gap-2 rounded-full border border-slate-700/70 bg-slate-950/50 px-3 py-1.5 text-sm text-slate-200">
+                                    <span aria-hidden="true">{surpriseAnswerer?.avatar}</span>
+                                    <span className="truncate">{surpriseAnswerer?.name || t('playerFallback')}</span>
+                                </div>
+                            </header>
+                            <div className="surprise-scoring__body">
+                                {isSurpriseQuestion && isSurpriseJudged && isSurpriseWheelMechanic && surpriseWheelValues.length > 0 && (
+                                    <PointsWheel
+                                        key={surpriseRound.spinId || activeQ.id}
+                                        values={surpriseWheelValues}
+                                        result={surpriseRound.rollResult}
+                                        rolledAt={surpriseRound.rolledAt}
+                                        scoreAppliedAt={surpriseRound.scoreAppliedAt}
+                                        serverNow={serverNow}
+                                        clockReady={Boolean(clockQuality.ready)}
+                                        t={t}
+                                    />
+                                )}
+                                {isSurpriseQuestion && isSurpriseJudged && isSurpriseTableMechanic && surpriseTableCells.length > 0 && (
+                                    <SurprisePointsTable
+                                        cells={surpriseTableCells}
+                                        rows={surpriseTableRows}
+                                        columns={surpriseTableColumns}
+                                        pickedCellId={surpriseTablePickedCellId}
+                                        canPick={canPickSurpriseTableCell}
+                                        onPick={handlePickSurpriseTableCell}
+                                        t={t}
+                                    />
+                                )}
+                                {canRollSurpriseWheel && (
+                                    <button
+                                        onClick={handleRollSurpriseWheel}
+                                        className="inline-flex w-full max-w-sm items-center justify-center gap-2 rounded-xl bg-yellow-400 px-5 py-3 text-base font-bold text-slate-950 transition-colors hover:bg-yellow-300 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-yellow-300 disabled:opacity-60"
+                                        disabled={isRolling}
+                                    >
+                                        <RotateCw size={24} /> {isHost && user.uid !== surpriseAnswererId ? t('forceRollWheel') : t('rollTheWheel')}
+                                    </button>
+                                )}
+                                {isSurpriseWheelMechanic && isSurpriseRolled && !isSurpriseScoreApplied && (
+                                    <div role="status" className="rounded-xl border border-slate-700/60 bg-slate-950/40 px-4 py-3 text-center text-sm text-slate-300">
+                                        {t(wheelRecovery.error ? 'wheelScoreFailed' : 'wheelScorePending')}
+                                        {wheelRecovery.error && (
+                                            <button onClick={wheelRecovery.retry} className="ml-2 underline">{t('wheelRetry')}</button>
+                                        )}
+                                    </div>
+                                )}
+                                {wheelStartError && !isSurpriseRolled && <p role="alert" className="text-red-300">{t('wheelStartFailed')}</p>}
+                                {!canRollSurpriseWheel && isSurpriseQuestion && isSurpriseWheelMechanic && isSurpriseJudged && !isSurpriseRolled && (
+                                    <div role="status" className="text-center text-sm text-slate-400">
+                                        {t('waitingForWheelRoll', { playerName: surpriseAnswerer?.name || t('playerFallback') })}
+                                    </div>
+                                )}
+                                {!canPickSurpriseTableCell && isSurpriseQuestion && isSurpriseTableMechanic && isSurpriseJudged && !isSurpriseTablePicked && (
+                                    <div role="status" className="text-center text-sm text-slate-400">
+                                        {t('waitingForTablePick', { playerName: surpriseAnswerer?.name || t('playerFallback') })}
+                                    </div>
+                                )}
+                            </div>
+                        </section>
                     )}
                     {!isHost && canContinueQuestion && (
                         <div className="text-base font-bold text-slate-400 md:text-lg">
