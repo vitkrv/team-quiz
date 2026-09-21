@@ -151,6 +151,10 @@ Question and answer content can contain text, images, audio, or video. Question 
 
 An accepted buzz attempt signals a pause to media on that contestant's client. Do not assume this pauses every participant's player. Volume controls are local. Answer media is presented with the revealed answer; the host has advance access to answer content.
 
+During an active question, the host's media start, judging, skip/reveal, wheel start, and continue controls share one panel with the current answerer and ordinary-answer timer. When the question area has at least 56rem of available width, this panel sits on the right; narrower layouts place it below the content with full-width touch controls. The wheel/table remains in the question content, and contestant/spectator controls keep their existing layout. Skip/reveal still requires a two-second hold, and continue remains unavailable while a surprise award is unresolved.
+
+The controls panel keeps a 17rem width throughout question phases, capped by the available space on narrow screens. The shared question-media launch action is available only before answer reveal; it does not control answer media.
+
 The host can adjust contestant scores by +100/-100 and use the score editor to set totals. Negative scores are allowed. These changes are recorded in history and can affect final ranking. They do not automatically transfer the question-selection turn.
 
 A pack with both prize images allows the host to open the prize presentation, reveal it, and close it. It is a visual activity and does not automatically award points or deliver a real-world prize.

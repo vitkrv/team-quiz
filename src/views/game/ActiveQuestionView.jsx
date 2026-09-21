@@ -855,7 +855,7 @@ export default function ActiveQuestionView({ room, roomCode, roomRef, user, isHo
     };
 
     const handleStartQuestionMedia = async () => {
-        if (!isHost || !hasGatedQuestionMedia || isQuestionMediaStarted) return;
+        if (!isHost || isAnswerRevealed || !hasGatedQuestionMedia || isQuestionMediaStarted) return;
         await updateRoom(roomRef, {
             mediaPlayback: {
                 questionId: activeQ.id,
@@ -866,6 +866,34 @@ export default function ActiveQuestionView({ room, roomCode, roomRef, user, isHo
             }
         });
     };
+
+    const answerTimer = (
+        <div className={`relative h-24 w-24 shrink-0 ${isHost ? 'mt-2' : 'mb-6 md:mb-8 md:h-32 md:w-32'}`}>
+            <svg viewBox="0 0 128 128" className="h-full w-full -rotate-90 transform">
+                <circle cx="64" cy="64" r="60" className="stroke-slate-700 fill-none" strokeWidth="8"/>
+                <circle cx="64" cy="64" r="60" className={`fill-none stroke-blue-500 transition-all duration-100 ${timeLeft < 3 ? 'stroke-red-500' : ''}`} strokeWidth="8"
+                        strokeDasharray="377" strokeDashoffset={377 - (377 * timeLeft / (ANSWER_WINDOW_MS / 1000))}
+                />
+            </svg>
+            <div className={`absolute inset-0 flex items-center justify-center font-mono text-3xl font-black md:text-4xl ${timeLeft < 3 ? 'text-red-400' : 'text-blue-400'}`}>
+                {Math.ceil(timeLeft)}
+            </div>
+        </div>
+    );
+    const buzzerStatus = (
+        <>
+            {buzzer.enabled && !isSurpriseQuestion && !isAnswerRevealed && (
+                <div className="mt-3 shrink-0 text-center text-sm text-slate-400" role="status" aria-live="polite">
+                    {buzzer.error ? <p className="text-red-300">{t(buzzer.error)}</p> : null}
+                    {!buzzer.online ? <p>{t('buzzOffline')}</p> : !clockQuality.ready ? <p>{t('buzzClockSyncing')}</p>
+                        : Date.now() - clockQuality.lastSyncedAt > 6 * 60 * 1000 ? <p>{t('buzzClockStale')}</p>
+                        : clockQuality.roundTripMs > 750 ? <p>{t('buzzConnectionSlow')}</p> : null}
+                    {buzzer.pending ? <p>{t('buzzSubmitting')}</p> : null}
+                    {buzzer.collecting ? <p className="font-bold">{t(buzzer.waitingForHost ? 'buzzWaitingHost' : 'buzzCollecting')}</p> : null}
+                </div>
+            )}
+        </>
+    );
 
     return (
         <>
@@ -884,7 +912,7 @@ export default function ActiveQuestionView({ room, roomCode, roomRef, user, isHo
             )}
             <div
                 key={room.activeQuestionId}
-                className={`active-question-enter-shell ${isSurpriseQuestion ? 'active-question-enter-shell--surprise' : ''} relative z-10 mx-auto flex min-h-0 w-full max-w-4xl flex-1 flex-col items-center justify-start pb-4 text-center`}
+                className={`active-question-enter-shell ${isSurpriseQuestion ? 'active-question-enter-shell--surprise' : ''} ${isHost ? 'host-question-shell' : ''} relative z-10 mx-auto flex min-h-0 w-full max-w-4xl flex-1 flex-col items-center justify-start pb-4 text-center`}
             >
             <SpaceBuzzHandler enabled={buzzer.enabled ? canClickBuzzButton : canIBuzz} onBuzz={handleBuzzIn} />
             <FloatingEmojiBackground
@@ -892,7 +920,8 @@ export default function ActiveQuestionView({ room, roomCode, roomRef, user, isHo
                 className={`left-1/2 top-1/2 -z-10 h-screen w-screen -translate-x-1/2 -translate-y-1/2 ${isSurpriseQuestion ? '' : 'grayscale brightness-50'}`}
             />
 
-            <div className={`active-question-enter-content relative z-10 flex min-h-0 w-full flex-1 flex-col items-center ${isAnswerFocused ? 'justify-center' : 'justify-start'} ${isEntranceContentVisible ? 'active-question-enter-content--visible' : ''}`}>
+            <div className={`active-question-enter-content ${isHost ? 'host-question-layout' : ''} relative z-10 flex min-h-0 w-full flex-1 flex-col items-center ${isAnswerFocused ? 'justify-center' : 'justify-start'} ${isEntranceContentVisible ? 'active-question-enter-content--visible' : ''}`}>
+            <div className={isHost ? 'host-question-content' : 'contents'}>
             {shouldShowQuestionContext && (
                 <div className="absolute top-0 flex w-full justify-between gap-3 text-xs font-bold uppercase tracking-widest text-slate-400 md:text-sm">
                     <span className="min-w-0 truncate text-left">{activeCatName}</span>
@@ -927,15 +956,6 @@ export default function ActiveQuestionView({ room, roomCode, roomRef, user, isHo
                             startAt={questionMediaStartAt}
                             pauseSignal={buzzMediaPauseSignal}
                         />
-                    )}
-                    {isHost && hasGatedQuestionMedia && !isQuestionMediaStarted && (
-                        <button
-                            type="button"
-                            onClick={handleStartQuestionMedia}
-                            className="inline-flex items-center justify-center gap-2 rounded-xl bg-blue-600 px-5 py-3 text-base font-bold text-white shadow-lg shadow-blue-900 transition-colors hover:bg-blue-500 md:px-6 md:text-lg"
-                        >
-                            <Play size={22} /> {t('startMediaForEveryone')}
-                        </button>
                     )}
                 </div>
             )}
@@ -996,7 +1016,7 @@ export default function ActiveQuestionView({ room, roomCode, roomRef, user, isHo
                                         t={t}
                                     />
                                 )}
-                                {canRollSurpriseWheel && (
+                                {!isHost && canRollSurpriseWheel && (
                                     <button
                                         onClick={handleRollSurpriseWheel}
                                         className="inline-flex w-full max-w-sm items-center justify-center gap-2 rounded-xl bg-yellow-400 px-5 py-3 text-base font-bold text-slate-950 transition-colors hover:bg-yellow-300 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-yellow-300 disabled:opacity-60"
@@ -1032,36 +1052,17 @@ export default function ActiveQuestionView({ room, roomCode, roomRef, user, isHo
                             {t('waitingForHostContinue')}
                         </div>
                     )}
-                    {isHost && canContinueQuestion && (
-                        <button
-                            onClick={handleContinue}
-                            className="rounded-xl bg-blue-600 px-6 py-3 text-lg font-bold text-white shadow-lg shadow-blue-900 transition-colors hover:bg-blue-500 md:px-8 md:py-4 md:text-xl"
-                        >
-                            {t('continue')}
-                        </button>
-                    )}
                 </div>
             )}
 
             {/* State: Someone buzzed */}
-            {isSurpriseQuestion && !isAnswerRevealed && (
+            {!isHost && isSurpriseQuestion && !isAnswerRevealed && (
                 <div className="mt-4 flex w-full flex-col items-center animate-in zoom-in duration-200 md:mt-6">
                     <div className="mb-4 flex flex-wrap items-center justify-center gap-2 text-base text-slate-300 md:mb-5 md:gap-3 md:text-xl">
                         <span className="text-2xl md:text-3xl">{surpriseAnswerer?.avatar}</span>
                         <span className="font-black text-xl text-yellow-400 md:text-2xl">{surpriseAnswerer?.name || t('playerFallback')}</span>
                         <span>{t('playerIsAnswering', { playerName: '' }).trim()}</span>
                     </div>
-
-                    {isHost && (
-                        <div className="flex w-full flex-col gap-3 sm:w-auto sm:flex-row md:gap-4">
-                            <button onClick={() => handleJudge(true)} className="flex items-center justify-center gap-2 rounded-xl bg-green-600 px-5 py-3 text-base font-bold text-white shadow-lg shadow-green-900 hover:bg-green-500 md:px-8 md:py-4 md:text-xl">
-                                <Check size={28}/> {t('correct')}
-                            </button>
-                            <button onClick={() => handleJudge(false)} className="flex items-center justify-center gap-2 rounded-xl bg-red-600 px-5 py-3 text-base font-bold text-white shadow-lg shadow-red-900 hover:bg-red-500 md:px-8 md:py-4 md:text-xl">
-                                <X size={28}/> {t('incorrect')}
-                            </button>
-                        </div>
-                    )}
 
                     {user.uid === surpriseAnswererId && !isHost && !isSpectator && (
                         <div className="mt-4 animate-pulse text-xl font-bold text-blue-400 md:text-2xl">
@@ -1078,50 +1079,17 @@ export default function ActiveQuestionView({ room, roomCode, roomRef, user, isHo
                             {t('surpriseOnlySelectedPlayer')}
                         </div>
                     )}
-
-                    {isHost && (
-                        <HoldToConfirmButton
-                            onConfirm={handleSkip}
-                            durationMs={2000}
-                            fillClassName="bg-slate-700"
-                            title={t('holdToConfirmAction', { action: t('skipRevealAnswer') })}
-                            className="mt-8 rounded-lg border border-slate-600 bg-transparent px-6 py-2 font-bold text-slate-400 transition-colors hover:text-white"
-                        >
-                            {t('skipRevealAnswer')}
-                        </HoldToConfirmButton>
-                    )}
                 </div>
             )}
 
-            {hasBuzzed && !isAnswerRevealed && !isSurpriseQuestion && (
+            {!isHost && hasBuzzed && !isAnswerRevealed && !isSurpriseQuestion && (
                 <div className="mt-4 flex w-full flex-col items-center animate-in zoom-in duration-200 md:mt-6">
                     <div className="mb-4 flex flex-wrap items-center justify-center gap-2 text-base text-slate-300 md:text-xl">
                         <span className="text-2xl md:text-3xl">{buzzedPlayerAvatar}</span>
                         <span className="font-black text-xl text-yellow-400 md:text-2xl">{buzzedPlayerName}</span> {t('playerIsAnswering', { playerName: '' }).trim()}
                     </div>
 
-                    <div className="relative mb-6 h-24 w-24 md:mb-8 md:h-32 md:w-32">
-                        <svg viewBox="0 0 128 128" className="h-full w-full -rotate-90 transform">
-                            <circle cx="64" cy="64" r="60" className="stroke-slate-700 fill-none" strokeWidth="8"/>
-                            <circle cx="64" cy="64" r="60" className={`fill-none stroke-blue-500 transition-all duration-100 ${timeLeft < 3 ? 'stroke-red-500' : ''}`} strokeWidth="8"
-                                    strokeDasharray="377" strokeDashoffset={377 - (377 * timeLeft / (ANSWER_WINDOW_MS / 1000))}
-                            />
-                        </svg>
-                        <div className={`absolute inset-0 flex items-center justify-center font-mono text-3xl font-black md:text-4xl ${timeLeft < 3 ? 'text-red-400' : 'text-blue-400'}`}>
-                            {Math.ceil(timeLeft)}
-                        </div>
-                    </div>
-
-                    {isHost && (
-                        <div className="flex w-full flex-col gap-3 sm:w-auto sm:flex-row md:gap-4">
-                            <button onClick={() => handleJudge(true)} className="flex items-center justify-center gap-2 rounded-xl bg-green-600 px-5 py-3 text-base font-bold text-white shadow-lg shadow-green-900 hover:bg-green-500 md:px-8 md:py-4 md:text-xl">
-                                <Check size={28}/> {t('correct')}
-                            </button>
-                            <button onClick={() => handleJudge(false)} className="flex items-center justify-center gap-2 rounded-xl bg-red-600 px-5 py-3 text-base font-bold text-white shadow-lg shadow-red-900 hover:bg-red-500 md:px-8 md:py-4 md:text-xl">
-                                <X size={28}/> {t('incorrect')}
-                            </button>
-                        </div>
-                    )}
+                    {answerTimer}
 
                     {didIBuzz && !isHost && !isSpectator && (
                         <div className="mt-4 animate-pulse text-xl font-bold text-blue-400 md:text-2xl">
@@ -1132,11 +1100,9 @@ export default function ActiveQuestionView({ room, roomCode, roomRef, user, isHo
             )}
 
             {/* State: Waiting for buzz */}
-            {!hasBuzzed && !isAnswerRevealed && !isSurpriseQuestion && (
+            {!isHost && !hasBuzzed && !isAnswerRevealed && !isSurpriseQuestion && (
                 <div className="mt-4 flex w-full max-w-md shrink-0 flex-col items-center md:mt-6">
-                    {isHost ? (
-                        !buzzer.collecting && <div className="mb-4 text-slate-400 md:mb-6">{t('waitingForBuzz')}</div>
-                    ) : isSpectator ? (
+                    {isSpectator ? (
                         <div className="w-full rounded-xl border-2 border-dashed border-slate-700 p-5 text-lg font-bold text-slate-500 md:p-8 md:text-xl">
                             {t('spectatorWatching')}
                         </div>
@@ -1160,30 +1126,76 @@ export default function ActiveQuestionView({ room, roomCode, roomRef, user, isHo
                             </div>
                         )
                     )}
+                </div>
+            )}
 
-                    {isHost && (
+            {!isHost && buzzerStatus}
+            </div>
+            {isHost && (
+                <aside className="host-question-controls" aria-label={t('hostQuestionControls')}>
+                    <h2 className="text-xs font-bold uppercase tracking-widest text-slate-400">{t('hostQuestionControls')}</h2>
+                    {!isAnswerRevealed && (isSurpriseQuestion || hasBuzzed) && (
+                        <div className="flex min-w-0 flex-col items-center gap-2">
+                            <div className="flex max-w-full items-center gap-2 text-lg font-bold text-yellow-400">
+                                <span>{isSurpriseQuestion ? surpriseAnswerer?.avatar : buzzedPlayerAvatar}</span>
+                                <span className="min-w-0 break-words">{isSurpriseQuestion ? surpriseAnswerer?.name || t('playerFallback') : buzzedPlayerName}</span>
+                            </div>
+                            <p className="text-sm text-slate-300">{t('playerIsAnswering', { playerName: '' }).trim()}</p>
+                            {!isSurpriseQuestion && answerTimer}
+                        </div>
+                    )}
+                    {!isAnswerRevealed && !isSurpriseQuestion && !hasBuzzed && !buzzer.collecting && (
+                        <p className="text-sm text-slate-400">{t('waitingForBuzz')}</p>
+                    )}
+                    {!isAnswerRevealed && hasGatedQuestionMedia && !isQuestionMediaStarted && (
+                        <button
+                            type="button"
+                            onClick={handleStartQuestionMedia}
+                            className="inline-flex items-center justify-center gap-2 rounded-xl bg-blue-600 px-5 py-3 text-base font-bold text-white shadow-lg shadow-blue-900 transition-colors hover:bg-blue-500 md:px-6 md:text-lg"
+                        >
+                            <Play size={22} /> {t('startMediaForEveryone')}
+                        </button>
+                    )}
+                    {!isAnswerRevealed && (isSurpriseQuestion || hasBuzzed) && (
+                        <div className="flex w-full flex-col gap-3">
+                            <button onClick={() => handleJudge(true)} className="flex items-center justify-center gap-2 rounded-xl bg-green-600 px-5 py-3 text-base font-bold text-white shadow-lg shadow-green-900 hover:bg-green-500">
+                                <Check size={28}/> {t('correct')}
+                            </button>
+                            <button onClick={() => handleJudge(false)} className="flex items-center justify-center gap-2 rounded-xl bg-red-600 px-5 py-3 text-base font-bold text-white shadow-lg shadow-red-900 hover:bg-red-500">
+                                <X size={28}/> {t('incorrect')}
+                            </button>
+                        </div>
+                    )}
+                    {!isAnswerRevealed && (isSurpriseQuestion || !hasBuzzed) && (
                         <HoldToConfirmButton
                             onConfirm={handleSkip}
                             durationMs={2000}
                             fillClassName="bg-slate-700"
                             title={t('holdToConfirmAction', { action: t('skipRevealAnswer') })}
-                            className="mt-8 rounded-lg border border-slate-600 bg-transparent px-6 py-2 font-bold text-slate-400 transition-colors hover:text-white"
+                            className="rounded-lg border border-slate-600 bg-transparent px-6 py-2 font-bold text-slate-400 transition-colors hover:text-white"
                         >
                             {t('skipRevealAnswer')}
                         </HoldToConfirmButton>
                     )}
-                </div>
-            )}
-
-            {buzzer.enabled && !isSurpriseQuestion && !isAnswerRevealed && (
-                <div className="mt-3 shrink-0 text-center text-sm text-slate-400" role="status" aria-live="polite">
-                    {buzzer.error ? <p className="text-red-300">{t(buzzer.error)}</p> : null}
-                    {!buzzer.online ? <p>{t('buzzOffline')}</p> : !clockQuality.ready ? <p>{t('buzzClockSyncing')}</p>
-                        : Date.now() - clockQuality.lastSyncedAt > 6 * 60 * 1000 ? <p>{t('buzzClockStale')}</p>
-                        : clockQuality.roundTripMs > 750 ? <p>{t('buzzConnectionSlow')}</p> : null}
-                    {buzzer.pending ? <p>{t('buzzSubmitting')}</p> : null}
-                    {buzzer.collecting ? <p className="font-bold">{t(buzzer.waitingForHost ? 'buzzWaitingHost' : 'buzzCollecting')}</p> : null}
-                </div>
+                    {canRollSurpriseWheel && (
+                        <button
+                            onClick={handleRollSurpriseWheel}
+                            className="inline-flex w-full max-w-sm items-center justify-center gap-2 rounded-xl bg-yellow-400 px-5 py-3 text-base font-bold text-slate-950 transition-colors hover:bg-yellow-300 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-yellow-300 disabled:opacity-60"
+                            disabled={isRolling}
+                        >
+                            <RotateCw size={24} /> {isHost && user.uid !== surpriseAnswererId ? t('forceRollWheel') : t('rollTheWheel')}
+                        </button>
+                    )}
+                    {isAnswerRevealed && canContinueQuestion && (
+                        <button
+                            onClick={handleContinue}
+                            className="rounded-xl bg-blue-600 px-6 py-3 text-lg font-bold text-white shadow-lg shadow-blue-900 transition-colors hover:bg-blue-500 md:px-8 md:py-4 md:text-xl"
+                        >
+                            {t('continue')}
+                        </button>
+                    )}
+                    {buzzerStatus}
+                </aside>
             )}
 
             </div>
