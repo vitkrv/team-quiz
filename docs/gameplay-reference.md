@@ -217,12 +217,19 @@ A shared results link cannot treat a round break as a final result. The frozen p
 survives every round boundary and is deleted only on explicit finish. Existing packs,
 embedded legacy rooms, and older frozen snapshots remain single-round experiences.
 
-Pending manual checks (no browser verification performed for this feature): in both
-English and Ukrainian, on desktop and mobile, add/delete/switch editor round tabs,
-preview each board, and switch tabs during media upload. With host, contestant, and
-spectator sessions, verify category previews, cumulative intermediate standings,
-negative-score/turn carryover, refresh during a break, and final results after the
-last round. Also check the final-round top-score tie and early finish during a break.
+Browser verification on 2026-09-28 used the real editor/game components against a
+dedicated Firestore Emulator with simulated identities. English desktop checks
+covered legacy-pack conversion, adding three rounds, the round cap, preview and
+save/reload; host/contestant/spectator checks covered category presentations,
+cumulative negative standings, a round break and refresh, host advancement, turn
+carryover, final-only results, and achievement/streak totals across two rounds.
+Ukrainian editor tabs and question controls were checked at a 390 px viewport.
+
+Pending manual checks: English/Ukrainian editor tabs on both desktop and mobile,
+round deletion, switching tabs during media uploads/replacements/removals, and
+responsive host/contestant/spectator round transitions on physical devices.
+Also check final-round top-score ties, surprise scoring at a boundary, early
+finish during a break, and production Google sign-in and external ImageKit media.
 
 ### Active room connection recovery
 

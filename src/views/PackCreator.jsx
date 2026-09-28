@@ -318,6 +318,11 @@ export default function PackCreator({ pack, setView, user, setError, onSaved }) 
             .map((category) => ({ ...category, roundId: roundIds[index], questions: category.questions?.length ? category.questions : [createEmptyQuestion()] })))
             : createDefaultCategories(t).map((category) => ({ ...category, roundId: roundIds[0] })), t));
     const visibleCategories = categories.filter((category) => category.roundId === activeRoundId);
+    const roundPluralRules = new Intl.PluralRules(language);
+    const roundCountUnit = (kind, count) => {
+        const form = roundPluralRules.select(count);
+        return t(`round${kind}${form[0].toUpperCase()}${form.slice(1)}`);
+    };
     const serializeRounds = (sourceCategories) => roundIdsRef.current.map((id) => ({ id,
         categories: stripPendingCategories(sourceCategories.filter((category) => category.roundId === id)).map((category) => {
             const saved = { ...category }; delete saved.roundId; return saved;
@@ -881,7 +886,7 @@ export default function PackCreator({ pack, setView, user, setError, onSaved }) 
     };
 
     return (
-        <div className="max-w-4xl mx-auto p-6 min-h-screen flex flex-col">
+        <div className="mx-auto flex min-h-screen w-full min-w-0 max-w-4xl flex-col p-4 sm:p-6">
             {isPreviewOpen && (
                 <QuestionPackPreviewModal
                     categories={previewCategories}
@@ -891,15 +896,15 @@ export default function PackCreator({ pack, setView, user, setError, onSaved }) 
                     onClose={() => setIsPreviewOpen(false)}
                 />
             )}
-            <div className="flex items-center mb-8">
-                <button onClick={handleBack} className="p-2 mr-4 hover:bg-slate-800 rounded-full transition-colors">
+            <div className="mb-8 flex flex-wrap items-center gap-3">
+                <button onClick={handleBack} className="shrink-0 rounded-full p-2 transition-colors hover:bg-slate-800">
                     <ArrowLeft size={24} />
                 </button>
-                <h2 className="text-3xl font-bold flex-1">{isEditMode ? t('editQuestionPack') : t('createQuestionPack')}</h2>
+                <h2 className="min-w-0 flex-1 text-2xl font-bold sm:text-3xl">{isEditMode ? t('editQuestionPack') : t('createQuestionPack')}</h2>
                 <button
                     onClick={handleSave}
                     disabled={isSaving || hasActiveMediaAction}
-                    className="bg-green-600 hover:bg-green-500 disabled:opacity-50 text-white px-6 py-2 rounded-lg font-bold flex items-center gap-2"
+                    className="flex w-full items-center justify-center gap-2 rounded-lg bg-green-600 px-6 py-2 font-bold text-white hover:bg-green-500 disabled:opacity-50 sm:w-auto"
                 >
                     <Check size={20} /> {isSaving ? t('saving') : isEditMode ? t('updatePack') : t('savePack')}
                 </button>
@@ -1085,6 +1090,7 @@ export default function PackCreator({ pack, setView, user, setError, onSaved }) 
                     <div role="tablist" aria-label={t('packRounds')} className="flex flex-wrap gap-2">
                         {roundIds.map((id, index) => {
                             const items = categories.filter((category) => category.roundId === id);
+                            const questionCount = items.reduce((count, category) => count + category.questions.length, 0);
                             return <button key={id} id={id + '-tab'} role="tab" aria-selected={activeRoundId === id} aria-controls="round-editor"
                                 tabIndex={activeRoundId === id ? 0 : -1}
                                 onKeyDown={(event) => {
@@ -1096,7 +1102,7 @@ export default function PackCreator({ pack, setView, user, setError, onSaved }) 
                                 }}
                                 onClick={() => setActiveRoundId(id)} className={`rounded-xl border px-4 py-3 text-left ${activeRoundId === id ? 'border-yellow-400 bg-yellow-400/10 text-yellow-300' : 'border-slate-600 text-slate-300'}`}>
                                 <span className="block font-bold">{t('packRound', { round: index + 1 })}</span>
-                                <span className="text-xs">{t('roundCounts', { categories: items.length, questions: items.reduce((count, category) => count + category.questions.length, 0) })}</span>
+                                <span className="text-xs">{t('roundCounts', { categories: items.length, categoryUnit: roundCountUnit('Category', items.length), questions: questionCount, questionUnit: roundCountUnit('Question', questionCount) })}</span>
                             </button>;
                         })}
                         <button onClick={addRound} disabled={roundIds.length >= MAX_PACK_ROUNDS || hasActiveMediaAction || isSaving}
@@ -1111,8 +1117,8 @@ export default function PackCreator({ pack, setView, user, setError, onSaved }) 
                     const questionCount = cat.questions?.length || 0;
 
                     return (
-                    <div key={cat.id} ref={setCategoryElement(cat.id)} className="bg-slate-800/50 p-6 rounded-xl border border-slate-700/50 scroll-mt-6">
-                        <div className="flex items-center gap-4 mb-6">
+                    <div key={cat.id} ref={setCategoryElement(cat.id)} className="min-w-0 scroll-mt-6 rounded-xl border border-slate-700/50 bg-slate-800/50 p-4 sm:p-6">
+                        <div className="mb-6 flex flex-wrap items-center gap-3 sm:gap-4">
                             <button
                                 type="button"
                                 onClick={() => toggleCategoryCollapsed(cat.id)}
@@ -1151,7 +1157,7 @@ export default function PackCreator({ pack, setView, user, setError, onSaved }) 
                                     <ArrowDown size={18} />
                                 </button>
                             </div>
-                            <div className="flex-1">
+                            <div className="min-w-0 basis-full sm:basis-auto sm:flex-1">
                                 <label className="block text-xs font-medium text-slate-500 mb-1">{t('categoryNumber', { number: catIdx + 1 })}</label>
                                 <input
                                     type="text"
@@ -1171,9 +1177,9 @@ export default function PackCreator({ pack, setView, user, setError, onSaved }) 
                         </div>
 
                         {!isCategoryCollapsed && (
-                        <div className="space-y-4 pl-4 border-l-2 border-slate-700">
+                        <div className="space-y-4 border-l-2 border-slate-700 pl-3 sm:pl-4">
                             {cat.questions.map((q, questionIdx) => (
-                                <div key={q.id} className={`flex gap-4 rounded-lg border p-4 ${q.isSurpriseQuestion ? 'border-yellow-400 bg-yellow-950/20' : 'border-transparent bg-slate-900'}`}>
+                                <div key={q.id} className={`flex min-w-0 flex-wrap gap-3 rounded-lg border p-3 sm:gap-4 sm:p-4 ${q.isSurpriseQuestion ? 'border-yellow-400 bg-yellow-950/20' : 'border-transparent bg-slate-900'}`}>
                                     <div
                                         onMouseDown={preventTextSelection}
                                         className="flex shrink-0 select-none flex-col overflow-hidden rounded-lg border border-slate-700 bg-slate-950 self-start"
@@ -1265,7 +1271,7 @@ export default function PackCreator({ pack, setView, user, setError, onSaved }) 
                                             </div>
                                         )}
                                     </div>
-                                    <div className="flex-1 space-y-3">
+                                    <div className="min-w-0 basis-full space-y-3 sm:basis-0 sm:flex-1">
                                         <div>
                                             <label className="block text-xs text-slate-500 mb-1">{t('question')}</label>
                                             <textarea
