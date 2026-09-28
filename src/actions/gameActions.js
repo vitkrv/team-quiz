@@ -1,3 +1,4 @@
+import { getRoundCategories, isRoundComplete } from '../utils/packRounds';
 import { BUZZ_OPEN_DELAY_MS } from '../utils/buzzerPolicy';
 import { prepareFinalRecap } from './gameRecap';
 import { packVersionRef, readRoomPack, runRoomTransaction, updateRoom, updateRoomInTransaction } from './gameStorage';
@@ -23,7 +24,7 @@ export const SURPRISE_PLAYER_DRAW_RESULT_HOLD_MS = 2000;
 const normalizeRpsMode = (mode) => (RPS_MODES[mode] ? mode : 'one');
 
 const getQuestionFromRoomPack = (room, questionId) => {
-    for (const category of room.pack?.categories || []) {
+    for (const category of getRoundCategories(room.pack, room.currentRoundIndex || 0)) {
         const question = (category.questions || []).find((item) => item.id === questionId);
         if (question) return question;
     }
@@ -257,6 +258,7 @@ export const handlePickQuestion = async (roomRef, qId, actorId, historyItem, ext
             || room.activeQuestionId
             || room.hostId !== actorId
             || room.questionStates?.[qId] !== 'available'
+            || (room.currentRoundQuestionIds && !room.currentRoundQuestionIds.includes(qId))
         ) {
             return;
         }
@@ -298,7 +300,7 @@ export const beginSurprisePlayerDraw = async (roomRef, qId, actorId, requestedPl
         const room = roomSnap.data();
         if (room.status !== 'playing') return;
         const pack = await readRoomPack(transaction, roomRef, room);
-        const question = getQuestionFromRoomPack({ pack }, qId);
+        const question = getQuestionFromRoomPack({ ...room, pack }, qId);
         const candidatePlayerIds = getSurpriseCandidatePlayerIds(room.players);
         const isSpecificPick = Boolean(requestedPlayerId);
         const answererId = isSpecificPick
@@ -310,6 +312,7 @@ export const beginSurprisePlayerDraw = async (roomRef, qId, actorId, requestedPl
             || room.activeQuestionId
             || room.hostId !== actorId
             || room.questionStates?.[qId] !== 'available'
+            || (room.currentRoundQuestionIds && !room.currentRoundQuestionIds.includes(qId))
             || room.surprisePlayerDraw
             || !question?.isSurpriseQuestion
             || !answererId
@@ -350,7 +353,7 @@ export const completeSurprisePlayerDraw = async (roomRef, drawId, actorId, histo
         const draw = room.surprisePlayerDraw;
         if (room.status !== 'playing' || !draw) return;
         const pack = await readRoomPack(transaction, roomRef, room);
-        const question = getQuestionFromRoomPack({ pack }, draw?.questionId);
+        const question = getQuestionFromRoomPack({ ...room, pack }, draw?.questionId);
 
         if (
             room.status !== 'playing'
@@ -416,6 +419,7 @@ export const pulseQuestionSelection = async (roomRef, qId, actorId) => {
             || !actor
             || actor.isHost
             || room.questionStates?.[qId] !== 'available'
+            || (room.currentRoundQuestionIds && !room.currentRoundQuestionIds.includes(qId))
         ) {
             return;
         }
@@ -774,3 +778,27 @@ export const advanceTieBreakerMatch = async (roomRef, tieBreaker) => {
 
     await updateRoom(roomRef, { tieBreaker: updateTieBreaker });
 };
+
+// The caller supplies the round it saw, so retries cannot advance a later break.
+export async function startNextRound(roomRef, expectedRoundIndex, actor, t) {
+    return runRoomTransaction(roomRef, async (transaction, room) => {
+        if (room?.hostId !== actor.id) throw new Error('Only the host can start a round');
+        if (room.status !== 'round_break' || room.currentRoundIndex !== expectedRoundIndex) return false;
+        if (room.activeQuestionId || hasPendingSurpriseAward(room) || expectedRoundIndex >= room.roundCount - 1) return false;
+        const pack = await readRoomPack(transaction, roomRef, room);
+        if (!isRoundComplete(pack, expectedRoundIndex, room.questionStates)) return false;
+        const index = expectedRoundIndex + 1;
+        const currentRoundQuestionIds = getRoundCategories(pack, index).flatMap((category) => category.questions.map((question) => question.id));
+        if (!currentRoundQuestionIds.length) throw new Error(t('invalidPackRounds'));
+        await updateRoomInTransaction(transaction, roomRef, room, {
+            status: 'category_preview', currentRoundIndex: index, categoryPreviewIndex: 0, currentRoundQuestionIds,
+            activeQuestionId: null, answerRevealed: false, buzzedPlayerId: null, buzzTimestamp: null,
+            buzzUnlockAt: null, buzzAttempts: {}, incorrectBuzzedIds: [], buzzerRoundId: null,
+            mediaPlayback: null, surprisePlayerDraw: null, surpriseRound: null, questionPulse: deleteField(),
+            history: [createHistoryItem({ id: 'pack_round_' + index + '_started', type: 'round_started',
+                actorId: actor.id, actorName: actor.name, message: t('roundStarted', { round: index + 1 }),
+                details: { round: index + 1, actorName: actor.name } })]
+        });
+        return true;
+    });
+}

@@ -1,3 +1,4 @@
+import { getRoundCategories } from '../../utils/packRounds';
 import { useCallback, useEffect, useState } from 'react';
 import { Shuffle, X } from 'lucide-react';
 import {
@@ -89,7 +90,7 @@ export default function BoardView({ room, roomRef, user, isHost, isSpectator = f
     const [pendingSurpriseQuestion, setPendingSurpriseQuestion] = useState(null);
     const [isTieBreakerSetupOpen, setIsTieBreakerSetupOpen] = useState(false);
     const isMyTurn = room.currentTurn === user.uid;
-    const categories = room.pack.categories;
+    const categories = getRoundCategories(room.pack, room.currentRoundIndex || 0);
     const questionImagePreloadVariant = isHost ? 'host' : 'game';
     const maxQuestionCount = Math.max(0, ...categories.map((cat) => cat.questions?.length || 0));
     const actorName = room.players[user.uid]?.name || user.displayName || t('playerFallback');

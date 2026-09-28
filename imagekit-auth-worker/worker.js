@@ -67,7 +67,9 @@ const getFirestorePack = async ({ env, appId, packId, idToken }) => {
 const getStringField = (doc, field) => doc.fields?.[field]?.stringValue || '';
 
 const getQuestions = (packDoc) => {
-    const categories = packDoc.fields?.categories?.arrayValue?.values || [];
+    const rounds = packDoc.fields?.rounds?.arrayValue?.values;
+    const categories = rounds ? rounds.flatMap((round) => round.mapValue?.fields?.categories?.arrayValue?.values || [])
+        : packDoc.fields?.categories?.arrayValue?.values || [];
     return categories.flatMap((category) => (
         category.mapValue?.fields?.questions?.arrayValue?.values || []
     ));

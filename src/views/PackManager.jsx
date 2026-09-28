@@ -1,3 +1,4 @@
+import { getAllCategories, getAllQuestions, getPackMedia, getPackRounds } from '../utils/packRounds';
 import { useEffect, useState } from 'react';
 import { collection, deleteDoc, doc, getDocs, query, where } from 'firebase/firestore';
 import { ArrowLeft, Edit3, Plus, Trash2 } from 'lucide-react';
@@ -6,18 +7,6 @@ import { appId, db } from '../firebase';
 import { deleteMedia } from '../services/imageStorage';
 import { useLanguage } from '../useLanguage';
 import { getFirestoreErrorMessage } from '../utils/errors';
-
-const getPackMedia = (pack) => (
-    [
-        pack.prize?.hiddenMedia,
-        pack.prize?.revealedMedia,
-        ...(pack.categories || []).flatMap((category) => (
-            (category.questions || []).flatMap((question) => (
-                [question.questionMedia, question.answerMedia]
-            ))
-        ))
-    ].filter((media) => media?.fileId)
-);
 
 export default function PackManager({ setView, user, setError, onCreatePack, onEditPack }) {
     const { language, t } = useLanguage();
@@ -99,8 +88,8 @@ export default function PackManager({ setView, user, setError, onCreatePack, onE
                             </h4>
                             <p className="text-sm text-slate-400 mb-2">
                                 {t('packStats', {
-                                    categories: pack.categories?.length || 0,
-                                    questions: pack.categories?.reduce((acc, c) => acc + (c.questions?.length || 0), 0)
+                                    rounds: getPackRounds(pack).length, categories: getAllCategories(pack).length,
+                                    questions: getAllQuestions(pack).length
                                 })}
                             </p>
                             <p className="text-xs text-slate-500 mb-5">

@@ -1,3 +1,4 @@
+import { getAllCategories } from '../utils/packRounds';
 import { doc, serverTimestamp } from 'firebase/firestore';
 import { getAchievements } from '../utils/achievements';
 
@@ -15,7 +16,7 @@ export async function prepareRecap(transaction, roomRef, room, update, readPack)
     if (!snapshot.exists()) throw new Error('Recap is missing');
     const summary = snapshot.data();
     const pack = room.activeQuestionId ? await readPack(transaction, roomRef, room) : null;
-    const category = pack?.categories?.find((c) => c.questions.some((q) => q.id === room.activeQuestionId));
+    const category = getAllCategories(pack).find((c) => c.questions.some((q) => q.id === room.activeQuestionId));
     const question = category?.questions.find((q) => q.id === room.activeQuestionId);
     const scores = [];
     for (const event of events) {

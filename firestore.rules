@@ -49,6 +49,7 @@ service cloud.firestore {
         && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['roomCode', 'hostId', 'recapVersion', 'buzzerPolicyVersion'])
         && validBuzzerRoomUpdate(appId, gameId, resource.data, request.resource.data)
         && validGameStorageUpdate(appId, gameId, resource.data, request.resource.data)
+        && validPackRoundUpdate(resource.data, request.resource.data)
         && validWheelRoomUpdate(appId, gameId, resource.data, request.resource.data)
         && (
           (
@@ -189,7 +190,8 @@ service cloud.firestore {
       let room = getAfter(/databases/$(database)/documents/artifacts/$(appId)/public/data/rooms/$(gameId)).data;
       let race = request.resource.data;
       let pack = get(/databases/$(database)/documents/artifacts/$(appId)/public/data/gamePackVersions/$(room.packVersionId)).data.content;
-      let question = pack.categories[race.categoryIndex].questions[race.questionIndex];
+      let categories = pack.keys().hasAny(['rounds']) ? pack.rounds[room.get('currentRoundIndex', 0)].categories : pack.categories;
+      let question = categories[race.categoryIndex].questions[race.questionIndex];
       return room.hostId == request.auth.uid && room.buzzerPolicyVersion == 1 && room.status == 'playing'
         && race.keys().hasOnly(['raceId', 'questionId', 'categoryIndex', 'questionIndex', 'phase', 'openedAt',
           'openingDelayMs', 'firstAcceptedAt', 'attempts', 'penalties', 'earlyOperations'])
@@ -271,9 +273,40 @@ service cloud.firestore {
       allow update: if false;
       allow delete: if isGoogleUser()
         && get(/databases/$(database)/documents/artifacts/$(appId)/public/data/rooms/$(resource.data.gameId)).data.hostId == request.auth.uid
-        && get(/databases/$(database)/documents/artifacts/$(appId)/public/data/rooms/$(resource.data.gameId)).data.status in ['playing', 'category_preview']
+        && get(/databases/$(database)/documents/artifacts/$(appId)/public/data/rooms/$(resource.data.gameId)).data.status in ['playing', 'category_preview', 'round_break']
         && get(/databases/$(database)/documents/artifacts/$(appId)/public/data/rooms/$(resource.data.gameId)).data.packVersionId == versionId
         && getAfter(/databases/$(database)/documents/artifacts/$(appId)/public/data/rooms/$(resource.data.gameId)).data.status == 'finished';
+    }
+
+
+    function validPackRoundUpdate(before, after) {
+      let index = before.get('currentRoundIndex', 0);
+      let count = before.get('roundCount', 1);
+      let changed = after.diff(before).affectedKeys();
+      return (before.status == 'lobby'
+          ? (after.status == 'lobby'
+              ? !changed.hasAny(['currentRoundIndex', 'roundCount', 'currentRoundQuestionIds'])
+              : (request.auth.uid == before.hostId && after.get('currentRoundIndex', 0) == 0
+                  && after.get('roundCount', 1) is int && after.get('roundCount', 1) >= 1 && after.get('roundCount', 1) <= 3))
+          : (after.get('roundCount', 1) == count
+              && (after.get('currentRoundIndex', 0) == index
+                  ? !changed.hasAny(['currentRoundQuestionIds'])
+                  : request.auth.uid == before.hostId && before.status == 'round_break'
+                    && after.status == 'category_preview' && after.currentRoundIndex == index + 1
+                    && after.currentRoundIndex < count && after.categoryPreviewIndex == 0
+                    && after.activeQuestionId == null && after.players == before.players
+                    && after.currentTurn == before.currentTurn && after.questionStates == before.questionStates)))
+        && (before.status != 'round_break' || after.status != 'category_preview'
+          || (request.auth.uid == before.hostId && after.currentRoundIndex == index + 1))
+        && (after.status != 'round_break' || before.status == 'round_break'
+          || (request.auth.uid == before.hostId && before.status == 'playing' && index < count - 1
+              && before.get('answerRevealed', false) && after.activeQuestionId == null && !pendingSurpriseAward(before)))
+        && (before.status != 'round_break' || after.status in ['round_break', 'category_preview', 'finished'])
+        && (!after.keys().hasAny(['currentRoundQuestionIds']) || after.get('activeQuestionId', null) == null
+          || after.activeQuestionId in after.currentRoundQuestionIds)
+        && (!changed.hasAny(['questionPulse']) || after.get('questionPulse', null) == null
+          || !after.keys().hasAny(['currentRoundQuestionIds'])
+          || (after.status == 'playing' && after.questionPulse.questionId in after.currentRoundQuestionIds));
     }
 
     function validPackSummary(summary) {
@@ -453,7 +486,7 @@ service cloud.firestore {
     function validRecapUpdate(appId, gameId, before, after) {
       let path = /databases/$(database)/documents/artifacts/$(appId)/public/data/rooms/$(gameId);
       let room = get(path).data;
-      return room.get('recapVersion', 0) == 1 && room.status in ['playing', 'category_preview']
+      return room.get('recapVersion', 0) == 1 && room.status in ['playing', 'category_preview', 'round_break']
         && after.version == before.version
         && (room.hostId == request.auth.uid
           ? (after.finalized == false
@@ -530,7 +563,7 @@ service cloud.firestore {
       let next = getAfter(path).data;
       let score = request.resource.data;
       let event = getAfter(/databases/$(database)/documents/artifacts/$(appId)/public/data/rooms/$(gameId)/history/$(eventId)).data;
-      return room.get('recapVersion', 0) == 1 && room.status in ['playing', 'category_preview']
+      return room.get('recapVersion', 0) == 1 && room.status in ['playing', 'category_preview', 'round_break']
         && score.id == eventId && event.recordedAt == request.time
         && score.playerId == event.details.playerId && score.source == event.type
         && score.before == room.players[score.playerId].score && score.after == next.players[score.playerId].score
@@ -551,7 +584,7 @@ service cloud.firestore {
       let room = get(path).data;
       let recap = getAfter(/databases/$(database)/documents/artifacts/$(appId)/public/data/rooms/$(gameId)/recap/summary).data;
       let record = request.resource.data;
-      return room.hostId == request.auth.uid && room.status in ['playing', 'category_preview']
+      return room.hostId == request.auth.uid && room.status in ['playing', 'category_preview', 'round_break']
         && getAfter(path).data.status == 'finished' && recap.finalized
         && userId in room.players && !room.players[userId].isHost
         && record.keys().hasOnly(['version', 'gameId', 'gameCode', 'completedAt', 'awards'])

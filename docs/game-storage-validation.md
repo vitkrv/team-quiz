@@ -43,6 +43,29 @@ directory when starting Java. This validation used the standalone Firestore Emul
 
 ## Covered cases
 
+The same entry point includes `scripts/verify-pack-rounds.mjs`; do not run it as a
+separate suite. Round checks cover legacy normalization, one/two/three-round starts,
+invalid or empty rounds, duplicate IDs, frozen content, current-round selection,
+negative-score carryover, spectator/reconnect state, repeated/concurrent transitions,
+cumulative streaks/category statistics, skipped questions, pending surprise awards,
+final-result gating, early finish, and snapshot cleanup. Worker fixtures use mocked
+HTTP responses to check nested/legacy media authorization without external services.
+
+New pack content uses `rounds: [{ id, categories }]`; legacy `categories` is one round.
+Newly started rooms store `currentRoundIndex`, `roundCount`, and
+`currentRoundQuestionIds`; question states remain game-wide. `round_break` persists
+the intermediate screen. Host advancement validates the expected index transactionally,
+preserves scores/turn/recap, and appends one start event. Rules protect advancement and
+current-round question selection. Host actions validate completion; rules do not
+independently adjudicate every question or score.
+
+Breaks retain the frozen snapshot. Finishing during a break atomically finalizes
+recap/profile achievements and deletes the snapshot. Coordinate rules, frontend,
+and ImageKit Worker releases: deploy the compatible Worker and rules first, then
+the frontend, and reload older clients. No migration or new indexes are needed.
+No deployment is part of validation. Browser/UI checks remain pending as described
+in the [gameplay reference](gameplay-reference.md#pack-rounds-and-intermediate-standings).
+
 - Compact new-room creation and atomic invitation reservation.
 - Host-only history reads, including player, spectator and unrelated-admin denials.
 - Embedded-field reintroduction, storage-version downgrade and spectator-write denials.

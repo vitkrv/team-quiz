@@ -1,5 +1,6 @@
+import { getPackRounds, validatePackRounds, MAX_PACK_ROUNDS } from '../utils/packRounds';
 import { useEffect, useRef, useState } from 'react';
-import { addDoc, collection, doc, setDoc, updateDoc } from 'firebase/firestore';
+import { addDoc, collection, doc, deleteField, setDoc, updateDoc } from 'firebase/firestore';
 import { ArrowDown, ArrowLeft, ArrowUp, Check, ChevronDown, ChevronRight, Eye, PartyPopper, Plus, Trash2, X } from 'lucide-react';
 import EmojiPicker from '../components/EmojiPicker';
 import PackMediaAttachment from '../components/PackMediaAttachment';
@@ -265,12 +266,12 @@ function PreviewBoardGrid({ categories, onCategorySelect, t }) {
     );
 }
 
-function QuestionPackPreviewModal({ categories, onCategorySelect, onClose, t }) {
+function QuestionPackPreviewModal({ categories, roundNumber, onCategorySelect, onClose, t }) {
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4 sm:p-6">
             <div className="flex max-h-[90vh] w-full max-w-6xl flex-col rounded-xl border border-slate-700 bg-slate-900 shadow-2xl">
                 <div className="flex items-center justify-between border-b border-slate-800 p-5">
-                    <h2 className="min-w-0 pr-4 text-xl font-bold text-white">{t('questionPackPreview')}</h2>
+                    <h2 className="min-w-0 pr-4 text-xl font-bold text-white">{t('questionPackPreview')} · {t('packRound', { round: roundNumber })}</h2>
                     <button
                         type="button"
                         onClick={onClose}
@@ -306,10 +307,26 @@ export default function PackCreator({ pack, setView, user, setError, onSaved }) 
         normalizeSurpriseScoringMechanic(pack?.surpriseScoringMechanic)
     ));
     const [prize, setPrize] = useState(() => pack?.prize || {});
-    const [categories, setCategories] = useState(() => ensureEditableCategoryIds(pack?.categories, t));
+    const [roundIds, setRoundIds] = useState(() => pack ? getPackRounds(pack).map((round) => round.id || generateId()) : [generateId()]);
+    const [activeRoundId, setActiveRoundId] = useState(roundIds[0]);
+    const roundIdsRef = useRef(roundIds);
+    roundIdsRef.current = roundIds;
+    // Local flat editing state keeps async media callbacks bound to globally unique IDs.
+    // Only nested rounds are persisted.
+    const [categories, setCategories] = useState(() => ensureEditableCategoryIds(
+        pack ? getPackRounds(pack).flatMap((round, index) => (round.categories?.length ? round.categories : createDefaultCategories(t))
+            .map((category) => ({ ...category, roundId: roundIds[index], questions: category.questions?.length ? category.questions : [createEmptyQuestion()] })))
+            : createDefaultCategories(t).map((category) => ({ ...category, roundId: roundIds[0] })), t));
+    const visibleCategories = categories.filter((category) => category.roundId === activeRoundId);
+    const serializeRounds = (sourceCategories) => roundIdsRef.current.map((id) => ({ id,
+        categories: stripPendingCategories(sourceCategories.filter((category) => category.roundId === id)).map((category) => {
+            const saved = { ...category }; delete saved.roundId; return saved;
+        })
+    }));
     const [isSaving, setIsSaving] = useState(false);
     const [isPreviewOpen, setIsPreviewOpen] = useState(false);
     const [collapsedCategoryIds, setCollapsedCategoryIds] = useState(() => new Set());
+    const [mediaBusy, setMediaBusy] = useState(false);
     const [mediaProgress, setMediaProgress] = useState({});
     const [mediaErrors, setMediaErrors] = useState({});
     const categoriesRef = useRef(categories);
@@ -318,9 +335,9 @@ export default function PackCreator({ pack, setView, user, setError, onSaved }) 
 
     categoriesRef.current = categories;
     prizeRef.current = prize;
-    const hasActiveMediaAction = Object.values(mediaProgress).some((value) => value > 0 && value < 100);
+    const hasActiveMediaAction = mediaBusy || Object.values(mediaProgress).some((value) => value > 0 && value < 100);
     const packSummary = getPackSummary(categories, prize);
-    const previewCategories = getPreviewCategories(categories);
+    const previewCategories = getPreviewCategories(visibleCategories);
 
     useEffect(() => () => {
         categoriesRef.current.forEach((category) => {
@@ -342,7 +359,7 @@ export default function PackCreator({ pack, setView, user, setError, onSaved }) 
     const addCategory = () => {
         setCategories((currentCategories) => [
             ...currentCategories,
-            { id: generateId(), name: t('newCategory'), questions: [createEmptyQuestion(100)] }
+            { id: generateId(), roundId: activeRoundId, name: t('newCategory'), questions: [createEmptyQuestion(100)] }
         ]);
     };
 
@@ -356,13 +373,13 @@ export default function PackCreator({ pack, setView, user, setError, onSaved }) 
         surpriseScoringMechanic,
         prize: cleanPrizeForSave(sourcePrize),
         updatedAt: timestamp,
-        categories: stripPendingCategories(sourceCategories)
+        rounds: serializeRounds(sourceCategories)
     });
 
     const ensurePackForMediaAction = async (sourceCategories = categories, sourcePrize = prizeRef.current) => {
         if (persistedPackId) {
             const timestamp = Date.now();
-            await updateDoc(getPackRef(persistedPackId), getPackData(sourceCategories, timestamp, sourcePrize));
+            await updateDoc(getPackRef(persistedPackId), { ...getPackData(sourceCategories, timestamp, sourcePrize), categories: deleteField() });
             return persistedPackId;
         }
 
@@ -386,7 +403,7 @@ export default function PackCreator({ pack, setView, user, setError, onSaved }) 
     const persistCategoriesIfNeeded = async (nextCategories) => {
         if (!persistedPackId) return;
         await updateDoc(getPackRef(persistedPackId), {
-            categories: stripPendingCategories(nextCategories),
+            rounds: serializeRounds(nextCategories), categories: deleteField(),
             updatedAt: Date.now()
         });
     };
@@ -399,7 +416,31 @@ export default function PackCreator({ pack, setView, user, setError, onSaved }) 
         });
     };
 
+    const addRound = () => {
+        if (roundIds.length >= MAX_PACK_ROUNDS || hasActiveMediaAction || isSaving) return;
+        const id = generateId();
+        setRoundIds([...roundIds, id]);
+        setCategories((current) => [...current, { id: generateId(), roundId: id, name: t('newCategory'), questions: [createEmptyQuestion()] }]);
+        setActiveRoundId(id);
+    };
+    const removeRound = async () => {
+        if (roundIds.length <= 1 || hasActiveMediaAction || isSaving || !window.confirm(t('removeRoundConfirm'))) return;
+        const removed = categories.filter((category) => category.roundId === activeRoundId);
+        const next = categories.filter((category) => category.roundId !== activeRoundId);
+        const ids = roundIds.filter((id) => id !== activeRoundId);
+        setIsSaving(true);
+        try {
+            if (persistedPackId) await updateDoc(getPackRef(persistedPackId), {
+                rounds: serializeRounds(next).filter((round) => round.id !== activeRoundId), categories: deleteField(), updatedAt: Date.now()
+            });
+            setRoundIds(ids); setCategories(next); setActiveRoundId(ids[0]);
+            await deleteMediaNow(removed.flatMap((category) => category.questions.flatMap(getSavedMediaFromQuestion)));
+        } catch (err) { setError(err.messageKey ? t(err.messageKey) : err.message); }
+        finally { setIsSaving(false); }
+    };
+
     const removeCategory = async (catId) => {
+        if (visibleCategories.length <= 1 || hasActiveMediaAction || isSaving) return;
         const category = categories.find((item) => item.id === catId);
         const nextCategories = categories.filter(c => c.id !== catId);
         setCategories(nextCategories);
@@ -426,8 +467,14 @@ export default function PackCreator({ pack, setView, user, setError, onSaved }) 
     const moveCategory = (catId, direction) => {
         setCategories((currentCategories) => {
             const currentIndex = currentCategories.findIndex((category) => category.id === catId);
-            const nextIndex = currentIndex + direction;
-            return reorderItem(currentCategories, currentIndex, nextIndex);
+            const siblings = currentCategories.filter((category) => category.roundId === currentCategories[currentIndex].roundId);
+            const siblingIndex = siblings.findIndex((category) => category.id === catId);
+            const target = siblings[siblingIndex + direction];
+            if (!target) return currentCategories;
+            const next = [...currentCategories];
+            const nextIndex = currentCategories.findIndex((category) => category.id === target.id);
+            [next[currentIndex], next[nextIndex]] = [next[nextIndex], next[currentIndex]];
+            return next;
         });
     };
 
@@ -588,6 +635,7 @@ export default function PackCreator({ pack, setView, user, setError, onSaved }) 
 
     const removeQuestion = async (catId, qId) => {
         const category = categories.find((item) => item.id === catId);
+        if (category?.questions.length <= 1 || hasActiveMediaAction || isSaving) return;
         const question = category?.questions.find((item) => item.id === qId);
         const nextCategories = categories.map(c => {
             if (c.id === catId) {
@@ -606,6 +654,8 @@ export default function PackCreator({ pack, setView, user, setError, onSaved }) 
     };
 
     const updateQuestionMedia = async (catId, qId, field, file) => {
+        if (hasActiveMediaAction || isSaving) return;
+        setMediaBusy(true);
         const previewUrl = URL.createObjectURL(file);
         const progressKey = `${qId}:${field}`;
         const previousQuestion = categories
@@ -639,7 +689,7 @@ export default function PackCreator({ pack, setView, user, setError, onSaved }) 
             const nextCategories = setQuestionMediaInCategories(categoriesRef.current, catId, qId, field, uploadedMedia);
             setCategories(nextCategories);
             await updateDoc(getPackRef(packId), {
-                categories: stripPendingCategories(nextCategories),
+                rounds: serializeRounds(nextCategories), categories: deleteField(),
                 updatedAt: Date.now()
             });
             if (previousMedia?.fileId) {
@@ -654,11 +704,14 @@ export default function PackCreator({ pack, setView, user, setError, onSaved }) 
             setMediaErrors((errors) => ({ ...errors, [progressKey]: err.messageKey ? t(err.messageKey) : err.message }));
             setError(err.messageKey ? t(err.messageKey) : err.message);
         } finally {
+            setMediaBusy(false);
             URL.revokeObjectURL(previewUrl);
         }
     };
 
     const removeQuestionMedia = async (catId, qId, field) => {
+        if (hasActiveMediaAction || isSaving) return;
+        setMediaBusy(true);
         const progressKey = `${qId}:${field}`;
         const previousQuestion = categories
             .find((category) => category.id === catId)
@@ -672,7 +725,7 @@ export default function PackCreator({ pack, setView, user, setError, onSaved }) 
         try {
             if (persistedPackId) {
                 await updateDoc(getPackRef(persistedPackId), {
-                    categories: stripPendingCategories(nextCategories),
+                    rounds: serializeRounds(nextCategories), categories: deleteField(),
                     updatedAt: Date.now()
                 });
             }
@@ -684,10 +737,12 @@ export default function PackCreator({ pack, setView, user, setError, onSaved }) 
             setCategories(setQuestionMediaInCategories(categoriesRef.current, catId, qId, field, previousMedia));
             setMediaErrors((errors) => ({ ...errors, [progressKey]: err.messageKey ? t(err.messageKey) : err.message }));
             setError(err.messageKey ? t(err.messageKey) : err.message);
-        }
+        } finally { setMediaBusy(false); }
     };
 
     const updatePrizeMedia = async (slot, file) => {
+        if (hasActiveMediaAction || isSaving) return;
+        setMediaBusy(true);
         const previewUrl = URL.createObjectURL(file);
         const progressKey = `${PACK_PRIZE_MEDIA_ID}:${slot}`;
         const previousPrize = prizeRef.current || {};
@@ -733,11 +788,14 @@ export default function PackCreator({ pack, setView, user, setError, onSaved }) 
             setMediaErrors((errors) => ({ ...errors, [progressKey]: err.messageKey ? t(err.messageKey) : err.message }));
             setError(err.messageKey ? t(err.messageKey) : err.message);
         } finally {
+            setMediaBusy(false);
             URL.revokeObjectURL(previewUrl);
         }
     };
 
     const removePrizeMedia = async (slot) => {
+        if (hasActiveMediaAction || isSaving) return;
+        setMediaBusy(true);
         const progressKey = `${PACK_PRIZE_MEDIA_ID}:${slot}`;
         const previousPrize = prizeRef.current || {};
         const previousMedia = previousPrize[getPrizeMediaField(slot)];
@@ -756,19 +814,21 @@ export default function PackCreator({ pack, setView, user, setError, onSaved }) 
             setPrize(previousPrize);
             setMediaErrors((errors) => ({ ...errors, [progressKey]: err.messageKey ? t(err.messageKey) : err.message }));
             setError(err.messageKey ? t(err.messageKey) : err.message);
-        }
+        } finally { setMediaBusy(false); }
     };
 
     const validateQuestions = () => {
+        const invalid = validatePackRounds({ rounds: serializeRounds(categories) });
+        if (invalid) { setActiveRoundId(roundIds[invalid.roundIndex]); alert(t(invalid.key)); return false; }
         for (const category of categories) {
             for (const question of category.questions) {
                 if (!question.text.trim() && !hasEffectiveMedia(question, MEDIA_SLOTS.QUESTION)) {
-                    alert(t('questionTextOrMediaRequired'));
+                    setActiveRoundId(category.roundId); alert(t('questionTextOrMediaRequired'));
                     return false;
                 }
 
                 if (!question.answer.trim() && !hasEffectiveMedia(question, MEDIA_SLOTS.ANSWER)) {
-                    alert(t('answerTextOrMediaRequired'));
+                    setActiveRoundId(category.roundId); alert(t('answerTextOrMediaRequired'));
                     return false;
                 }
             }
@@ -797,11 +857,11 @@ export default function PackCreator({ pack, setView, user, setError, onSaved }) 
                 surpriseScoringMechanic,
                 prize: cleanPrizeForSave(prize),
                 updatedAt: Date.now(),
-                categories: finalCategories
+                rounds: serializeRounds(finalCategories)
             };
 
             if (persistedPackId) {
-                await updateDoc(getPackRef(persistedPackId), packData);
+                await updateDoc(getPackRef(persistedPackId), { ...packData, categories: deleteField() });
             } else {
                 const packsRef = collection(db, 'artifacts', appId, 'public', 'data', 'packs');
                 const createdDoc = await addDoc(packsRef, {
@@ -825,6 +885,7 @@ export default function PackCreator({ pack, setView, user, setError, onSaved }) 
             {isPreviewOpen && (
                 <QuestionPackPreviewModal
                     categories={previewCategories}
+                    roundNumber={roundIds.indexOf(activeRoundId) + 1}
                     t={t}
                     onCategorySelect={handlePreviewCategorySelect}
                     onClose={() => setIsPreviewOpen(false)}
@@ -988,7 +1049,7 @@ export default function PackCreator({ pack, setView, user, setError, onSaved }) 
                             <PackMediaAttachment
                                 media={prize?.hiddenMedia}
                                 label={t('prizeHiddenMedia')}
-                                disabled={isSaving || Boolean(mediaProgress[`${PACK_PRIZE_MEDIA_ID}:${MEDIA_SLOTS.PRIZE_HIDDEN}`] > 0 && mediaProgress[`${PACK_PRIZE_MEDIA_ID}:${MEDIA_SLOTS.PRIZE_HIDDEN}`] < 100)}
+                                disabled={isSaving || hasActiveMediaAction}
                                 progress={mediaProgress[`${PACK_PRIZE_MEDIA_ID}:${MEDIA_SLOTS.PRIZE_HIDDEN}`] || 0}
                                 error={mediaErrors[`${PACK_PRIZE_MEDIA_ID}:${MEDIA_SLOTS.PRIZE_HIDDEN}`]}
                                 t={t}
@@ -1004,7 +1065,7 @@ export default function PackCreator({ pack, setView, user, setError, onSaved }) 
                             <PackMediaAttachment
                                 media={prize?.revealedMedia}
                                 label={t('prizeRevealedMedia')}
-                                disabled={isSaving || Boolean(mediaProgress[`${PACK_PRIZE_MEDIA_ID}:${MEDIA_SLOTS.PRIZE_REVEALED}`] > 0 && mediaProgress[`${PACK_PRIZE_MEDIA_ID}:${MEDIA_SLOTS.PRIZE_REVEALED}`] < 100)}
+                                disabled={isSaving || hasActiveMediaAction}
                                 progress={mediaProgress[`${PACK_PRIZE_MEDIA_ID}:${MEDIA_SLOTS.PRIZE_REVEALED}`] || 0}
                                 error={mediaErrors[`${PACK_PRIZE_MEDIA_ID}:${MEDIA_SLOTS.PRIZE_REVEALED}`]}
                                 t={t}
@@ -1020,7 +1081,31 @@ export default function PackCreator({ pack, setView, user, setError, onSaved }) 
             </div>
 
             <div className="flex-1 overflow-y-auto space-y-8 pb-12">
-                {categories.map((cat, catIdx) => {
+                <div className="mb-6 space-y-3">
+                    <div role="tablist" aria-label={t('packRounds')} className="flex flex-wrap gap-2">
+                        {roundIds.map((id, index) => {
+                            const items = categories.filter((category) => category.roundId === id);
+                            return <button key={id} id={id + '-tab'} role="tab" aria-selected={activeRoundId === id} aria-controls="round-editor"
+                                tabIndex={activeRoundId === id ? 0 : -1}
+                                onKeyDown={(event) => {
+                                    const offset = event.key === 'ArrowRight' ? 1 : event.key === 'ArrowLeft' ? -1 : 0;
+                                    const target = event.key === 'Home' ? 0 : event.key === 'End' ? roundIds.length - 1 : (index + offset + roundIds.length) % roundIds.length;
+                                    if (!offset && !['Home', 'End'].includes(event.key)) return;
+                                    event.preventDefault(); setActiveRoundId(roundIds[target]);
+                                    document.getElementById(roundIds[target] + '-tab')?.focus();
+                                }}
+                                onClick={() => setActiveRoundId(id)} className={`rounded-xl border px-4 py-3 text-left ${activeRoundId === id ? 'border-yellow-400 bg-yellow-400/10 text-yellow-300' : 'border-slate-600 text-slate-300'}`}>
+                                <span className="block font-bold">{t('packRound', { round: index + 1 })}</span>
+                                <span className="text-xs">{t('roundCounts', { categories: items.length, questions: items.reduce((count, category) => count + category.questions.length, 0) })}</span>
+                            </button>;
+                        })}
+                        <button onClick={addRound} disabled={roundIds.length >= MAX_PACK_ROUNDS || hasActiveMediaAction || isSaving}
+                            className="flex items-center gap-2 rounded-xl border border-slate-600 px-4 py-3 text-white disabled:opacity-40"><Plus size={18} />{t('addRound')}</button>
+                    </div>
+                    {roundIds.length > 1 && <button onClick={removeRound} disabled={hasActiveMediaAction || isSaving} className="flex items-center gap-2 text-sm text-red-400 disabled:opacity-40"><Trash2 size={16} />{t('removeRound')}</button>}
+                </div>
+                <div id="round-editor" role="tabpanel" aria-labelledby={activeRoundId + '-tab'} className="space-y-6">
+                {visibleCategories.map((cat, catIdx) => {
                     const isCategoryCollapsed = collapsedCategoryIds.has(cat.id);
                     const collapseLabel = isCategoryCollapsed ? t('expandCategory') : t('collapseCategory');
                     const questionCount = cat.questions?.length || 0;
@@ -1058,7 +1143,7 @@ export default function PackCreator({ pack, setView, user, setError, onSaved }) 
                                 <button
                                     type="button"
                                     onClick={() => moveCategory(cat.id, 1)}
-                                    disabled={catIdx === categories.length - 1}
+                                    disabled={catIdx === visibleCategories.length - 1}
                                     aria-label={t('moveCategoryDown')}
                                     title={t('moveCategoryDown')}
                                     className="flex h-10 w-10 select-none items-center justify-center border-l border-slate-700 text-slate-300 transition-colors hover:bg-slate-800 hover:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:cursor-not-allowed disabled:text-slate-700 disabled:hover:bg-transparent"
@@ -1075,14 +1160,14 @@ export default function PackCreator({ pack, setView, user, setError, onSaved }) 
                                     className="w-full bg-slate-900 border border-slate-600 rounded-lg p-2 text-white font-bold outline-none"
                                 />
                             </div>
-                            <HoldToConfirmButton
+                            {visibleCategories.length > 1 && !hasActiveMediaAction && !isSaving && <HoldToConfirmButton
                                 ariaLabel={t('removeCategory')}
                                 onConfirm={() => removeCategory(cat.id)}
                                 title={t('holdToConfirmAction', { action: t('removeCategory') })}
                                 className="mt-5 rounded-lg p-2 text-red-400 transition-colors hover:bg-red-400/10 hover:text-white"
                             >
                                 <Trash2 size={20} />
-                            </HoldToConfirmButton>
+                            </HoldToConfirmButton>}
                         </div>
 
                         {!isCategoryCollapsed && (
@@ -1193,7 +1278,7 @@ export default function PackCreator({ pack, setView, user, setError, onSaved }) 
                                             <PackMediaAttachment
                                                 media={q.questionMedia}
                                                 label={t('questionMediaAlt')}
-                                                disabled={isSaving || Boolean(mediaProgress[`${q.id}:${MEDIA_SLOTS.QUESTION}`] > 0 && mediaProgress[`${q.id}:${MEDIA_SLOTS.QUESTION}`] < 100)}
+                                                disabled={isSaving || hasActiveMediaAction}
                                                 progress={mediaProgress[`${q.id}:${MEDIA_SLOTS.QUESTION}`] || 0}
                                                 error={mediaErrors[`${q.id}:${MEDIA_SLOTS.QUESTION}`]}
                                                 t={t}
@@ -1213,7 +1298,7 @@ export default function PackCreator({ pack, setView, user, setError, onSaved }) 
                                             <PackMediaAttachment
                                                 media={q.answerMedia}
                                                 label={t('answerMediaAlt')}
-                                                disabled={isSaving || Boolean(mediaProgress[`${q.id}:${MEDIA_SLOTS.ANSWER}`] > 0 && mediaProgress[`${q.id}:${MEDIA_SLOTS.ANSWER}`] < 100)}
+                                                disabled={isSaving || hasActiveMediaAction}
                                                 progress={mediaProgress[`${q.id}:${MEDIA_SLOTS.ANSWER}`] || 0}
                                                 error={mediaErrors[`${q.id}:${MEDIA_SLOTS.ANSWER}`]}
                                                 t={t}
@@ -1222,7 +1307,7 @@ export default function PackCreator({ pack, setView, user, setError, onSaved }) 
                                             />
                                         </div>
                                     </div>
-                                    <button onClick={() => removeQuestion(cat.id, q.id)} className="text-slate-600 hover:text-red-400 transition-colors self-start mt-6">
+                                    <button disabled={cat.questions.length <= 1 || hasActiveMediaAction || isSaving} aria-label={t('removeQuestion')} onClick={() => removeQuestion(cat.id, q.id)} className="text-slate-600 hover:text-red-400 transition-colors self-start mt-6">
                                         <X size={20} />
                                     </button>
                                 </div>
@@ -1245,6 +1330,7 @@ export default function PackCreator({ pack, setView, user, setError, onSaved }) 
                 >
                     <Plus size={24} /> {t('addCategory')}
                 </button>
+                </div>
             </div>
         </div>
     );

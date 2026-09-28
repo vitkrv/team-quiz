@@ -301,7 +301,7 @@ export default function App() {
                 const hasLinkedDefinedFinalResults = linkedGameRoomCode === currentRoomCode
                     && !isParticipant
                     && hasDefinedFinalResults(room);
-                const canSpectate = room.status === 'category_preview'
+                const canSpectate = room.status === 'round_break' || room.status === 'category_preview'
                     || room.status === 'playing'
                     || room.status === 'finished'
                     || hasLinkedDefinedFinalResults;

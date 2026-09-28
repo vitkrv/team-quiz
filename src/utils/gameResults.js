@@ -23,6 +23,7 @@ export const hasDefinedFinalResults = (room) => {
     if (room.status === 'finished') return true;
     if (
         room.status !== 'playing'
+        || (room.currentRoundIndex || 0) < (room.roundCount || 1) - 1
         || room.activeQuestionId
         || room.answerRevealed
         || !areAllQuestionsDone(room.questionStates)

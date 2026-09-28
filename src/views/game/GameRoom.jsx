@@ -1,3 +1,4 @@
+import { getRoundCategories } from '../../utils/packRounds';
 import { ANSWER_WINDOW_MS, LATE_BUZZ_WINDOW_MS, timestampMillis } from '../../utils/buzzerPolicy';
 import { startGame } from '../../actions/roomActions';
 import useGamePack from '../../hooks/useGamePack';
@@ -20,6 +21,7 @@ import { hasDefinedFinalResults } from '../../utils/gameResults';
 import ActiveQuestionView from './ActiveQuestionView';
 import BoardView from './BoardView';
 import ResultsView from './ResultsView';
+import RoundBreakView from './RoundBreakView';
 
 const BOARD_CLOCK_RESYNC_INTERVAL_MS = 2 * 60 * 1000;
 
@@ -280,6 +282,10 @@ const renderHistoryMessage = (item, t) => {
             return <><PlayerName>{details.hostName || fallbackName}</PlayerName> {t('historyViewCreatedRoom')}</>;
         case 'game_started':
             return <><PlayerName>{details.actorName || fallbackName}</PlayerName> {t('historyViewStartedGame')} {t('historyViewFirst')} <PlayerName>{details.playerName || t('playerFallback')}</PlayerName></>;
+        case 'round_completed':
+            return t('roundComplete', { round: details.round });
+        case 'round_started':
+            return t('roundStarted', { round: details.round });
         case 'game_finished':
             return <><PlayerName>{details.actorName || fallbackName}</PlayerName> {t('historyViewEndedGame')}</>;
         case 'question_picked':
@@ -528,7 +534,7 @@ function PrizeModal({ room, roomRef, isHost, t }) {
 }
 
 function CategoryPreviewView({ room, roomRef, isHost, t }) {
-    const categories = room.pack?.categories || [];
+    const categories = getRoundCategories(room.pack, room.currentRoundIndex || 0);
     const roomIndex = Math.min(Math.max(Number(room.categoryPreviewIndex) || 0, 0), Math.max(categories.length - 1, 0));
     const [displayedIndex, setDisplayedIndex] = useState(roomIndex);
     const [isLeaving, setIsLeaving] = useState(false);
@@ -896,7 +902,7 @@ function GameRoomContent({ room, roomCode, user, onPrepareRoomExit, onLeaveRoom,
         return <ResultsView gameId={roomCode} room={room} leaveRoom={leaveRoom} />;
     }
 
-    if (room.status === 'category_preview' || room.status === 'playing') {
+    if (room.status === 'round_break' || room.status === 'category_preview' || room.status === 'playing') {
         return (
             <div className="min-h-screen flex flex-col bg-slate-900 overflow-hidden">
                 {isHost && isScoreEditorOpen && (
@@ -942,6 +948,7 @@ function GameRoomContent({ room, roomCode, user, onPrepareRoomExit, onLeaveRoom,
                         <button onClick={leaveRoom} className="shrink-0 text-slate-500 hover:text-slate-300"><ArrowLeft size={20}/></button>
                         <h1 className="min-w-0 flex-1 text-base font-bold text-blue-400 md:max-w-xs md:text-xl">
                             <PackTitle pack={room.pack} />
+                            {room.roundCount > 1 && <span className="ml-2 text-xs text-slate-400">{t('packRound', { round: (room.currentRoundIndex || 0) + 1 })} / {room.roundCount}</span>}
                         </h1>
                         <span className="hidden shrink-0 rounded-full bg-slate-800 px-3 py-1 font-mono text-xs text-slate-400 sm:inline-flex">{t('codeLabel', { roomCode: invitationCode })}</span>
                         {isSpectator && (
@@ -1032,7 +1039,9 @@ function GameRoomContent({ room, roomCode, user, onPrepareRoomExit, onLeaveRoom,
 
                     {/* Main Play Area */}
                     <main className="relative flex min-w-0 flex-1 flex-col overflow-x-hidden overflow-y-auto bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-blue-950 to-slate-900 p-3 md:overflow-hidden md:p-6">
-                        {room.status === 'category_preview' ? (
+                        {room.status === 'round_break' ? (
+                            <RoundBreakView room={room} roomRef={roomRef} isHost={isHost} actor={host} />
+                        ) : room.status === 'category_preview' ? (
                             <CategoryPreviewView room={room} roomRef={roomRef} isHost={isHost} t={t} />
                         ) : room.activeQuestionId ? (
                             <ActiveQuestionView room={room} roomCode={roomCode} roomRef={roomRef} user={user} isHost={isHost} isSpectator={isSpectator} serverNow={serverNow} clockSyncKey={clockSyncKey} resumedQuestion={initialQuestion.current === room.activeQuestionId} clockQuality={{ ready, lastSyncedAt, roundTripMs }} />

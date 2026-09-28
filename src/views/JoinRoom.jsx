@@ -68,7 +68,7 @@ export default function JoinRoom({ initialCode = '', setView, user, username, se
 
                 const roomData = roomSnap.data();
                 if (roomData.status !== 'lobby') {
-                    if (roomData.status === 'category_preview' || roomData.status === 'playing' || roomData.status === 'finished') {
+                    if (roomData.status === 'round_break' || roomData.status === 'category_preview' || roomData.status === 'playing' || roomData.status === 'finished') {
                         return { ok: true, spectating: true, gameId: roomRef.id };
                     }
 
@@ -131,7 +131,7 @@ export default function JoinRoom({ initialCode = '', setView, user, username, se
         setIsJoining(false);
     };
 
-    const isSpectatorPreview = roomPreview.status === 'category_preview' || roomPreview.status === 'playing' || roomPreview.status === 'finished';
+    const isSpectatorPreview = roomPreview.status === 'round_break' || roomPreview.status === 'category_preview' || roomPreview.status === 'playing' || roomPreview.status === 'finished';
     const submitLabel = isSpectatorPreview ? t('watchGame') : t('enterRoom');
 
     return (

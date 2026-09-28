@@ -34,7 +34,7 @@ The normal application requires Google sign-in. Public packs are available to ot
 3. The host selects a pack and receives a six-digit room code and a shareable `?room=` link.
 4. Players join the lobby with nicknames. The lobby supports up to 20 contestants plus the host. The host chooses whether to enable True Competitive Mode.
 5. The host starts the session. Categories are introduced one at a time before the question board appears.
-6. Play repeats through question selection, answering, judging, answer reveal, and return to the board.
+6. Play repeats through question selection, answering, judging, answer reveal, and return to the board. Between rounds, everyone sees cumulative standings; the host starts the next round and its category previews. Scores, selection turn, and achievement progress carry forward.
 7. The host completes the game, resolving a top-score tie through RPS when following the normal completed-board flow. Everyone can view final standings.
 
 New arrivals after the lobby view the game as spectators. Existing participants retain their role when reopening their room. A `?game=` link supports viewing a game and its defined results; see the gameplay reference for the precise result condition.
@@ -52,7 +52,7 @@ games without saved awards are not backfilled.
 
 ## Question packs
 
-A pack contains a title, optional emoji icon, ownership/sharing information, ordered categories, and ordered questions. Authors can add, remove, reorder, and preview categories and questions.
+A pack contains a title, optional emoji icon, ownership/sharing information, and one to three ordered rounds with categories and questions. Numbered tabs let authors add/delete rounds and edit or preview one round at a time. Each round needs at least one category and each category needs at least one question. Category/question reordering stays within its round; cross-round movement is unavailable. Existing category-only packs are treated as a single round and converted when saved. Round support was checked against source on 2026-09-28.
 
 Each question includes a point value and question/answer content. Each side must have text or media; either can have both. Supported media kinds are image, audio, and video. Ordinary point values are normalized to positive multiples of 100 in the editor.
 

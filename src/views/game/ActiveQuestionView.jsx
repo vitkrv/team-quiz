@@ -1,3 +1,4 @@
+import { getRoundCategories } from '../../utils/packRounds';
 import useBuzzer from '../../hooks/useBuzzer';
 import useSurpriseWheel from '../../hooks/useSurpriseWheel';
 import { WHEEL_ANIMATION_MS, wheelEasing } from '../../utils/wheelPolicy';
@@ -325,7 +326,7 @@ export default function ActiveQuestionView({ room, roomCode, roomRef, user, isHo
     // Find the active question data
     let activeQ = null;
     let activeCatName = "";
-    for (const cat of room.pack.categories) {
+    for (const cat of getRoundCategories(room.pack, room.currentRoundIndex || 0)) {
         const q = cat.questions.find(q => q.id === room.activeQuestionId);
         if (q) {
             activeQ = q;

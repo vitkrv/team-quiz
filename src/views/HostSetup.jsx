@@ -1,3 +1,4 @@
+import { getAllCategories, getAllQuestions, getPackRounds } from '../utils/packRounds';
 import { useEffect, useRef, useState } from 'react';
 import { collection, getDocs, query, where } from 'firebase/firestore';
 import { ArrowLeft, ChevronDown, ChevronRight, Play } from 'lucide-react';
@@ -19,8 +20,8 @@ function PackCard({ pack, onStartRoom, t }) {
             </h4>
             <p className="mb-2 text-sm text-slate-400">
                 {t('packStats', {
-                    categories: pack.categories?.length || 0,
-                    questions: pack.categories?.reduce((acc, c) => acc + (c.questions?.length || 0), 0)
+                    rounds: getPackRounds(pack).length, categories: getAllCategories(pack).length,
+                    questions: getAllQuestions(pack).length
                 })}
             </p>
             <p className="mb-4 text-xs text-slate-500">

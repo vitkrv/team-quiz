@@ -175,7 +175,7 @@ Between questions, the host can select two room members for RPS, including thems
 
 ### Completed-board tie-breaker
 
-When all questions are done and the host has returned to the board:
+When all questions across all pack rounds are done and the host has returned to the board:
 
 - With a single highest scorer, the host can show final results.
 - With multiple contestants tied for highest score, the normal completion control opens the tie-breaker setup.
@@ -191,6 +191,38 @@ The host can end the game early from a board that still has questions, using hol
 The host is excluded from final standings. A finished game counts as having defined results. Results can also be defined before `finished` when the room is `playing`, all questions are done, no question/reveal is active, and there is either no top-score tie or a recorded champion. A non-participant opening a `?game=` link can see those defined results.
 
 ## 8. Review checks for future changes
+
+### Pack rounds and intermediate standings
+
+A pack has 1–3 numbered rounds. Every round has at least one category, and every
+category has at least one question. Authors manage rounds through tabs; reordering
+categories/questions never moves them between rounds. The selected round has its
+own board preview. Prize and surprise-scoring settings remain pack-wide.
+
+Start Game freezes all rounds together. The host presents only the current round's
+categories, then players select from that round's board. After the final question is
+resolved and the host presses Continue, a non-final round enters the shared
+intermediate screen. Pending surprise awards must finish first. Standings exclude
+the host and show cumulative scores, including negative scores, without final awards
+or a tie-breaker. Only the host starts the next round, beginning its category previews.
+
+Scores and the current selection turn carry forward unchanged. Recap statistics,
+correct-answer streaks, achievement counters, and score progression cover the entire
+game; round boundaries do not reset or finalize them. Final tie-breakers/results use
+the existing flow only after the last round. Explicit early finish remains available
+from the intermediate screen and saves results and achievements normally.
+
+Refreshes and spectator joins during an intermediate screen restore that screen.
+A shared results link cannot treat a round break as a final result. The frozen pack
+survives every round boundary and is deleted only on explicit finish. Existing packs,
+embedded legacy rooms, and older frozen snapshots remain single-round experiences.
+
+Pending manual checks (no browser verification performed for this feature): in both
+English and Ukrainian, on desktop and mobile, add/delete/switch editor round tabs,
+preview each board, and switch tabs during media upload. With host, contestant, and
+spectator sessions, verify category previews, cumulative intermediate standings,
+negative-score/turn carryover, refresh during a break, and final results after the
+last round. Also check the final-round top-score tie and early finish during a break.
 
 ### Active room connection recovery
 

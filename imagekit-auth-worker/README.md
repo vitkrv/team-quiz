@@ -8,6 +8,13 @@ The app stores unused upload-auth responses in `sessionStorage` for the active b
 
 ## Requirements
 
+Multi-round upload authorization finds question IDs across every entry of
+`rounds[].categories` and still supports legacy top-level `categories`. Owner checks
+and deletion path checks are unchanged. Deploy this compatible Worker before
+enabling the new frontend's round editor. Non-browser Worker fixtures run through
+the repository's `node scripts/verify-game-storage.mjs` entry point with its dedicated
+Emulator; production upload/delete and UI checks remain pending.
+
 - A Cloudflare account with Workers enabled.
 - An ImageKit account.
 - Your Firebase project id.

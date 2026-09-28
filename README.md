@@ -7,7 +7,7 @@ Question packs are owner-only by default. Authors can mark a pack as available t
 ## Features and game flow
 
 - Google sign-in and English/Ukrainian interfaces.
-- Pack editing with category/question reordering, board previews, image/audio/video questions and answers, and optional concealed/revealed prize images.
+- Packs with 1–3 ordered rounds, round tabs, category/question reordering within each round, board previews, image/audio/video questions and answers, and optional concealed/revealed prize images.
 - Host-led rooms for up to 20 contestants plus the host, with six-digit invitations, remembered rooms, and spectator support after play starts.
 - Category previews, a shared question board, contestant question suggestions, and host judging/reveal controls. Answers are given outside the app; the app does not evaluate free-text answers or provide voice chat.
 - Standard scoring or optional True Competitive Mode with wrong-answer deductions and early-buzz delays. New rooms collect in-flight buzzes for two seconds and rank device-reported local reaction times; accepted losing presses retain personal reaction-gap feedback.
@@ -175,3 +175,22 @@ storage validation command to include the recap/achievement scenarios.
 New rooms use `buzzerPolicyVersion: 1` and a bounded `rooms/{gameId}/buzzer/current` document. The first server-committed submission starts a two-second collection window. The host resolves accepted submissions by reported local reaction duration, then server acceptance timestamp and player ID. Device measurements and host ranking are trusted; there is no new backend service or latency estimate. Shared penalties apply to button and Space, and the answer countdown begins only when the winner is finalized. Existing rooms keep their previous policy.
 
 Rules and frontend require a coordinated release; older clients must reload before creating new rooms. No migration or new indexes are required. The existing storage verification command also runs `scripts/verify-buzzer.mjs`. See the [gameplay reference](docs/gameplay-reference.md#4-ordinary-question-sequence) for refresh, penalties, deadlines, and host recovery.
+
+## Pack rounds
+
+Packs contain one to three ordered rounds. Each round requires at least one category;
+each category requires at least one question. Round tabs support adding and deleting
+rounds, with a board preview for the selected round. Categories and questions cannot
+move between rounds. Existing packs are interpreted as one round and converted when
+saved in the editor; active legacy games need no migration.
+
+All rounds are frozen together at Start Game. After completing a round and continuing
+past its last answer, everyone sees cumulative standings. Only the host can start the
+next round and its category previews. Negative scores, the selection turn, statistics,
+streaks, and achievements carry across rounds. Only the final round uses the usual
+final-results/tie-breaker flow. Early finish remains available during a round break.
+
+This feature requires coordinated frontend, Firestore rules, and ImageKit Worker
+releases. Update the compatible Worker and rules before publishing the new frontend;
+older clients must reload before editing or playing multi-round packs. No migration
+or new indexes are required. Deploy only when explicitly authorized.

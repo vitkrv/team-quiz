@@ -1,3 +1,4 @@
+import { getAllCategories, getPackRounds, validatePackRounds } from '../utils/packRounds';
 import { BUZZER_POLICY_VERSION } from '../utils/buzzerPolicy';
 import { createRecapSummary } from '../utils/achievements';
 import { recapRef } from './gameRecap';
@@ -56,9 +57,10 @@ export async function startGame(roomRef, actor, t) {
             pack = source.data();
             if (pack.ownerId !== actor.id && pack.isPublic !== true) throw new Error('Pack is private');
         }
-        if (!Array.isArray(pack?.categories)) throw new Error('Invalid pack');
+        if (validatePackRounds(pack)) throw new Error(t('invalidPackRounds'));
+        const rounds = getPackRounds(pack);
         const questionStates = {};
-        for (const category of pack.categories) {
+        for (const category of getAllCategories(pack)) {
             if (!Array.isArray(category.questions)) throw new Error('Invalid category');
             for (const question of category.questions) {
                 if (typeof question.id !== 'string' || !question.id || Object.hasOwn(questionStates, question.id)) {
@@ -70,7 +72,8 @@ export async function startGame(roomRef, actor, t) {
         const playerIds = Object.keys(room.players).filter((id) => !room.players[id].isHost);
         const starterId = playerIds.length ? playerIds[Math.floor(Math.random() * playerIds.length)] : actor.id;
         const update = {
-            status: pack.categories.length ? 'category_preview' : 'playing',
+            status: 'category_preview', currentRoundIndex: 0, roundCount: rounds.length,
+            currentRoundQuestionIds: rounds[0].categories.flatMap((category) => category.questions.map((question) => question.id)),
             categoryPreviewIndex: 0, currentTurn: starterId, questionStates,
             history: [createHistoryItem({
                 id: eventId, type: 'game_started', actorId: actor.id, actorName: actor.name,

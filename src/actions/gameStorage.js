@@ -1,3 +1,4 @@
+import { getAllQuestions, isRoundComplete } from '../utils/packRounds';
 import { prepareBuzzerLifecycle } from './buzzerState';
 import { prepareRecap } from './gameRecap';
 import { hasPendingSurpriseAward, isCurrentGame } from '../utils/wheelPolicy';
@@ -78,7 +79,7 @@ export async function updateRoom(roomRef, update) {
             if (!playerId || playerId !== d.playerId || !room.players[playerId] || room.players[playerId].isHost) return;
             if (isCurrentGame(room)) {
                 const pack = await readRoomPack(transaction, roomRef, room);
-                const question = pack.categories.flatMap((category) => category.questions).find((q) => q.id === d.questionId);
+                const question = getAllQuestions(pack).find((q) => q.id === d.questionId);
                 if (!question || Boolean(question.isSurpriseQuestion) !== event.type.startsWith('surprise_')) return;
                 if (!question.isSurpriseQuestion) {
                     const points = Number(question.points) || 0;
@@ -100,6 +101,15 @@ export async function updateRoom(roomRef, update) {
                     next[`players.${id}.score`] = after;
                     Object.assign(item.details, { previousScore: before, nextScore: after, delta: after - before });
                 }
+            }
+        }
+        if (event.type === 'tie_breaker_started' && ((room.currentRoundIndex || 0) < (room.roundCount || 1) - 1 || room.status !== 'playing' || room.activeQuestionId || Object.values(room.questionStates || {}).some((state) => state !== 'done'))) return;
+        if (event.type === 'board_resumed' && room.roundCount > 1) {
+            const pack = await readRoomPack(transaction, roomRef, room);
+            if (room.currentRoundIndex < room.roundCount - 1 && isRoundComplete(pack, room.currentRoundIndex, room.questionStates)) {
+                next.status = 'round_break';
+                next.history.push({ ...event, id: event.id + '_round', type: 'round_completed',
+                    details: { actorName: event.actorName, round: room.currentRoundIndex + 1 } });
             }
         }
         next.history = next.history.filter((item) => !['score_set', 'score_adjusted'].includes(item.type) || item.details.delta !== 0);

@@ -1,3 +1,4 @@
+import { getRoundCategories } from '../utils/packRounds';
 import { doc, serverTimestamp } from 'firebase/firestore';
 import { generateId } from '../utils/ids';
 import { BUZZ_OPEN_DELAY_MS } from '../utils/buzzerPolicy';
@@ -19,9 +20,10 @@ export async function prepareBuzzerLifecycle(transaction, roomRef, room, update,
     };
     const pack = await readPack(transaction, roomRef, room);
     const questionId = newQuestion ? update.activeQuestionId : room.activeQuestionId;
-    const categoryIndex = pack.categories.findIndex((c) => c.questions.some((q) => q.id === questionId));
-    const questionIndex = pack.categories[categoryIndex]?.questions.findIndex((q) => q.id === questionId);
-    const question = pack.categories[categoryIndex]?.questions[questionIndex];
+    const categories = getRoundCategories(pack, room.currentRoundIndex || 0);
+    const categoryIndex = categories.findIndex((c) => c.questions.some((q) => q.id === questionId));
+    const questionIndex = categories[categoryIndex]?.questions.findIndex((q) => q.id === questionId);
+    const question = categories[categoryIndex]?.questions[questionIndex];
     if (!question) throw new Error('Question is unavailable');
     if (question.isSurpriseQuestion) {
         update.buzzerRoundId = null;

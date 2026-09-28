@@ -1,3 +1,4 @@
+import { getAllCategories, getPackRounds } from '../utils/packRounds';
 import { logEvent, setDefaultEventParameters, setUserProperties } from 'firebase/analytics';
 import { analyticsPromise, appId } from '../firebase';
 
@@ -97,7 +98,7 @@ export const setAnalyticsUserContext = ({ signedIn }) => {
 };
 
 export const getPackAnalyticsSummary = (pack = {}) => {
-    const categories = pack.categories || [];
+    const categories = getAllCategories(pack);
     const questions = categories.flatMap((category) => category.questions || []);
     const questionMediaCount = questions.reduce((count, question) => (
         count + (question.questionMedia ? 1 : 0) + (question.answerMedia ? 1 : 0)
@@ -106,6 +107,7 @@ export const getPackAnalyticsSummary = (pack = {}) => {
     const prizeMediaCount = (prize.hiddenMedia ? 1 : 0) + (prize.revealedMedia ? 1 : 0);
 
     return {
+        round_count: getPackRounds(pack).length,
         category_count: categories.length,
         question_count: questions.length,
         surprise_question_count: questions.filter((question) => question.isSurpriseQuestion).length,
