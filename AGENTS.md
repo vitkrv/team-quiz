@@ -101,6 +101,8 @@ Real-browser testing requires an additional explicit user request. Agents must n
 
 After making changes, report lint/build and testing-script results, and provide relevant copy-ready commands and a short checklist for remaining checks. Distinguish user-reported results from agent-run results, and report unexecuted checks as pending. After fixing a reported failure, agents may rerun non-browser scripts automatically; browser reruns require explicit browser-testing authorization for the task. Reading source, reviewing diffs, and checking documentation links remain part of the agent's work.
 
+In every summary of work that changes files under `imagekit-auth-worker/`, explicitly highlight those changes, including `imagekit-auth-worker/worker.js` when it is changed. This is a reporting reminder; it adds no verification or deployment restrictions.
+
 There is currently no automated test script in `package.json`. For changes to game storage/actions/rules, run the isolated Emulator checks in `scripts/verify-game-storage.mjs` when prerequisites are available; otherwise report the blocker and provide the user with the commands. Setup and commands are in `docs/game-storage-validation.md`. This entry point includes storage, recap, buzzer, and wheel checks; do not run those modules separately.
 
 The harness requires Java, the Firebase CLI, and a dedicated local Firestore Emulator. It targets `demo-game-storage`, requires a loopback `FIRESTORE_EMULATOR_HOST`, and loads this checkout's rules into the emulator project. Do not share that emulator with other active tests. It covers room reservations, concurrent starts/finishes, history permissions/pagination, frozen packs, player events, and legacy compatibility; it does not deploy rules or Hosting.
