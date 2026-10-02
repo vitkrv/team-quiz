@@ -1,4 +1,5 @@
 export const MAX_PACK_ROUNDS = 3;
+export const getRoundPointStep = (roundIndex = 0) => 100 * (2 ** Math.max(0, roundIndex));
 
 // Legacy documents are interpreted without rewriting saved packs or active games.
 export const getPackRounds = (pack) => Array.isArray(pack?.rounds)

@@ -117,12 +117,12 @@ Only the assigned contestant answers. There is no ordinary buzzer contest or buz
 
 The question defines minimum and maximum magnitudes, normalized to positive multiples of 100 with maximum at least minimum. Editor defaults are 100 through 500. For older question data without an explicit maximum, runtime normalization can use the stored question value.
 
-1. Build every magnitude in the inclusive range in steps of 100, with both signs. For 100–500: `+100, -100, +200, -200, ... +500, -500`.
+1. Starting at the minimum, build magnitudes in steps of 100 for round 1, 200 for round 2, or 400 for round 3, with both signs, stopping before exceeding the maximum. The maximum appears only when reached by that increment. For 100–500, the magnitudes are `100, 200, 300, 400, 500` in round 1, `100, 300, 500` in round 2, and `100, 500` in round 3. Legacy single-round packs use steps of 100.
 2. If the answer is correct, prune negative values. If incorrect, prune positive values.
 3. From that sign, remove the largest magnitudes first. For `N` magnitudes, remove `min(N - 1, floor(0.8 * N))` entries, never eliminating that sign entirely.
 4. Shuffle the remaining values for the selected scoring mechanic.
 
-With the default range:
+With the default range in round 1:
 
 | Judgment | Remaining values |
 | --- | --- |
@@ -206,7 +206,12 @@ Adding a question increments the previous question's value by that round's start
 value: `100, 200, 300, ...`, `200, 400, 600, ...`, or `400, 800, 1200, ...`.
 Authors can still edit values in multiples of 100; existing values are preserved,
 including when deleting a round changes the remaining round numbers. Surprise
-scoring ranges retain their existing defaults.
+scoring ranges retain their existing defaults and owner-configured bounds, but their
+score-pool increment follows the current round position: 100, 200, or 400. The editor
+shows this increment and its round-based reason below the range inputs. Deleting
+an earlier round immediately updates this hint and the increment used in future games;
+it does not change the range bounds or board display values. Frozen packs keep their
+bounds, and already prepared wheel/table pools remain unchanged.
 
 Start Game freezes all rounds together. The host presents only the current round's
 categories, then players select from that round's board. After the final question is

@@ -1,4 +1,4 @@
-import { getPackRounds, validatePackRounds, MAX_PACK_ROUNDS } from '../utils/packRounds';
+import { getPackRounds, getRoundPointStep, validatePackRounds, MAX_PACK_ROUNDS } from '../utils/packRounds';
 import { useEffect, useRef, useState } from 'react';
 import { addDoc, collection, doc, deleteField, setDoc, updateDoc } from 'firebase/firestore';
 import { ArrowDown, ArrowLeft, ArrowUp, Check, ChevronDown, ChevronRight, Eye, Lock, PartyPopper, Plus, Trash2, X } from 'lucide-react';
@@ -19,7 +19,6 @@ import { getFirestoreErrorMessage } from '../utils/errors';
 const SURPRISE_DEFAULT_MIN_POINTS = 100;
 const SURPRISE_DEFAULT_MAX_POINTS = 500;
 const POINT_STEP = 100;
-const getRoundPointStep = (roundIndex) => POINT_STEP * (2 ** Math.max(0, roundIndex));
 
 const normalizePoints = (value, fallback = POINT_STEP) => {
     const parsedValue = Number.parseInt(value, 10);
@@ -1443,6 +1442,12 @@ export default function PackCreator({ pack, setView, user, setError }) {
                                                         className="w-full rounded border border-slate-700 bg-slate-800 p-2 text-center font-mono text-yellow-400 outline-none"
                                                     />
                                                 </label>
+                                                <p className="text-xs text-slate-400">
+                                                    {t('surprisePointIncrementHint', {
+                                                        increment: getRoundPointStep(roundIds.indexOf(cat.roundId)),
+                                                        round: roundIds.indexOf(cat.roundId) + 1
+                                                    })}
+                                                </p>
                                                 <div className="border-t border-slate-700/80 pt-2">
                                                     <label className="block">
                                                         <span className="mb-1 block text-xs text-slate-500">{t('shownAs')}</span>

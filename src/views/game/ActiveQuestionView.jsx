@@ -1,4 +1,5 @@
 import { getRoundCategories } from '../../utils/packRounds';
+import { pruneSurprisePointValues } from '../../utils/surprisePoints';
 import useBuzzer from '../../hooks/useBuzzer';
 import useSurpriseWheel from '../../hooks/useSurpriseWheel';
 import { WHEEL_ANIMATION_MS, wheelEasing } from '../../utils/wheelPolicy';
@@ -18,9 +19,6 @@ import { getMediaKind, MEDIA_KINDS, MEDIA_SLOTS } from '../../services/imageStor
 import { createFloatingBackgroundItems } from '../../utils/floatingBackground';
 import { generateId } from '../../utils/ids';
 
-const POINT_STEP = 100;
-const SURPRISE_DEFAULT_MIN_POINTS = 100;
-const SURPRISE_DEFAULT_MAX_POINTS = 500;
 const ACTIVE_QUESTION_ENTRANCE_MS = 750;
 const SURPRISE_BACKGROUND_EMOJIS = ['\u{1F37F}', '\u{1F389}', '\u{1F973}', '\u{1F381}', '\u{1F37E}', '\u{1F382}', '\u{2728}', '\u{1FA84}'];
 const NORMAL_BACKGROUND_EMOJIS = ['\u{2754}'];
@@ -52,31 +50,6 @@ const clearStoredEarlyBuzzUnlockAt = (storageKey) => {
 
 const formatBuzzDelta = (deltaMs) => `+${(deltaMs / 1000).toFixed(2)}s`;
 
-const normalizePoints = (value, fallback = POINT_STEP) => {
-    const parsedValue = Number.parseInt(value, 10);
-    if (Number.isNaN(parsedValue)) return fallback;
-
-    return Math.max(POINT_STEP, Math.round(parsedValue / POINT_STEP) * POINT_STEP);
-};
-
-const getSurpriseMinPoints = (question) => normalizePoints(question.surpriseMinPoints, SURPRISE_DEFAULT_MIN_POINTS);
-const getSurpriseMaxPoints = (question) => Math.max(
-    getSurpriseMinPoints(question),
-    normalizePoints(question.surpriseMaxPoints ?? question.points, SURPRISE_DEFAULT_MAX_POINTS)
-);
-
-const getFullSurpriseWheelValues = (question) => {
-    const values = [];
-    const minPoints = getSurpriseMinPoints(question);
-    const maxPoints = getSurpriseMaxPoints(question);
-
-    for (let points = minPoints; points <= maxPoints; points += POINT_STEP) {
-        values.push(points, -points);
-    }
-
-    return values;
-};
-
 const shuffleItems = (items) => {
     const shuffledItems = [...items];
 
@@ -86,17 +59,6 @@ const shuffleItems = (items) => {
     }
 
     return shuffledItems;
-};
-
-const pruneSurpriseWheelValues = (question, isCorrect) => {
-    const values = getFullSurpriseWheelValues(question);
-    const removedSign = isCorrect ? -1 : 1;
-    const valuesToPrune = values
-        .filter((value) => Math.sign(value) === removedSign)
-        .sort((a, b) => Math.abs(b) - Math.abs(a));
-    const removeCount = Math.min(valuesToPrune.length - 1, Math.floor(valuesToPrune.length * 0.8));
-    const removedValues = new Set(valuesToPrune.slice(0, Math.max(0, removeCount)));
-    return shuffleItems(values.filter((value) => !removedValues.has(value)));
 };
 
 const createSurpriseTable = (values) => {
@@ -608,7 +570,7 @@ export default function ActiveQuestionView({ room, roomCode, roomRef, user, isHo
             if (!surpriseAnswererId) return;
 
             const playerName = room.players[surpriseAnswererId]?.name || t('playerFallback');
-            const pointValues = pruneSurpriseWheelValues(activeQ, isCorrect);
+            const pointValues = shuffleItems(pruneSurprisePointValues(activeQ, isCorrect, room.currentRoundIndex || 0));
             const surpriseTable = createSurpriseTable(pointValues);
             const surpriseScoringUpdate = isSurpriseTableMechanic
                 ? {
