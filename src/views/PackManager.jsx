@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react';
 import { collection, deleteDoc, doc, getDocs, query, where } from 'firebase/firestore';
 import { ArrowLeft, Edit3, Plus, Trash2 } from 'lucide-react';
 import PackTitle from '../components/PackTitle';
+import DeletePackDialog from '../components/DeletePackDialog';
 import { appId, db } from '../firebase';
 import { deleteMedia } from '../services/imageStorage';
 import { useLanguage } from '../useLanguage';
@@ -13,6 +14,7 @@ export default function PackManager({ setView, user, setError, onCreatePack, onE
     const [packs, setPacks] = useState([]);
     const [loading, setLoading] = useState(true);
     const [deletingPackId, setDeletingPackId] = useState(null);
+    const [deleteConfirmation, setDeleteConfirmation] = useState(null);
 
     useEffect(() => {
         const fetchPacks = async () => {
@@ -33,23 +35,28 @@ export default function PackManager({ setView, user, setError, onCreatePack, onE
     }, [language, setError, t, user.uid]);
 
     const handleDeletePack = async (pack) => {
-        const firstConfirmed = window.confirm(t('deletePackConfirm', { packName: pack.name }));
-        if (!firstConfirmed) return;
-
-        const secondConfirmed = window.confirm(t('deletePackFinalConfirm', { packName: pack.name }));
-        if (!secondConfirmed) return;
-
         setDeletingPackId(pack.id);
         try {
             const packMedia = getPackMedia(pack);
             await Promise.all(packMedia.map((media) => deleteMedia(media)));
             await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'packs', pack.id));
-            setPacks(packs.filter((item) => item.id !== pack.id));
+            setPacks((currentPacks) => currentPacks.filter((item) => item.id !== pack.id));
         } catch (err) {
             console.error("Delete pack error:", err);
             setError(err.messageKey ? t(err.messageKey) : getFirestoreErrorMessage(err, t('deletePackAction'), language));
         }
         setDeletingPackId(null);
+    };
+
+    const handleConfirmDelete = () => {
+        if (!deleteConfirmation || deletingPackId) return;
+        if (!deleteConfirmation.finalConfirmation) {
+            setDeleteConfirmation({ ...deleteConfirmation, finalConfirmation: true });
+            return;
+        }
+        const { pack } = deleteConfirmation;
+        setDeleteConfirmation(null);
+        handleDeletePack(pack);
     };
 
     return (
@@ -103,8 +110,8 @@ export default function PackManager({ setView, user, setError, onCreatePack, onE
                                     <Edit3 size={18} /> {t('edit')}
                                 </button>
                                 <button
-                                    onClick={() => handleDeletePack(pack)}
-                                    disabled={deletingPackId === pack.id}
+                                    onClick={() => setDeleteConfirmation({ pack, finalConfirmation: false })}
+                                    disabled={Boolean(deletingPackId)}
                                     className="bg-red-600/20 text-red-300 hover:bg-red-600 hover:text-white disabled:opacity-50 px-4 py-2 rounded-lg font-bold border border-red-500/30 transition-colors"
                                     title={t('deletePackTitle')}
                                 >
@@ -114,6 +121,15 @@ export default function PackManager({ setView, user, setError, onCreatePack, onE
                         </div>
                     ))}
                 </div>
+            )}
+            {deleteConfirmation && (
+                <DeletePackDialog
+                    packName={deleteConfirmation.pack.name}
+                    finalConfirmation={deleteConfirmation.finalConfirmation}
+                    onCancel={() => setDeleteConfirmation(null)}
+                    onConfirm={handleConfirmDelete}
+                    t={t}
+                />
             )}
         </div>
     );

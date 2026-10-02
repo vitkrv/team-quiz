@@ -214,6 +214,8 @@ Coordinate storage-related rule and frontend releases. Older clients must reload
 - Keep translation-facing strings in `src/i18n.jsx` instead of hardcoding new user-visible copy.
 - Use lucide-react icons when adding icon buttons or UI controls.
 - Follow existing Tailwind utility style and avoid broad visual rewrites for narrow tasks.
+- Use app-styled custom modals for confirmations. Do not introduce browser-native `confirm()` / `window.confirm()` dialogs. For new alerts or input requests, use the app's inline feedback or custom modals instead of `alert()` / `prompt()`.
+- Follow [DeletePackDialog.jsx](src/components/DeletePackDialog.jsx), [DeleteRoundDialog.jsx](src/components/DeleteRoundDialog.jsx), and [MediaPasteDialog.jsx](src/components/MediaPasteDialog.jsx) for dialog styling and accessibility: translated copy, a labeled dialog, keyboard focus containment/restoration, background scroll locking, and a safe initial focus on Cancel. Cancel, Escape, and backdrop dismissal must not execute the confirmed action; preserve existing confirmation steps and run destructive work only after final confirmation.
 - Preserve existing real-time listener cleanup patterns.
 - Validate external inputs and URL/query values before using them in Firestore paths or UI state.
 - Do not place secrets in frontend code, docs examples with real values, or committed env files.
