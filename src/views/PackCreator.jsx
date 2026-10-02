@@ -4,10 +4,11 @@ import { addDoc, collection, doc, deleteField, setDoc, updateDoc } from 'firebas
 import { ArrowDown, ArrowLeft, ArrowUp, Check, ChevronDown, ChevronRight, Eye, PartyPopper, Plus, Trash2, X } from 'lucide-react';
 import EmojiPicker from '../components/EmojiPicker';
 import PackMediaAttachment from '../components/PackMediaAttachment';
+import MediaPasteDialog from '../components/MediaPasteDialog';
 import HoldToConfirmButton from '../components/HoldToConfirmButton';
 import { normalizeSurpriseScoringMechanic, SURPRISE_SCORING_MECHANICS } from '../constants';
 import { appId, db } from '../firebase';
-import { deleteMedia, MEDIA_KINDS, MEDIA_SLOTS, PACK_PRIZE_MEDIA_ID, uploadMedia, getMediaKind } from '../services/imageStorage';
+import { deleteMedia, MEDIA_KINDS, MEDIA_SLOTS, PACK_PRIZE_MEDIA_ID, uploadMedia, getMediaKind, validateMediaFile } from '../services/imageStorage';
 import { getPackAnalyticsSummary, trackEvent } from '../services/analytics';
 import { useLanguage } from '../useLanguage';
 import { generateId } from '../utils/ids';
@@ -334,8 +335,11 @@ export default function PackCreator({ pack, setView, user, setError }) {
     const mountedRef = useRef(false);
     const savedTimerRef = useRef(null);
     const [isPreviewOpen, setIsPreviewOpen] = useState(false);
+    const [pendingMediaPaste, setPendingMediaPaste] = useState(null);
     const [collapsedCategoryIds, setCollapsedCategoryIds] = useState(() => new Set());
     const [mediaBusy, setMediaBusy] = useState(false);
+    const [remoteMediaBusy, setRemoteMediaBusy] = useState(false);
+    const remoteMediaBusyRef = useRef(false);
     const [mediaProgress, setMediaProgress] = useState({});
     const [mediaErrors, setMediaErrors] = useState({});
     const categoriesRef = useRef(categories);
@@ -344,7 +348,7 @@ export default function PackCreator({ pack, setView, user, setError }) {
 
     categoriesRef.current = categories;
     prizeRef.current = prize;
-    const hasActiveMediaAction = mediaBusy || Object.values(mediaProgress).some((value) => value > 0 && value < 100);
+    const hasActiveMediaAction = remoteMediaBusy || mediaBusy || Object.values(mediaProgress).some((value) => value > 0 && value < 100);
     const packSummary = getPackSummary(categories, prize);
     const previewCategories = getPreviewCategories(visibleCategories);
 
@@ -673,12 +677,80 @@ export default function PackCreator({ pack, setView, user, setError }) {
         }
     };
 
+    const handleQuestionMediaPaste = (event, catId, qId, field) => {
+        const clipboard = event.clipboardData;
+        if (!clipboard) return;
+        const clipboardFiles = Array.from(clipboard.files || []);
+        const files = clipboardFiles.length ? clipboardFiles : Array.from(clipboard.items || [])
+            .filter((item) => item.kind === 'file')
+            .map((item) => item.getAsFile()).filter(Boolean);
+        if (!files.length) return;
+
+        // File pastes belong to the attachment slot; leave ordinary text pastes alone.
+        event.preventDefault();
+        const progressKey = `${qId}:${field}`;
+        const showPasteError = (messageKey) => setMediaErrors((errors) => ({
+            ...errors, [progressKey]: t(messageKey)
+        }));
+        if (hasActiveMediaAction || isSaving || remoteMediaBusyRef.current || pendingMediaPaste) {
+            showPasteError('mediaActionInProgress');
+            return;
+        }
+        if (files.length !== 1) {
+            showPasteError('mediaPasteOneFile');
+            return;
+        }
+        const file = files[0];
+        const validation = validateMediaFile(file);
+        if (!validation.valid) {
+            showPasteError(validation.messageKey);
+            return;
+        }
+        const question = categoriesRef.current.find((category) => category.id === catId)
+            ?.questions.find((item) => item.id === qId);
+        if (!question) return;
+        setPendingMediaPaste({ file, catId, qId, field, replacing: Boolean(question[field]) });
+    };
+
+    const confirmMediaPaste = () => {
+        if (!pendingMediaPaste || hasActiveMediaAction || isSaving || remoteMediaBusyRef.current) return;
+        const { file, catId, qId, field } = pendingMediaPaste;
+        setPendingMediaPaste(null);
+        const question = categoriesRef.current.find((category) => category.id === catId)
+            ?.questions.find((item) => item.id === qId);
+        if (!question) return;
+        const validation = validateMediaFile(file);
+        if (!validation.valid) {
+            setMediaErrors((errors) => ({ ...errors, [`${qId}:${field}`]: t(validation.messageKey) }));
+            return;
+        }
+        void updateQuestionMedia(catId, qId, field, file);
+    };
+
+    const resolveDroppedMedia = async (resolveFile, applyFile) => {
+        if (hasActiveMediaAction || isSaving || remoteMediaBusyRef.current) return;
+        remoteMediaBusyRef.current = true;
+        setRemoteMediaBusy(true);
+        try {
+            const file = await resolveFile();
+            if (!mountedRef.current) return;
+            // applyFile captures the idle editor before the download lock was set.
+            // Hand the lock directly to the existing upload flow without an idle render.
+            setRemoteMediaBusy(false);
+            await applyFile(file);
+        } finally {
+            remoteMediaBusyRef.current = false;
+            if (mountedRef.current) setRemoteMediaBusy(false);
+        }
+    };
+
     const updateQuestionMedia = async (catId, qId, field, file) => {
         if (hasActiveMediaAction || isSaving) return;
         setMediaBusy(true);
+        const sourceCategories = categoriesRef.current;
         const previewUrl = URL.createObjectURL(file);
         const progressKey = `${qId}:${field}`;
-        const previousQuestion = categories
+        const previousQuestion = sourceCategories
             .find((category) => category.id === catId)
             ?.questions.find((question) => question.id === qId);
         const previousMedia = previousQuestion?.[field];
@@ -692,14 +764,14 @@ export default function PackCreator({ pack, setView, user, setError }) {
             mimeType: file.type,
             previousMedia
         };
-        const previewCategories = setQuestionMediaInCategories(categories, catId, qId, field, previewMedia);
+        const previewCategories = setQuestionMediaInCategories(sourceCategories, catId, qId, field, previewMedia);
 
         setMediaErrors((errors) => ({ ...errors, [`${qId}:${field}`]: '' }));
         setMediaProgress((progress) => ({ ...progress, [progressKey]: 1 }));
         setCategories(previewCategories);
 
         try {
-            const packId = await ensurePackForMediaAction(stripPendingCategories(categories));
+            const packId = await ensurePackForMediaAction(stripPendingCategories(sourceCategories));
             const uploadedMedia = await uploadMedia(file, {
                 packId,
                 questionId: qId,
@@ -915,6 +987,17 @@ export default function PackCreator({ pack, setView, user, setError }) {
 
     return (
         <div className="mx-auto grid min-h-screen w-full min-w-0 max-w-4xl grid-cols-1 content-start gap-x-3 p-4 sm:grid-cols-[minmax(0,1fr),auto] sm:p-6">
+            {pendingMediaPaste && (
+                <MediaPasteDialog
+                    file={pendingMediaPaste.file}
+                    targetLabel={t(pendingMediaPaste.field === MEDIA_SLOTS.QUESTION ? 'mediaPasteQuestionTarget' : 'mediaPasteAnswerTarget')}
+                    replacing={pendingMediaPaste.replacing}
+                    disabled={isSaving || hasActiveMediaAction}
+                    onCancel={() => setPendingMediaPaste(null)}
+                    onConfirm={confirmMediaPaste}
+                    t={t}
+                />
+            )}
             {isPreviewOpen && (
                 <QuestionPackPreviewModal
                     categories={previewCategories}
@@ -1103,6 +1186,7 @@ export default function PackCreator({ pack, setView, user, setError }) {
                                 allowedKinds={[MEDIA_KINDS.IMAGE]}
                                 hint={t('prizeImageUploadHint')}
                                 onChange={(file) => updatePrizeMedia(MEDIA_SLOTS.PRIZE_HIDDEN, file)}
+                                onResolveFile={(resolveFile) => resolveDroppedMedia(resolveFile, (file) => updatePrizeMedia(MEDIA_SLOTS.PRIZE_HIDDEN, file))}
                                 onRemove={() => removePrizeMedia(MEDIA_SLOTS.PRIZE_HIDDEN)}
                             />
                         </div>
@@ -1119,6 +1203,7 @@ export default function PackCreator({ pack, setView, user, setError }) {
                                 allowedKinds={[MEDIA_KINDS.IMAGE]}
                                 hint={t('prizeImageUploadHint')}
                                 onChange={(file) => updatePrizeMedia(MEDIA_SLOTS.PRIZE_REVEALED, file)}
+                                onResolveFile={(resolveFile) => resolveDroppedMedia(resolveFile, (file) => updatePrizeMedia(MEDIA_SLOTS.PRIZE_REVEALED, file))}
                                 onRemove={() => removePrizeMedia(MEDIA_SLOTS.PRIZE_REVEALED)}
                             />
                         </div>
@@ -1317,6 +1402,7 @@ export default function PackCreator({ pack, setView, user, setError }) {
                                             <label className="block text-xs text-slate-500 mb-1">{t('question')}</label>
                                             <textarea
                                                 value={q.text}
+                                                onPaste={(event) => handleQuestionMediaPaste(event, cat.id, q.id, MEDIA_SLOTS.QUESTION)}
                                                 onChange={(e) => updateQuestion(cat.id, q.id, 'text', e.target.value)}
                                                 placeholder={t('questionPlaceholder')}
                                                 rows={3}
@@ -1330,6 +1416,7 @@ export default function PackCreator({ pack, setView, user, setError }) {
                                                 error={mediaErrors[`${q.id}:${MEDIA_SLOTS.QUESTION}`]}
                                                 t={t}
                                                 onChange={(file) => updateQuestionMedia(cat.id, q.id, MEDIA_SLOTS.QUESTION, file)}
+                                                onResolveFile={(resolveFile) => resolveDroppedMedia(resolveFile, (file) => updateQuestionMedia(cat.id, q.id, MEDIA_SLOTS.QUESTION, file))}
                                                 onRemove={() => removeQuestionMedia(cat.id, q.id, MEDIA_SLOTS.QUESTION)}
                                             />
                                         </div>
@@ -1338,6 +1425,7 @@ export default function PackCreator({ pack, setView, user, setError }) {
                                             <input
                                                 type="text"
                                                 value={q.answer}
+                                                onPaste={(event) => handleQuestionMediaPaste(event, cat.id, q.id, MEDIA_SLOTS.ANSWER)}
                                                 onChange={(e) => updateQuestion(cat.id, q.id, 'answer', e.target.value)}
                                                 placeholder={t('answerPlaceholder')}
                                                 className="w-full bg-slate-800 border border-slate-700 rounded p-2 text-green-400 outline-none"
@@ -1350,6 +1438,7 @@ export default function PackCreator({ pack, setView, user, setError }) {
                                                 error={mediaErrors[`${q.id}:${MEDIA_SLOTS.ANSWER}`]}
                                                 t={t}
                                                 onChange={(file) => updateQuestionMedia(cat.id, q.id, MEDIA_SLOTS.ANSWER, file)}
+                                                onResolveFile={(resolveFile) => resolveDroppedMedia(resolveFile, (file) => updateQuestionMedia(cat.id, q.id, MEDIA_SLOTS.ANSWER, file))}
                                                 onRemove={() => removeQuestionMedia(cat.id, q.id, MEDIA_SLOTS.ANSWER)}
                                             />
                                         </div>
