@@ -201,6 +201,11 @@ The host is excluded from final standings. A finished game counts as having defi
 
 ### Pack rounds and intermediate standings
 
+The pack editor's Form and Table modes share the same draft, saved pack format,
+round limits, ordering rules, point normalization, media, and surprise settings.
+Switching editor modes does not change gameplay. Existing packs can be edited in
+either mode; older single-round packs retain the same conversion on save.
+
 A pack has 1–3 numbered rounds. Every round has at least one category, and every
 category has at least one question. Authors manage rounds through tabs; reordering
 categories/questions never moves them between rounds. The selected round has its

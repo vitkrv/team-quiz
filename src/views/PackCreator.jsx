@@ -1,13 +1,15 @@
 import { getPackRounds, getRoundPointStep, validatePackRounds, MAX_PACK_ROUNDS } from '../utils/packRounds';
 import { useEffect, useRef, useState } from 'react';
 import { addDoc, collection, doc, deleteField, setDoc, updateDoc } from 'firebase/firestore';
-import { ArrowDown, ArrowLeft, ArrowUp, Check, ChevronDown, ChevronRight, Eye, Lock, PartyPopper, Plus, Trash2, X } from 'lucide-react';
+import { ArrowDown, ArrowLeft, ArrowUp, Check, ChevronDown, ChevronRight, Eye, ListChecks, Lock, Plus, Table2, Trash2, X } from 'lucide-react';
 import EmojiPicker from '../components/EmojiPicker';
 import QuestionPresenter from '../components/QuestionPresenter';
 import PackMediaAttachment from '../components/PackMediaAttachment';
 import MediaPasteDialog from '../components/MediaPasteDialog';
 import DeleteRoundDialog from '../components/DeleteRoundDialog';
 import HoldToConfirmButton from '../components/HoldToConfirmButton';
+import PackQuestionEditor from '../components/PackQuestionEditor';
+import PackTableEditor from '../components/PackTableEditor';
 import { normalizeSurpriseScoringMechanic, SURPRISE_SCORING_MECHANICS } from '../constants';
 import { appId, db } from '../firebase';
 import { deleteMedia, MEDIA_KINDS, MEDIA_SLOTS, PACK_PRIZE_MEDIA_ID, uploadMedia, getMediaKind, validateMediaFile } from '../services/imageStorage';
@@ -351,6 +353,16 @@ function QuestionPackPreviewModal({ categories, roundNumber, onCategorySelect, o
 export default function PackCreator({ pack, setView, user, setError }) {
     const { language, t } = useLanguage();
     const isEditMode = Boolean(pack?.id);
+    const modeStorageKey = 'cortex-rush:pack-editor-mode:' + user.uid;
+    const [editorMode, setEditorMode] = useState(() => {
+        try { return localStorage.getItem(modeStorageKey) === 'table' ? 'table' : 'form'; }
+        catch { return 'form'; }
+    });
+    const [selection, setSelection] = useState(null);
+    const [focusRequest, setFocusRequest] = useState(null);
+    const [viewportWide, setViewportWide] = useState(() => window.matchMedia('(min-width: 1024px)').matches);
+    const [wide, setWide] = useState(viewportWide);
+    const activeEditorMode = wide ? editorMode : 'form';
     const [persistedPackId, setPersistedPackId] = useState(pack?.id || null);
     const [packName, setPackName] = useState(pack?.name || '');
     const [packIconEmoji, setPackIconEmoji] = useState(pack?.iconEmoji || '');
@@ -401,6 +413,9 @@ export default function PackCreator({ pack, setView, user, setError }) {
     categoriesRef.current = categories;
     prizeRef.current = prize;
     const hasActiveMediaAction = remoteMediaBusy || mediaBusy || Object.values(mediaProgress).some((value) => value > 0 && value < 100);
+    const editorLocked = isSaving || hasActiveMediaAction || Boolean(pendingMediaPaste);
+    const selectedCategoryIndex = visibleCategories.findIndex((category) => category.id === selection?.categoryId);
+    const selectedQuestionIndex = visibleCategories[selectedCategoryIndex]?.questions.findIndex((question) => question.id === selection?.questionId);
     const packSummary = getPackSummary(categories, prize);
     const previewCategories = getPreviewCategories(visibleCategories);
 
@@ -411,6 +426,69 @@ export default function PackCreator({ pack, setView, user, setError }) {
             clearTimeout(savedTimerRef.current);
         };
     }, []);
+
+    useEffect(() => {
+        const query = window.matchMedia('(min-width: 1024px)');
+        const update = () => setViewportWide(query.matches);
+        query.addEventListener('change', update);
+        return () => query.removeEventListener('change', update);
+    }, []);
+
+    // Keep the active media controls mounted until their operation finishes.
+    useEffect(() => { if (!editorLocked) setWide(viewportWide); }, [editorLocked, viewportWide]);
+
+    useEffect(() => {
+        if (wide || editorMode !== 'table' || !selection || editorLocked) return;
+        setCollapsedCategoryIds((ids) => { const next = new Set(ids); next.delete(selection.categoryId); return next; });
+        setFocusRequest({ questionId: selection.questionId, field: 'text' });
+        setSelection(null);
+    }, [wide, editorMode, selection, editorLocked]);
+
+    useEffect(() => {
+        if (!focusRequest || editorLocked) return;
+        const frame = window.requestAnimationFrame(() => {
+            const scope = document.querySelector('[data-question-editor-dialog]') || document;
+            const candidates = Array.from(scope.querySelectorAll(focusRequest.field === 'cell'
+                ? '[data-question-cell], [data-question-field="text"]' : focusRequest.questionId
+                ? '[data-question-id]' : focusRequest.addCategoryId ? '[data-add-question]' : '[data-category-id]'));
+            const target = candidates.find((element) => focusRequest.field === 'cell'
+                ? element.dataset.questionCell === focusRequest.questionId || element.dataset.questionId === focusRequest.questionId
+                : focusRequest.questionId
+                ? element.dataset.questionId === focusRequest.questionId && element.dataset.questionField === focusRequest.field
+                : focusRequest.addCategoryId ? element.dataset.addQuestion === focusRequest.addCategoryId
+                    : element.dataset.categoryId === focusRequest.categoryId);
+            target?.focus();
+            target?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+            setFocusRequest(null);
+        });
+        return () => window.cancelAnimationFrame(frame);
+    }, [focusRequest, activeRoundId, activeEditorMode, wide, editorLocked]);
+
+    useEffect(() => {
+        if (activeEditorMode !== 'table' || !selection || selection.roundId !== activeRoundId) return;
+        const cell = Array.from(document.querySelectorAll('[data-question-cell]'))
+            .find((element) => element.dataset.questionCell === selection.questionId);
+        cell?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+    }, [selection, activeEditorMode, activeRoundId, selectedCategoryIndex, selectedQuestionIndex]);
+
+    const changeEditorMode = (mode) => {
+        if (editorLocked || (mode === 'table' && !wide)) return;
+        setEditorMode(mode);
+        try { localStorage.setItem(modeStorageKey, mode); } catch { /* Editing works without local storage. */ }
+    };
+    const selectQuestion = (category, question, field) => {
+        if (editorLocked) return;
+        setSelection({ roundId: category.roundId, categoryId: category.id, questionId: question.id });
+        if (field) setFocusRequest({ questionId: question.id, field });
+    };
+    const closeQuestion = () => {
+        if (editorLocked) return;
+        if (selection) {
+            if (!wide) setCollapsedCategoryIds((ids) => { const next = new Set(ids); next.delete(selection.categoryId); return next; });
+            setFocusRequest({ questionId: selection.questionId, field: 'cell' });
+        }
+        setSelection(null);
+    };
 
     const idleSaveLabel = isEditMode ? t('updatePack') : t('savePack');
     const saveLabel = isSaving ? t('saving') : isSaved ? t('packSaved') : idleSaveLabel;
@@ -429,14 +507,18 @@ export default function PackCreator({ pack, setView, user, setError }) {
     }, []);
 
     const handleBack = () => {
+        if (editorLocked) return;
         setView(isEditMode ? 'managePacks' : 'menu');
     };
 
     const addCategory = () => {
+        if (editorLocked) return;
+        const categoryId = generateId();
         setCategories((currentCategories) => [
             ...currentCategories,
-            { id: generateId(), roundId: activeRoundId, name: t('newCategory'), questions: [createEmptyQuestion(getRoundPointStep(roundIds.indexOf(activeRoundId)))] }
+            { id: categoryId, roundId: activeRoundId, name: t('newCategory'), questions: [createEmptyQuestion(getRoundPointStep(roundIds.indexOf(activeRoundId)))] }
         ]);
+        if (activeEditorMode === 'table') setFocusRequest({ categoryId });
     };
 
     const getPackRef = (packId) => doc(db, 'artifacts', appId, 'public', 'data', 'packs', packId);
@@ -493,14 +575,14 @@ export default function PackCreator({ pack, setView, user, setError }) {
     };
 
     const addRound = () => {
-        if (roundIds.length >= MAX_PACK_ROUNDS || hasActiveMediaAction || isSaving) return;
+        if (roundIds.length >= MAX_PACK_ROUNDS || editorLocked) return;
         const id = generateId();
         setRoundIds([...roundIds, id]);
         setCategories((current) => [...current, { id: generateId(), roundId: id, name: t('newCategory'), questions: [createEmptyQuestion(getRoundPointStep(roundIds.length))] }]);
         setActiveRoundId(id);
     };
     const removeRound = async (roundId) => {
-        if (roundIds.length <= 1 || !roundIds.includes(roundId) || hasActiveMediaAction || isSaving) return;
+        if (roundIds.length <= 1 || !roundIds.includes(roundId) || editorLocked) return;
         setPendingRoundRemoval(null);
         const removed = categories.filter((category) => category.roundId === roundId);
         const next = categories.filter((category) => category.roundId !== roundId);
@@ -511,15 +593,19 @@ export default function PackCreator({ pack, setView, user, setError }) {
                 rounds: serializeRounds(next).filter((round) => round.id !== roundId), categories: deleteField(), updatedAt: Date.now()
             });
             setRoundIds(ids); setCategories(next); setActiveRoundId(ids[0]);
+            if (selection?.roundId === roundId) setSelection(null);
+            if (activeEditorMode === 'table') setFocusRequest({ categoryId: next.find((category) => category.roundId === ids[0])?.id });
             await deleteMediaNow(removed.flatMap((category) => category.questions.flatMap(getSavedMediaFromQuestion)));
         } catch (err) { setError(err.messageKey ? t(err.messageKey) : err.message); }
         finally { setIsSaving(false); }
     };
 
     const removeCategory = async (catId) => {
-        if (visibleCategories.length <= 1 || hasActiveMediaAction || isSaving) return;
+        if (visibleCategories.length <= 1 || editorLocked) return;
         const category = categories.find((item) => item.id === catId);
         const nextCategories = categories.filter(c => c.id !== catId);
+        if (selection?.categoryId === catId) setSelection(null);
+        if (activeEditorMode === 'table') setFocusRequest({ categoryId: nextCategories.find((item) => item.roundId === activeRoundId)?.id });
         setCategories(nextCategories);
         setCollapsedCategoryIds((currentIds) => {
             const nextIds = new Set(currentIds);
@@ -542,6 +628,7 @@ export default function PackCreator({ pack, setView, user, setError }) {
     };
 
     const moveCategory = (catId, direction) => {
+        if (editorLocked) return;
         setCategories((currentCategories) => {
             const currentIndex = currentCategories.findIndex((category) => category.id === catId);
             const siblings = currentCategories.filter((category) => category.roundId === currentCategories[currentIndex].roundId);
@@ -556,6 +643,7 @@ export default function PackCreator({ pack, setView, user, setError }) {
     };
 
     const toggleCategoryCollapsed = (catId) => {
+        if (editorLocked) return;
         setCollapsedCategoryIds((currentIds) => {
             const nextIds = new Set(currentIds);
             if (nextIds.has(catId)) {
@@ -590,21 +678,32 @@ export default function PackCreator({ pack, setView, user, setError }) {
     };
 
     const collapseAllCategories = () => {
+        if (editorLocked) return;
         setCollapsedCategoryIds(new Set(categories.map((category) => category.id)));
     };
 
     const addQuestion = (catId) => {
+        if (editorLocked) return;
+        const questionId = generateId();
+        const category = categories.find((item) => item.id === catId);
+        if (!category) return;
+        if (activeEditorMode === 'table') {
+            setCollapsedCategoryIds((ids) => { const next = new Set(ids); next.delete(catId); return next; });
+            setSelection({ roundId: category.roundId, categoryId: catId, questionId });
+            setFocusRequest({ questionId, field: 'text' });
+        }
         setCategories((currentCategories) => currentCategories.map(c => {
             if (c.id === catId) {
                 const lastPoints = c.questions.length > 0 ? normalizePoints(c.questions[c.questions.length - 1].points, 0) : 0;
                 const pointStep = getRoundPointStep(roundIds.indexOf(c.roundId));
-                return { ...c, questions: [...c.questions, createEmptyQuestion(lastPoints + pointStep)] };
+                return { ...c, questions: [...c.questions, { ...createEmptyQuestion(lastPoints + pointStep), id: questionId }] };
             }
             return c;
         }));
     };
 
     const moveQuestion = (catId, qId, direction) => {
+        if (editorLocked) return;
         setCategories((currentCategories) => currentCategories.map((category) => {
             if (category.id !== catId) return category;
 
@@ -713,7 +812,7 @@ export default function PackCreator({ pack, setView, user, setError }) {
 
     const removeQuestion = async (catId, qId) => {
         const category = categories.find((item) => item.id === catId);
-        if (category?.questions.length <= 1 || hasActiveMediaAction || isSaving) return;
+        if (category?.questions.length <= 1 || editorLocked) return;
         const question = category?.questions.find((item) => item.id === qId);
         const nextCategories = categories.map(c => {
             if (c.id === catId) {
@@ -721,6 +820,8 @@ export default function PackCreator({ pack, setView, user, setError }) {
             }
             return c;
         });
+        if (selection?.questionId === qId) setSelection(null);
+        if (activeEditorMode === 'table') setFocusRequest({ addCategoryId: catId });
         setCategories(nextCategories);
         try {
             await persistCategoriesIfNeeded(nextCategories);
@@ -746,7 +847,7 @@ export default function PackCreator({ pack, setView, user, setError }) {
         const showPasteError = (messageKey) => setMediaErrors((errors) => ({
             ...errors, [progressKey]: t(messageKey)
         }));
-        if (hasActiveMediaAction || isSaving || remoteMediaBusyRef.current || pendingMediaPaste) {
+        if (editorLocked || remoteMediaBusyRef.current || pendingMediaPaste) {
             showPasteError('mediaActionInProgress');
             return;
         }
@@ -767,7 +868,7 @@ export default function PackCreator({ pack, setView, user, setError }) {
     };
 
     const confirmMediaPaste = () => {
-        if (!pendingMediaPaste || hasActiveMediaAction || isSaving || remoteMediaBusyRef.current) return;
+        if (!pendingMediaPaste || isSaving || hasActiveMediaAction || remoteMediaBusyRef.current) return;
         const { file, catId, qId, field } = pendingMediaPaste;
         setPendingMediaPaste(null);
         const question = categoriesRef.current.find((category) => category.id === catId)
@@ -782,7 +883,7 @@ export default function PackCreator({ pack, setView, user, setError }) {
     };
 
     const resolveDroppedMedia = async (resolveFile, applyFile) => {
-        if (hasActiveMediaAction || isSaving || remoteMediaBusyRef.current) return;
+        if (editorLocked || remoteMediaBusyRef.current) return;
         remoteMediaBusyRef.current = true;
         setRemoteMediaBusy(true);
         try {
@@ -799,7 +900,8 @@ export default function PackCreator({ pack, setView, user, setError }) {
     };
 
     const updateQuestionMedia = async (catId, qId, field, file) => {
-        if (hasActiveMediaAction || isSaving) return;
+        // Clipboard confirmation invokes this handler before its state update renders.
+        if (isSaving || hasActiveMediaAction) return;
         setMediaBusy(true);
         const sourceCategories = categoriesRef.current;
         const previewUrl = URL.createObjectURL(file);
@@ -856,7 +958,7 @@ export default function PackCreator({ pack, setView, user, setError }) {
     };
 
     const removeQuestionMedia = async (catId, qId, field) => {
-        if (hasActiveMediaAction || isSaving) return;
+        if (editorLocked) return;
         setMediaBusy(true);
         const progressKey = `${qId}:${field}`;
         const previousQuestion = categories
@@ -887,7 +989,7 @@ export default function PackCreator({ pack, setView, user, setError }) {
     };
 
     const updatePrizeMedia = async (slot, file) => {
-        if (hasActiveMediaAction || isSaving) return;
+        if (editorLocked) return;
         setMediaBusy(true);
         const previewUrl = URL.createObjectURL(file);
         const progressKey = `${PACK_PRIZE_MEDIA_ID}:${slot}`;
@@ -940,7 +1042,7 @@ export default function PackCreator({ pack, setView, user, setError }) {
     };
 
     const removePrizeMedia = async (slot) => {
-        if (hasActiveMediaAction || isSaving) return;
+        if (editorLocked) return;
         setMediaBusy(true);
         const progressKey = `${PACK_PRIZE_MEDIA_ID}:${slot}`;
         const previousPrize = prizeRef.current || {};
@@ -963,18 +1065,27 @@ export default function PackCreator({ pack, setView, user, setError }) {
         } finally { setMediaBusy(false); }
     };
 
+    const revealInvalidQuestion = (category, question, field) => {
+        setActiveRoundId(category.roundId);
+        setCollapsedCategoryIds((ids) => { const next = new Set(ids); next.delete(category.id); return next; });
+        if (activeEditorMode === 'table') {
+            setSelection({ roundId: category.roundId, categoryId: category.id, questionId: question.id });
+        }
+        setFocusRequest({ questionId: question.id, field });
+    };
+
     const validateQuestions = () => {
         const invalid = validatePackRounds({ rounds: serializeRounds(categories) });
         if (invalid) { setActiveRoundId(roundIds[invalid.roundIndex]); setError(t(invalid.key)); return false; }
         for (const category of categories) {
             for (const question of category.questions) {
                 if (!question.text.trim() && !hasEffectiveMedia(question, MEDIA_SLOTS.QUESTION)) {
-                    setActiveRoundId(category.roundId); setError(t('questionTextOrMediaRequired'));
+                    revealInvalidQuestion(category, question, 'text'); setError(t('questionTextOrMediaRequired'));
                     return false;
                 }
 
                 if (!question.answer.trim() && !hasEffectiveMedia(question, MEDIA_SLOTS.ANSWER)) {
-                    setActiveRoundId(category.roundId); setError(t('answerTextOrMediaRequired'));
+                    revealInvalidQuestion(category, question, 'answer'); setError(t('answerTextOrMediaRequired'));
                     return false;
                 }
             }
@@ -989,7 +1100,7 @@ export default function PackCreator({ pack, setView, user, setError }) {
         setIsSaved(false);
         setError('');
         if (!packName.trim()) return setError(t('pleaseEnterPackName'));
-        if (hasActiveMediaAction) return setError(t('mediaActionInProgress'));
+        if (hasActiveMediaAction || pendingMediaPaste) return setError(t('mediaActionInProgress'));
         if (!validateQuestions()) return;
 
         saveInFlightRef.current = true;
@@ -1039,8 +1150,22 @@ export default function PackCreator({ pack, setView, user, setError }) {
         }
     };
 
+    const renderQuestion = (category, question, questionIndex, compact = false, dialogLayout = false) => (
+        <PackQuestionEditor key={question.id} category={category} question={question} questionIndex={questionIndex}
+            t={t} disabled={editorLocked} compact={compact} formLayout={activeEditorMode === 'form'} dialogLayout={dialogLayout}
+            roundNumber={roundIds.indexOf(category.roundId) + 1} pointIncrement={getRoundPointStep(roundIds.indexOf(category.roundId))}
+            surpriseMin={getSurpriseMinPoints(question)} surpriseMax={getSurpriseMaxPoints(question)} surpriseDisplay={getSurpriseDisplayPoints(question)}
+            onUpdate={(field, value) => updateQuestion(category.id, question.id, field, value)}
+            onValidatePoints={(field) => validateQuestionPoints(category.id, question.id, field)}
+            onMove={(direction) => moveQuestion(category.id, question.id, direction)} onRemove={() => removeQuestion(category.id, question.id)}
+            onPaste={(event, field) => handleQuestionMediaPaste(event, category.id, question.id, field)}
+            onMediaChange={(field, file) => updateQuestionMedia(category.id, question.id, field, file)}
+            onMediaResolve={(field, resolveFile) => resolveDroppedMedia(resolveFile, (file) => updateQuestionMedia(category.id, question.id, field, file))}
+            onMediaRemove={(field) => removeQuestionMedia(category.id, question.id, field)} mediaProgress={mediaProgress} mediaErrors={mediaErrors} />
+    );
+
     return (
-        <div className="mx-auto grid min-h-screen w-full min-w-0 max-w-4xl grid-cols-1 content-start gap-x-3 p-4 sm:grid-cols-[minmax(0,1fr),auto] sm:p-6">
+        <div className={`mx-auto grid min-h-screen w-full min-w-0 ${activeEditorMode === 'table' ? 'max-w-[1600px]' : 'max-w-4xl'} grid-cols-1 content-start gap-x-3 p-4 sm:grid-cols-[minmax(0,1fr),auto] sm:p-6`}>
             {pendingRoundRemoval && (
                 <DeleteRoundDialog
                     roundNumber={roundIds.indexOf(pendingRoundRemoval) + 1}
@@ -1071,7 +1196,7 @@ export default function PackCreator({ pack, setView, user, setError }) {
                 />
             )}
             <div className="mb-3 flex min-w-0 items-center gap-3 sm:mb-8">
-                <button onClick={handleBack} className="shrink-0 rounded-full p-2 transition-colors hover:bg-slate-800">
+                <button onClick={handleBack} disabled={editorLocked} className="shrink-0 rounded-full p-2 transition-colors hover:bg-slate-800 disabled:opacity-50">
                     <ArrowLeft size={24} />
                 </button>
                 <h2 className="min-w-0 flex-1 text-2xl font-bold sm:text-3xl">{isEditMode ? t('editQuestionPack') : t('createQuestionPack')}</h2>
@@ -1079,7 +1204,7 @@ export default function PackCreator({ pack, setView, user, setError }) {
             <div className="sticky top-4 z-40 mb-8 self-start sm:top-6">
                 <button
                     onClick={handleSave}
-                    disabled={isSaving || hasActiveMediaAction}
+                    disabled={editorLocked}
                     aria-label={saveLabel}
                     aria-busy={isSaving}
                     className="flex w-full items-center justify-center gap-2 rounded-lg bg-green-600 px-6 py-2 font-bold text-white shadow-lg hover:bg-green-500 disabled:opacity-50 sm:w-auto"
@@ -1097,6 +1222,16 @@ export default function PackCreator({ pack, setView, user, setError }) {
             </div>
 
             <div className="col-span-full min-w-0">
+            <fieldset disabled={editorLocked} className="mb-6 flex flex-wrap items-center gap-3">
+                <legend className="mb-2 text-sm font-bold text-slate-300">{t('editorMode')}</legend>
+                {['form', 'table'].map((mode) => <button key={mode} type="button" aria-pressed={activeEditorMode === mode}
+                    disabled={mode === 'table' && !wide} aria-describedby={!wide ? 'editor-desktop-hint' : undefined}
+                    onClick={() => changeEditorMode(mode)} className={`inline-flex min-h-11 items-center justify-center gap-2 rounded-lg border px-5 font-bold focus-visible:ring-2 focus-visible:ring-blue-400 disabled:opacity-50 ${activeEditorMode === mode ? 'border-blue-400 bg-blue-600/20 text-blue-100' : 'border-slate-600 bg-slate-900 text-slate-300'}`}>
+                    {mode === 'form' ? <ListChecks size={18} aria-hidden="true" className="shrink-0" /> : <Table2 size={18} aria-hidden="true" className="shrink-0" />}
+                    {t(mode === 'form' ? 'editorFormMode' : 'editorTableMode')}
+                </button>)}
+                {!wide && <p id="editor-desktop-hint" className="basis-full text-sm text-slate-400">{t('editorTableDesktopOnly')}</p>}
+            </fieldset>
             <div className="bg-slate-800 p-6 rounded-xl border border-slate-700 mb-8">
                 <div className="grid gap-4 sm:grid-cols-[auto,minmax(0,1fr)]">
                     <EmojiPicker
@@ -1258,7 +1393,7 @@ export default function PackCreator({ pack, setView, user, setError }) {
                 </div>
             </div>
 
-            <div className="flex-1 overflow-y-auto space-y-8 pb-12">
+            <div className="min-w-0 flex-1 space-y-8 pb-12">
                 <div className="mb-6 space-y-3">
                     <div role="tablist" aria-label={t('packRounds')} className="flex flex-wrap gap-2">
                         {roundIds.map((id, index) => {
@@ -1266,7 +1401,9 @@ export default function PackCreator({ pack, setView, user, setError }) {
                             const questionCount = items.reduce((count, category) => count + category.questions.length, 0);
                             return <button key={id} id={id + '-tab'} role="tab" aria-selected={activeRoundId === id} aria-controls="round-editor"
                                 tabIndex={activeRoundId === id ? 0 : -1}
+                                disabled={editorLocked}
                                 onKeyDown={(event) => {
+                                    if (editorLocked) return;
                                     const offset = event.key === 'ArrowRight' ? 1 : event.key === 'ArrowLeft' ? -1 : 0;
                                     const target = event.key === 'Home' ? 0 : event.key === 'End' ? roundIds.length - 1 : (index + offset + roundIds.length) % roundIds.length;
                                     if (!offset && !['Home', 'End'].includes(event.key)) return;
@@ -1278,21 +1415,23 @@ export default function PackCreator({ pack, setView, user, setError }) {
                                 <span className="text-xs">{t('roundCounts', { categories: items.length, categoryUnit: roundCountUnit('Category', items.length), questions: questionCount, questionUnit: roundCountUnit('Question', questionCount) })}</span>
                             </button>;
                         })}
-                        <button onClick={addRound} disabled={roundIds.length >= MAX_PACK_ROUNDS || hasActiveMediaAction || isSaving}
+                        <button onClick={addRound} disabled={roundIds.length >= MAX_PACK_ROUNDS || editorLocked}
                             className="flex items-center gap-2 rounded-xl border border-slate-600 px-4 py-3 text-white disabled:opacity-40"><Plus size={18} />{t('addRound')}</button>
                     </div>
-                    <div className={`grid gap-3 rounded-xl border border-slate-700 bg-slate-800/50 p-4 sm:grid-cols-2 ${roundIds.length > 1 ? 'lg:grid-cols-3' : ''}`}>
-                        <button
+                    <div className={`grid gap-3 rounded-xl border border-slate-700 bg-slate-800/50 p-4 ${activeEditorMode === 'table' ? (roundIds.length > 1 ? 'sm:grid-cols-2' : '') : (roundIds.length > 1 ? 'sm:grid-cols-2 lg:grid-cols-3' : 'sm:grid-cols-2')}`}>
+                        {activeEditorMode === 'form' && <button
                             type="button"
                             onClick={collapseAllCategories}
+                            disabled={editorLocked}
                             className="flex min-w-0 items-center justify-center gap-2 rounded-lg border border-slate-600 bg-slate-900 px-4 py-2 text-sm font-bold text-slate-200 transition-colors hover:border-slate-500 hover:bg-slate-800"
                         >
                             <ChevronRight size={18} className="shrink-0" />
                             <span>{t('collapseAllCategories')}</span>
-                        </button>
+                        </button>}
                         <button
                             type="button"
                             onClick={() => setIsPreviewOpen(true)}
+                            disabled={editorLocked}
                             className="flex min-w-0 items-center justify-center gap-2 rounded-lg border border-blue-500/40 bg-blue-600/20 px-4 py-2 text-sm font-bold text-blue-100 transition-colors hover:border-blue-400 hover:bg-blue-600/30"
                         >
                             <Eye size={18} className="shrink-0" />
@@ -1302,7 +1441,7 @@ export default function PackCreator({ pack, setView, user, setError }) {
                             <button
                                 type="button"
                                 onClick={() => setPendingRoundRemoval(activeRoundId)}
-                                disabled={hasActiveMediaAction || isSaving}
+                                disabled={editorLocked}
                                 className="flex min-w-0 items-center justify-center gap-2 rounded-lg border border-red-500/40 bg-red-950/20 px-4 py-2 text-sm font-bold text-red-400 transition-colors hover:border-red-400 hover:bg-red-950/40 disabled:opacity-40 sm:col-span-2 lg:col-span-1"
                             >
                                 <Trash2 size={18} className="shrink-0" />
@@ -1312,6 +1451,13 @@ export default function PackCreator({ pack, setView, user, setError }) {
                     </div>
                 </div>
                 <div id="round-editor" role="tabpanel" aria-labelledby={activeRoundId + '-tab'} className="space-y-6">
+                {activeEditorMode === 'table' ? <PackTableEditor categories={visibleCategories} t={t} disabled={editorLocked}
+                    selection={selection?.roundId === activeRoundId ? selection : null}
+                    onSelect={selectQuestion} onClose={closeQuestion} onCategoryName={updateCategoryName}
+                    onCategoryMove={moveCategory} onCategoryRemove={removeCategory}
+                    onCategoryAdd={addCategory} onQuestionAdd={addQuestion} renderQuestion={renderQuestion}
+                    getDisplayPoints={(question) => question.isSurpriseQuestion ? getSurpriseDisplayPoints(question) : question.points}
+                    isQuestionReady={isPreviewReadyQuestion} setCategoryElement={setCategoryElement} /> : <>
                 {visibleCategories.map((cat, catIdx) => {
                     const isCategoryCollapsed = collapsedCategoryIds.has(cat.id);
                     const collapseLabel = isCategoryCollapsed ? t('expandCategory') : t('collapseCategory');
@@ -1323,6 +1469,7 @@ export default function PackCreator({ pack, setView, user, setError }) {
                             <button
                                 type="button"
                                 onClick={() => toggleCategoryCollapsed(cat.id)}
+                                disabled={editorLocked}
                                 aria-expanded={!isCategoryCollapsed}
                                 aria-label={collapseLabel}
                                 title={collapseLabel}
@@ -1340,7 +1487,7 @@ export default function PackCreator({ pack, setView, user, setError }) {
                                 <button
                                     type="button"
                                     onClick={() => moveCategory(cat.id, -1)}
-                                    disabled={catIdx === 0}
+                                    disabled={editorLocked || catIdx === 0}
                                     aria-label={t('moveCategoryUp')}
                                     title={t('moveCategoryUp')}
                                     className="flex h-10 w-10 select-none items-center justify-center text-slate-300 transition-colors hover:bg-slate-800 hover:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:cursor-not-allowed disabled:text-slate-700 disabled:hover:bg-transparent"
@@ -1350,7 +1497,7 @@ export default function PackCreator({ pack, setView, user, setError }) {
                                 <button
                                     type="button"
                                     onClick={() => moveCategory(cat.id, 1)}
-                                    disabled={catIdx === visibleCategories.length - 1}
+                                    disabled={editorLocked || catIdx === visibleCategories.length - 1}
                                     aria-label={t('moveCategoryDown')}
                                     title={t('moveCategoryDown')}
                                     className="flex h-10 w-10 select-none items-center justify-center border-l border-slate-700 text-slate-300 transition-colors hover:bg-slate-800 hover:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:cursor-not-allowed disabled:text-slate-700 disabled:hover:bg-transparent"
@@ -1363,11 +1510,14 @@ export default function PackCreator({ pack, setView, user, setError }) {
                                 <input
                                     type="text"
                                     value={cat.name}
+                                    disabled={editorLocked}
+                                    aria-label={t('categoryNumber', { number: catIdx + 1 })}
+                                    data-category-id={cat.id}
                                     onChange={(e) => updateCategoryName(cat.id, e.target.value)}
                                     className="w-full bg-slate-900 border border-slate-600 rounded-lg p-2 text-white font-bold outline-none"
                                 />
                             </div>
-                            {visibleCategories.length > 1 && !hasActiveMediaAction && !isSaving && <HoldToConfirmButton
+                            {visibleCategories.length > 1 && !editorLocked && <HoldToConfirmButton
                                 ariaLabel={t('removeCategory')}
                                 onConfirm={() => removeCategory(cat.id)}
                                 title={t('holdToConfirmAction', { action: t('removeCategory') })}
@@ -1379,158 +1529,11 @@ export default function PackCreator({ pack, setView, user, setError }) {
 
                         {!isCategoryCollapsed && (
                         <div className="space-y-4 border-l-2 border-slate-700 pl-3 sm:pl-4">
-                            {cat.questions.map((q, questionIdx) => (
-                                <div key={q.id} className={`flex min-w-0 flex-wrap gap-3 rounded-lg border p-3 sm:gap-4 sm:p-4 ${q.isSurpriseQuestion ? 'border-yellow-400 bg-yellow-950/20' : 'border-transparent bg-slate-900'}`}>
-                                    <div
-                                        onMouseDown={preventTextSelection}
-                                        className="flex shrink-0 select-none flex-col overflow-hidden rounded-lg border border-slate-700 bg-slate-950 self-start"
-                                    >
-                                        <button
-                                            type="button"
-                                            onClick={() => moveQuestion(cat.id, q.id, -1)}
-                                            disabled={questionIdx === 0}
-                                            aria-label={t('moveQuestionUp')}
-                                            title={t('moveQuestionUp')}
-                                            className="flex h-9 w-9 select-none items-center justify-center text-slate-300 transition-colors hover:bg-slate-800 hover:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:cursor-not-allowed disabled:text-slate-700 disabled:hover:bg-transparent"
-                                        >
-                                            <ArrowUp size={16} />
-                                        </button>
-                                        <button
-                                            type="button"
-                                            onClick={() => moveQuestion(cat.id, q.id, 1)}
-                                            disabled={questionIdx === cat.questions.length - 1}
-                                            aria-label={t('moveQuestionDown')}
-                                            title={t('moveQuestionDown')}
-                                            className="flex h-9 w-9 select-none items-center justify-center border-t border-slate-700 text-slate-300 transition-colors hover:bg-slate-800 hover:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:cursor-not-allowed disabled:text-slate-700 disabled:hover:bg-transparent"
-                                        >
-                                            <ArrowDown size={16} />
-                                        </button>
-                                    </div>
-                                    <div className="w-32 shrink-0 space-y-3">
-                                        <label className="flex items-center gap-2 text-xs font-bold text-yellow-300">
-                                            <input
-                                                type="checkbox"
-                                                checked={Boolean(q.isSurpriseQuestion)}
-                                                onChange={(e) => updateQuestion(cat.id, q.id, 'isSurpriseQuestion', e.target.checked)}
-                                                className="h-4 w-4 accent-yellow-400"
-                                            />
-                                            <PartyPopper size={14} /> {t('surpriseQuestion')}
-                                        </label>
-                                        {q.isSurpriseQuestion ? (
-                                            <div className="space-y-2">
-                                                <label className="block">
-                                                    <span className="mb-1 block text-xs text-slate-500">{t('pointsFrom')}</span>
-                                                    <input
-                                                        type="number"
-                                                        min={POINT_STEP}
-                                                        step={POINT_STEP}
-                                                        value={q.surpriseMinPoints ?? SURPRISE_DEFAULT_MIN_POINTS}
-                                                        onChange={(e) => updateQuestion(cat.id, q.id, 'surpriseMinPoints', e.target.value)}
-                                                        onBlur={() => validateQuestionPoints(cat.id, q.id, 'surpriseMinPoints')}
-                                                        className="w-full rounded border border-slate-700 bg-slate-800 p-2 text-center font-mono text-yellow-400 outline-none"
-                                                    />
-                                                </label>
-                                                <label className="block">
-                                                    <span className="mb-1 block text-xs text-slate-500">{t('pointsTo')}</span>
-                                                    <input
-                                                        type="number"
-                                                        min={getSurpriseMinPoints(q)}
-                                                        step={POINT_STEP}
-                                                        value={q.surpriseMaxPoints ?? getSurpriseMaxPoints(q)}
-                                                        onChange={(e) => updateQuestion(cat.id, q.id, 'surpriseMaxPoints', e.target.value)}
-                                                        onBlur={() => validateQuestionPoints(cat.id, q.id, 'surpriseMaxPoints')}
-                                                        className="w-full rounded border border-slate-700 bg-slate-800 p-2 text-center font-mono text-yellow-400 outline-none"
-                                                    />
-                                                </label>
-                                                <p className="text-xs text-slate-400">
-                                                    {t('surprisePointIncrementHint', {
-                                                        increment: getRoundPointStep(roundIds.indexOf(cat.roundId)),
-                                                        round: roundIds.indexOf(cat.roundId) + 1
-                                                    })}
-                                                </p>
-                                                <div className="border-t border-slate-700/80 pt-2">
-                                                    <label className="block">
-                                                        <span className="mb-1 block text-xs text-slate-500">{t('shownAs')}</span>
-                                                        <input
-                                                            type="number"
-                                                            min={POINT_STEP}
-                                                            step={POINT_STEP}
-                                                            value={q.surpriseDisplayPoints ?? getSurpriseDisplayPoints(q)}
-                                                            onChange={(e) => updateQuestion(cat.id, q.id, 'surpriseDisplayPoints', e.target.value)}
-                                                            onBlur={() => validateQuestionPoints(cat.id, q.id, 'surpriseDisplayPoints')}
-                                                            className="w-full rounded border border-slate-700 bg-slate-800 p-2 text-center font-mono text-yellow-400 outline-none"
-                                                        />
-                                                    </label>
-                                                </div>
-                                            </div>
-                                        ) : (
-                                            <div>
-                                                <label className="block text-xs text-slate-500 mb-1">{t('points')}</label>
-                                                <input
-                                                    type="number"
-                                                    min={POINT_STEP}
-                                                    step={POINT_STEP}
-                                                    value={q.points}
-                                                    onChange={(e) => updateQuestion(cat.id, q.id, 'points', e.target.value)}
-                                                    onBlur={() => validateQuestionPoints(cat.id, q.id, 'points')}
-                                                    className="w-full bg-slate-800 border border-slate-700 rounded p-2 text-yellow-400 font-mono text-center outline-none"
-                                                />
-                                            </div>
-                                        )}
-                                    </div>
-                                    <div className="min-w-0 basis-full space-y-3 sm:basis-0 sm:flex-1">
-                                        <div>
-                                            <label className="block text-xs text-slate-500 mb-1">{t('question')}</label>
-                                            <textarea
-                                                value={q.text}
-                                                onPaste={(event) => handleQuestionMediaPaste(event, cat.id, q.id, MEDIA_SLOTS.QUESTION)}
-                                                onChange={(e) => updateQuestion(cat.id, q.id, 'text', e.target.value)}
-                                                placeholder={t('questionPlaceholder')}
-                                                rows={3}
-                                                className="w-full resize-y bg-slate-800 border border-slate-700 rounded p-2 text-white outline-none"
-                                            />
-                                            <PackMediaAttachment
-                                                media={q.questionMedia}
-                                                label={t('questionMediaAlt')}
-                                                disabled={isSaving || hasActiveMediaAction}
-                                                progress={mediaProgress[`${q.id}:${MEDIA_SLOTS.QUESTION}`] || 0}
-                                                error={mediaErrors[`${q.id}:${MEDIA_SLOTS.QUESTION}`]}
-                                                t={t}
-                                                onChange={(file) => updateQuestionMedia(cat.id, q.id, MEDIA_SLOTS.QUESTION, file)}
-                                                onResolveFile={(resolveFile) => resolveDroppedMedia(resolveFile, (file) => updateQuestionMedia(cat.id, q.id, MEDIA_SLOTS.QUESTION, file))}
-                                                onRemove={() => removeQuestionMedia(cat.id, q.id, MEDIA_SLOTS.QUESTION)}
-                                            />
-                                        </div>
-                                        <div>
-                                            <label className="block text-xs text-slate-500 mb-1">{t('answer')}</label>
-                                            <input
-                                                type="text"
-                                                value={q.answer}
-                                                onPaste={(event) => handleQuestionMediaPaste(event, cat.id, q.id, MEDIA_SLOTS.ANSWER)}
-                                                onChange={(e) => updateQuestion(cat.id, q.id, 'answer', e.target.value)}
-                                                placeholder={t('answerPlaceholder')}
-                                                className="w-full bg-slate-800 border border-slate-700 rounded p-2 text-green-400 outline-none"
-                                            />
-                                            <PackMediaAttachment
-                                                media={q.answerMedia}
-                                                label={t('answerMediaAlt')}
-                                                disabled={isSaving || hasActiveMediaAction}
-                                                progress={mediaProgress[`${q.id}:${MEDIA_SLOTS.ANSWER}`] || 0}
-                                                error={mediaErrors[`${q.id}:${MEDIA_SLOTS.ANSWER}`]}
-                                                t={t}
-                                                onChange={(file) => updateQuestionMedia(cat.id, q.id, MEDIA_SLOTS.ANSWER, file)}
-                                                onResolveFile={(resolveFile) => resolveDroppedMedia(resolveFile, (file) => updateQuestionMedia(cat.id, q.id, MEDIA_SLOTS.ANSWER, file))}
-                                                onRemove={() => removeQuestionMedia(cat.id, q.id, MEDIA_SLOTS.ANSWER)}
-                                            />
-                                        </div>
-                                    </div>
-                                    <button disabled={cat.questions.length <= 1 || hasActiveMediaAction || isSaving} aria-label={t('removeQuestion')} onClick={() => removeQuestion(cat.id, q.id)} className="text-slate-600 hover:text-red-400 transition-colors self-start mt-6">
-                                        <X size={20} />
-                                    </button>
-                                </div>
-                            ))}
+                            {cat.questions.map((q, questionIdx) => renderQuestion(cat, q, questionIdx))}
                             <button
                                 onClick={() => addQuestion(cat.id)}
+                                disabled={editorLocked}
+                                data-add-question={cat.id}
                                 className="text-sm text-blue-400 hover:text-blue-300 flex items-center gap-1 py-2"
                             >
                                 <Plus size={16} /> {t('addQuestion')}
@@ -1543,10 +1546,12 @@ export default function PackCreator({ pack, setView, user, setError }) {
 
                 <button
                     onClick={addCategory}
+                    disabled={editorLocked}
                     className="w-full border-2 border-dashed border-slate-700 hover:border-slate-500 text-slate-400 hover:text-slate-300 p-6 rounded-xl flex items-center justify-center gap-2 font-bold transition-colors"
                 >
                     <Plus size={24} /> {t('addCategory')}
                 </button>
+                </>}
                 </div>
             </div>
             </div>

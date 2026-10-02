@@ -36,7 +36,8 @@ export default function PackMediaAttachment({
     onRemove,
     accept = 'image/*,audio/*,video/*',
     allowedKinds = [MEDIA_KINDS.IMAGE, MEDIA_KINDS.AUDIO, MEDIA_KINDS.VIDEO],
-    hint
+    hint,
+    stacked = false
 }) {
     const inputRef = useRef(null);
     const [localError, setLocalError] = useState('');
@@ -129,7 +130,7 @@ export default function PackMediaAttachment({
 
     return (
         <div
-            className={`mt-2 rounded-lg border p-3 transition-colors ${dragActive && !disabled ? 'border-blue-400 bg-blue-500/10' : 'border-slate-800 bg-slate-950/40'}`}
+            className={`mt-2 min-w-0 rounded-lg border p-3 transition-colors ${dragActive && !disabled ? 'border-blue-400 bg-blue-500/10' : 'border-slate-800 bg-slate-950/40'}`}
             onDragEnter={(event) => {
                 event.preventDefault();
                 event.stopPropagation();
@@ -152,29 +153,29 @@ export default function PackMediaAttachment({
         >
             <input ref={inputRef} type="file" accept={accept} className="hidden" onChange={handleFileChange} disabled={disabled} />
             {media ? (
-                <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-                    <div className="flex w-fit flex-col gap-1">
+                <div className={`flex min-w-0 flex-col gap-3 ${stacked ? '' : 'sm:flex-row sm:items-center'}`}>
+                    <div className="flex w-fit min-w-0 max-w-full flex-col gap-1">
                         <QuestionMedia media={media} alt={label} variant="thumbnail" t={t} />
                         <div className="text-xs font-medium text-slate-500">
                             {[getKindLabel(kind, t), formatBytes(media.size)].filter(Boolean).join(' · ')}
                         </div>
                     </div>
-                    <div className="flex flex-wrap gap-2">
+                    <div className={stacked ? 'grid min-w-0 grid-cols-1 gap-2' : 'flex flex-wrap gap-2'}>
                         <button
                             type="button"
                             onClick={pickFile}
                             disabled={disabled}
-                            className="inline-flex items-center gap-2 rounded-lg border border-slate-700 px-3 py-2 text-sm font-bold text-slate-200 hover:bg-slate-800 disabled:opacity-50"
+                            className="inline-flex min-h-11 min-w-0 max-w-full items-center gap-2 rounded-lg border border-slate-700 px-3 py-2 text-sm font-bold text-slate-200 hover:bg-slate-800 disabled:opacity-50"
                         >
-                            <RefreshCw size={16} /> {t('replaceMedia')}
+                            <RefreshCw size={16} className="shrink-0" /> <span className="min-w-0 break-words">{t('replaceMedia')}</span>
                         </button>
                         <button
                             type="button"
                             onClick={onRemove}
                             disabled={disabled}
-                            className="inline-flex items-center gap-2 rounded-lg border border-red-500/30 px-3 py-2 text-sm font-bold text-red-300 hover:bg-red-600 hover:text-white disabled:opacity-50"
+                            className="inline-flex min-h-11 min-w-0 max-w-full items-center gap-2 rounded-lg border border-red-500/30 px-3 py-2 text-sm font-bold text-red-300 hover:bg-red-600 hover:text-white disabled:opacity-50"
                         >
-                            <Trash2 size={16} /> {t('removeMedia')}
+                            <Trash2 size={16} className="shrink-0" /> <span className="min-w-0 break-words">{t('removeMedia')}</span>
                         </button>
                     </div>
                 </div>

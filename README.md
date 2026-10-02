@@ -178,6 +178,25 @@ Rules and frontend require a coordinated release; older clients must reload befo
 
 ## Pack rounds
 
+The pack editor offers **Form** and **Table** modes over the same draft. Form is
+the initial default; the last choice is remembered on this device for the signed-in
+owner. Switching modes retains the current round and unsaved edits. Both modes
+open existing packs, including older single-round packs, and share validation,
+saving, preview, media, sharing, surprise settings, and prize images.
+
+At widths of 1024 px and above, Table mode places categories in editable column
+headers and questions in board cells. Selecting a cell opens a spacious editing
+dialog with Question and Answer side by side on desktop. Previous/Next controls
+move through the current category. Questions follow category order, allowing different counts and point
+values. Below 1024 px, the editor automatically uses Form mode. Table selection is
+disabled on small screens; the desktop mode preference is retained and restored
+when returning to a wider viewport. Resizing retains the current round and draft;
+active media work finishes before the automatic switch.
+Returning to the board retains edits; use Save for text changes.
+Media actions keep their existing immediate persistence. Switching modes/rounds
+is blocked during media work or clipboard confirmation. Spreadsheet import and
+bulk paste are unavailable. See the [editor verification checklist](docs/app-overview.md#pack-editor-verification).
+
 Packs contain one to three ordered rounds. Each round requires at least one category;
 each category requires at least one question. Round tabs support adding and deleting
 rounds, with a board preview for the selected round. Categories and questions cannot

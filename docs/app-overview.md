@@ -56,6 +56,48 @@ A pack contains a title, optional emoji icon, ownership/sharing information, and
 
 Preview, collapse-all, and round deletion controls share a panel below the round tabs. Round deletion opens an app-styled confirmation dialog identifying the selected round and warning that its categories, questions, and media will be deleted. Cancel, Escape, or clicking outside dismisses the dialog without deleting anything; confirmation retains the existing deletion and media cleanup behavior.
 
+The editor offers **Form / Table** modes over one shared draft. Form is the initial
+default; each signed-in owner's last choice is remembered locally on this device.
+Unavailable local storage falls back to Form without preventing editing. Switching
+modes preserves unsaved content and the active round. Both modes use the same
+pack format, validation, saving, preview, media, sharing, prizes, and surprise
+mechanics. Older packs remain editable in either mode.
+
+At 1024 px and above, Table mode displays editable category headers and question
+cells, with a spacious editing dialog for the selected question's full controls. Cells
+show points, a question excerpt, and media/surprise/incomplete indicators. Rows
+follow category question order rather than matching points; unequal lengths leave
+empty space. Incomplete questions remain editable. Category ordering and deletion
+controls sit in the headers; each column has Add Question. Adding a question opens
+its editor and focuses its text field. The dialog places Question and Answer side
+by side on desktop, stacks them on small screens, and provides Previous/Next
+navigation within the category. When the selected question is last, a separate
+**Add new question** button in the bottom bar appends a question to that category,
+opens it in the same dialog, and focuses its text field. The question deletion
+control uses a trash icon in this dialog, with the same deletion behavior.
+It retains visible
+close/navigation controls while its content scrolls. Escape, backdrop dismissal,
+and Back to board retain draft edits and restore focus; they do not save or discard
+text. Closing the dialog keeps draft changes; Save
+persists text changes while media operations retain their immediate persistence.
+Below 1024 px, the editor automatically switches to the existing Form layout and
+disables Table selection. The desktop preference is preserved and restored when
+the viewport becomes wide again. Draft content and the active round are retained.
+If resizing closes a question dialog, its category expands and focus moves to that
+question's Form field. Collapse/expand and collapse-all remain available in Form.
+Desktop Table mode shows all columns
+and confines horizontal scrolling to the board.
+
+Selection follows stable IDs through reordering. Deletion clears a removed item's
+selection and focuses a nearby control. Content validation reveals the affected
+round/question and focuses its missing field. Controls that could unmount media
+panels are blocked during saving, media work, and clipboard confirmation, including
+dialog navigation and dismissal. Clipboard confirmation and enlarged media remain
+available above the editor dialog. Crossing
+the responsive breakpoint defers layout changes until the operation finishes.
+Controls support English/Ukrainian and ordinary keyboard navigation. Spreadsheet
+import and multi-cell paste are not included.
+
 Deleting a saved pack from My Question Packs uses two app-styled confirmation steps. Both identify the pack; the final step warns about permanent deletion and explains that existing rooms with a copied pack remain unchanged. Cancel, Escape, or clicking outside at either step dismisses the dialog without deleting the pack or its media. Media cleanup and pack deletion start only after the final confirmation.
 
 Each question includes a point value and question/answer content. Each side must have text or media; either can have both. Supported media kinds are image, audio, and video. In the create/edit pack editor, each media panel accepts one dropped local file or web image, including replacement of an existing attachment. Question/answer panels accept images up to 10 MB and audio/video up to 100 MB; both prize panels accept images only. Web images are downloaded without credentials in the browser with a 15-second timeout; websites that block downloading require saving the image locally first. Multiple-file drops are rejected. Pasting a clipboard media file into a focused question or answer text field opens an app-styled confirmation dialog before uploading it to that side’s media slot. The dialog highlights the Question or Answer media destination and warns when replacing an existing attachment; Cancel, Escape, or clicking the backdrop dismisses it. The same type/size validation applies; multiple-file pastes are rejected, declining keeps the attachment and text unchanged, and ordinary text pastes retain their normal behavior. Saving, round changes, and other media actions are blocked during downloading and uploading; file-picker buttons remain available for keyboard and touch use. Ordinary point values are normalized to positive multiples of 100 in the editor.
@@ -67,6 +109,34 @@ The editor's Save button stays visible at the top while scrolling. Saving a new 
 Questions can be marked as surprise questions, with a displayed board value and a separate minimum/maximum scoring range. Both wheel and hidden-table scoring build magnitudes from the minimum in increments of 100, 200, or 400 for rounds 1, 2, or 3, stopping before exceeding the maximum. The editor explains the current increment and its round-based reason; deleting an earlier round updates the increment without changing the configured bounds. The maximum is included only when reached by the increment. The pack chooses the wheel or hidden-table scoring mechanic. An optional prize uses two images: a concealed presentation and a revealed presentation.
 
 Packs are private by default. New rooms store only pack display metadata in the lobby. Start Game freezes the latest saved pack in an immutable, game-specific version document shared by all participants and spectators. Later source-pack edits do not change that version. Explicitly finishing the game deletes the version while retaining results in the room. Legacy rooms keep their embedded snapshots. Media assets remain external resources; copied metadata does not preserve a separate copy of the files.
+
+### Pack editor verification
+
+Real-browser checks for the alternative mode remain pending. Use a signed-in pack
+owner and disposable packs. Repeat in English/Ukrainian at desktop (at least 1024 px)
+and 390 px mobile widths:
+
+1. Create in Form, switch before saving, edit in Table, save/reopen, then edit/save
+   in Form. Repeat starting in Table. Check remembered mode and separate owner preferences.
+2. Open legacy and three-round packs in both modes. Check the round cap, switching,
+   deletion/cancellation, unequal category lengths, and custom points after save/reopen.
+3. Add, rename, reorder, and delete categories/questions. Check minimum counts,
+   category hold cancellation, stable selection, focus after adding/deleting/closing,
+   and empty board space. Check Previous/Next navigation, Escape/backdrop dismissal,
+   and return focus from the question dialog. Check round deletion cancellation separately.
+4. Check surprise minimum/maximum/display values and round increment hints, both
+   scoring mechanics, both prize images, sharing, emoji, and cross-mode save/reopen.
+5. Upload, replace, remove, and preview question/answer image/audio/video. Test local
+   and web-image drops, media-paste confirmation/cancellation, invalid files, failure
+   recovery, progress, and retained content after errors.
+6. During media work, try mode/round/selection/collapse controls and resizing across
+   1024 px. The active panel must stay mounted; the automatic Form switch applies
+   after completion. Confirm Table returns on desktop without losing draft edits,
+   the selected round, or the remembered preference.
+7. Save missing question/answer content in another round or collapsed category.
+   Check visible errors and focus on the missing field; media-only content remains valid.
+8. Use Tab and Enter/Space; test long text, scrolling, touch controls, and absence of
+   horizontal page overflow on mobile. Preview, reveal, and return without changing the draft.
 
 ## Shared state and services
 
