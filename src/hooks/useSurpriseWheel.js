@@ -6,9 +6,9 @@ import { WHEEL_ANIMATION_MS } from '../utils/wheelPolicy';
 export default function useSurpriseWheel({ roomRef, round, questionId, actorId, actorName, canComplete, serverNow, clockReady, t }) {
     const [error, setError] = useState(false);
     const [retry, setRetry] = useState(0);
-    const spinId = round?.spinId;
     const applied = Boolean(round?.scoreAppliedAt);
     const startedAt = timestampMillis(round?.rolledAt);
+    const spinId = round?.spinId || (startedAt ? `legacy_${startedAt}` : null);
     useEffect(() => {
         setError(false);
         if (!canComplete || !spinId || applied || !startedAt || !clockReady) return undefined;

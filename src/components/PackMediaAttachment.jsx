@@ -59,6 +59,9 @@ export default function PackMediaAttachment({
             setDragActive(false);
         }
     }, [disabled]);
+    useEffect(() => {
+        setLocalError('');
+    }, [media]);
     const kind = getMediaKind(media);
     const EmptyIcon = kind === MEDIA_KINDS.AUDIO ? FileAudio : kind === MEDIA_KINDS.VIDEO ? FileVideo : ImagePlus;
 

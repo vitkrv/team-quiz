@@ -55,7 +55,7 @@ export default function QuestionMedia({
 
     useEffect(() => {
         const element = mediaRef.current;
-        if (!element || !shouldStart || !unlocked || kind === MEDIA_KINDS.IMAGE) return;
+        if (!element || !shouldStart || !unlocked || pauseSignal || kind === MEDIA_KINDS.IMAGE) return;
 
         const startedKey = `${media?.fileId || media?.url}:${startAt}`;
         if (startedKeyRef.current === startedKey) return;
@@ -72,7 +72,7 @@ export default function QuestionMedia({
         }, delay);
 
         return () => window.clearTimeout(timeoutId);
-    }, [kind, media?.fileId, media?.url, onBlocked, shouldStart, startAt, unlocked]);
+    }, [kind, media?.fileId, media?.url, onBlocked, pauseSignal, shouldStart, startAt, unlocked]);
 
     useEffect(() => {
         const element = mediaRef.current;

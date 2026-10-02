@@ -149,7 +149,7 @@ export async function startSurpriseWheel(roomRef, questionId, actor, t) {
     const random = Math.random();
     return runRoomTransaction(roomRef, async (transaction, room) => {
         const round = room?.surpriseRound;
-        if (!room || !isCurrentGame(room) || room.status !== 'playing' || !room.answerRevealed
+        if (!room || room.status !== 'playing' || !room.answerRevealed
             || room.activeQuestionId !== questionId || round?.questionId !== questionId
             || !round.judgeResult || round.scoringMechanic !== 'wheel'
             || (actor.id !== room.hostId && actor.id !== round.answererId)
@@ -159,11 +159,14 @@ export async function startSurpriseWheel(roomRef, questionId, actor, t) {
         if (!values?.length || !values.every(Number.isFinite)) return 'stale';
         const points = values[Math.floor(random * values.length)];
         const playerName = room.players[round.answererId].name;
+        const currentGame = isCurrentGame(room);
         await updateRoomInTransaction(transaction, roomRef, room, {
-            'surpriseRound.spinId': spinId,
-            'surpriseRound.durationMs': WHEEL_ANIMATION_MS,
+            ...(currentGame ? {
+                'surpriseRound.spinId': spinId,
+                'surpriseRound.durationMs': WHEEL_ANIMATION_MS
+            } : {}),
             'surpriseRound.rollResult': points,
-            'surpriseRound.rolledAt': serverTimestamp(),
+            'surpriseRound.rolledAt': currentGame ? serverTimestamp() : Date.now(),
             'surpriseRound.rolledBy': actor.id,
             'surpriseRound.scoreAppliedAt': null,
             history: [createHistoryItem({ id: `wheel_${spinId}_started`, type: 'surprise_wheel_rolled',
@@ -187,21 +190,23 @@ export async function completeSurpriseWheel(roomRef, questionId, spinId, actor, 
     try {
         return await runRoomTransaction(roomRef, async (transaction, room) => {
             const round = room?.surpriseRound;
-            if (!room || !isCurrentGame(room) || !spinId || room.status !== 'playing'
+            const currentGame = isCurrentGame(room || {});
+            const startedAt = timestampMillis(round?.rolledAt);
+            const expectedSpinId = currentGame ? round?.spinId : startedAt ? `legacy_${startedAt}` : null;
+            if (!room || !spinId || room.status !== 'playing'
                 || room.activeQuestionId !== questionId || round?.questionId !== questionId
-                || round.spinId !== spinId || !room.answerRevealed || !round.judgeResult
+                || expectedSpinId !== spinId || !room.answerRevealed || !round.judgeResult
                 || round.scoringMechanic !== 'wheel'
                 || (actor.id !== room.hostId && actor.id !== round.answererId)
                 || !room.players[round.answererId] || room.players[round.answererId].isHost) return 'stale';
             if (round.scoreAppliedAt) return 'already-applied';
-            const startedAt = timestampMillis(round.rolledAt);
-            if (!startedAt || round.durationMs !== WHEEL_ANIMATION_MS
+            if (!startedAt || (currentGame && round.durationMs !== WHEEL_ANIMATION_MS)
                 || !Number.isFinite(round.rollResult) || !round.wheelValues?.includes(round.rollResult)) return 'stale';
             if (now() < startedAt + WHEEL_ANIMATION_MS) return 'not-ready';
             await updateRoomInTransaction(transaction, roomRef, room, {
                 [`players.${round.answererId}.score`]: (Number(room.players[round.answererId].score) || 0) + round.rollResult,
                 currentTurn: round.answererId,
-                'surpriseRound.scoreAppliedAt': serverTimestamp(),
+                'surpriseRound.scoreAppliedAt': currentGame ? serverTimestamp() : now(),
                 history: [createHistoryItem({ id: `wheel_${spinId}_scored`, type: 'surprise_wheel_scored',
                     actorId: actor.id, actorName: actor.name, message: t('recapWheelScored'),
                     details: { spinId, playerId: round.answererId, playerName: room.players[round.answererId].name,
@@ -213,7 +218,9 @@ export async function completeSurpriseWheel(roomRef, questionId, spinId, actor, 
         // Concurrent immutable-event creation may fail before the SDK retries.
         if (error.code === 'permission-denied') {
             const room = (await getDocFromServer(roomRef)).data();
-            if (room?.surpriseRound?.spinId === spinId && room.surpriseRound.scoreAppliedAt) return 'already-applied';
+            const round = room?.surpriseRound;
+            const expectedSpinId = isCurrentGame(room || {}) ? round?.spinId : `legacy_${timestampMillis(round?.rolledAt)}`;
+            if (expectedSpinId === spinId && round?.scoreAppliedAt) return 'already-applied';
         }
         throw error;
     }

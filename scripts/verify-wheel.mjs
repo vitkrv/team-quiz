@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { collection, deleteDoc, doc, getDocFromServer, getDocs, serverTimestamp, setDoc, Timestamp, updateDoc } from 'firebase/firestore';
+import { collection, deleteDoc, deleteField, doc, getDocFromServer, getDocs, serverTimestamp, setDoc, Timestamp, updateDoc } from 'firebase/firestore';
 
 // Run only through verify-game-storage.mjs, with its isolated project and rules.
 export async function verifyWheel({ actions, check, denied, hostDb, playerDb, spectatorDb, seedDb, ref, roomRef, event, t, client }) {
@@ -36,6 +36,33 @@ export async function verifyWheel({ actions, check, denied, hostDb, playerDb, sp
     const resume = (game, questionId = 'wheel', history = event('board_resumed', 'host', { questionId })) => actions.updateRoom(game.host, {
         activeQuestionId: null, answerRevealed: false, buzzedPlayerId: null, buzzTimestamp: null, buzzAttempts: {},
         incorrectBuzzedIds: [], mediaPlayback: null, surpriseRound: null, history: [history]
+    });
+    await check('wheel: embedded and pre-policy rooms preserve numeric spin/award compatibility', async () => {
+        for (const format of ['embedded', 'pre-policy', 'pre-recap']) {
+            const game = await make(100);
+            await updateDoc(game.seed, {
+                buzzerPolicyVersion: deleteField(), buzzerRoundId: deleteField(),
+                ...(format === 'embedded' ? {
+                    dataVersion: deleteField(), recapVersion: deleteField(),
+                    packVersionId: deleteField(), pack, history: []
+                } : format === 'pre-recap' ? { recapVersion: deleteField() } : {})
+            });
+            assert.equal(await actions.startSurpriseWheel(game.player, 'wheel', playerActor, t), 'started');
+            const spin = (await read(game.host)).surpriseRound;
+            assert.equal(typeof spin.rolledAt, 'number');
+            assert.equal(spin.spinId, undefined);
+            assert.equal((await read(game.host)).players.player.score, 0);
+            const spinId = `legacy_${spin.rolledAt}`;
+            assert.equal(await actions.completeSurpriseWheel(game.player, 'wheel', spinId, playerActor, t, () => spin.rolledAt), 'not-ready');
+            // Legacy deadlines are client-side; current-format server denials are checked below.
+            await actions.completeSurpriseWheel(game.player, 'wheel', spinId, playerActor, t, () => spin.rolledAt + 6100);
+            assert.equal(await actions.completeSurpriseWheel(game.host, 'wheel', spinId, hostActor, t), 'already-applied');
+            const completed = await read(game.host);
+            assert.equal(completed.players.player.score, 100);
+            assert.equal(typeof completed.surpriseRound.scoreAppliedAt, 'number');
+            await resume(game);
+            assert.equal((await read(game.host)).activeQuestionId, null);
+        }
     });
     await check('wheel: concurrent starts select once and server rejects early awards and spin tampering', async () => {
         const game = await make();

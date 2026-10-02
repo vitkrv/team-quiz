@@ -135,7 +135,12 @@ A correct answer can still lose points; an incorrect answer can still gain point
 
 The assigned contestant or host starts the wheel after judging. In current-format rooms (`dataVersion: 2`, `recapVersion: 1`, `buzzerPolicyVersion: 1`), the app persists one selected entry and a server-stamped spin identity/start time without changing scores. Everyone uses the same six-second animation timeline. Refreshing or receiving a late snapshot resumes at the elapsed position; after the deadline the wheel is shown settled. The result label stays hidden until the animation ends, and a committed award settles the wheel before its score is displayed.
 
-After the deadline, either the host or selected contestant can complete the award. The score, application marker, history, and recap commit together exactly once; Firestore rejects early completion even if a client clock runs ahead. Mounted authorized clients retry after refresh/reconnect and show pending/retry feedback. If both are disconnected, the pending award waits for either to return. Continue and explicit Finish cannot discard an unresolved judged surprise award. These guarantees require updated clients and rules; older room formats and pre-update spins are not upgraded or recovered.
+After the deadline, either the host or selected contestant can complete the award. The score, application marker, history, and recap commit together exactly once; Firestore rejects early completion even if a client clock runs ahead. Mounted authorized clients retry after refresh/reconnect and show pending/retry feedback. If both are disconnected, the pending award waits for either to return. Continue and explicit Finish cannot discard an unresolved judged surprise award. These guarantees require current-format rooms and updated clients and rules; older rooms retain their existing version markers.
+
+Older rooms retain numeric client timestamps and their existing history/recap format.
+The assigned contestant or host can still start the wheel and apply its award after
+the six-second animation, including after refresh. This compatibility path does not
+add the current room's server-enforced deadline or migrate its version markers.
 
 ### Hidden table
 
