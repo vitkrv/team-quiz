@@ -1,10 +1,12 @@
 import { getPackRounds, validatePackRounds, MAX_PACK_ROUNDS } from '../utils/packRounds';
 import { useEffect, useRef, useState } from 'react';
 import { addDoc, collection, doc, deleteField, setDoc, updateDoc } from 'firebase/firestore';
-import { ArrowDown, ArrowLeft, ArrowUp, Check, ChevronDown, ChevronRight, Eye, PartyPopper, Plus, Trash2, X } from 'lucide-react';
+import { ArrowDown, ArrowLeft, ArrowUp, Check, ChevronDown, ChevronRight, Eye, Lock, PartyPopper, Plus, Trash2, X } from 'lucide-react';
 import EmojiPicker from '../components/EmojiPicker';
+import QuestionPresenter from '../components/QuestionPresenter';
 import PackMediaAttachment from '../components/PackMediaAttachment';
 import MediaPasteDialog from '../components/MediaPasteDialog';
+import DeleteRoundDialog from '../components/DeleteRoundDialog';
 import HoldToConfirmButton from '../components/HoldToConfirmButton';
 import { normalizeSurpriseScoringMechanic, SURPRISE_SCORING_MECHANICS } from '../constants';
 import { appId, db } from '../firebase';
@@ -17,6 +19,7 @@ import { getFirestoreErrorMessage } from '../utils/errors';
 const SURPRISE_DEFAULT_MIN_POINTS = 100;
 const SURPRISE_DEFAULT_MAX_POINTS = 500;
 const POINT_STEP = 100;
+const getRoundPointStep = (roundIndex) => POINT_STEP * (2 ** Math.max(0, roundIndex));
 
 const normalizePoints = (value, fallback = POINT_STEP) => {
     const parsedValue = Number.parseInt(value, 10);
@@ -40,10 +43,10 @@ const getQuestionPointsForSummary = (question) => (
 
 const createEmptyQuestion = (points = 100) => ({ id: generateId(), points, text: '', answer: '' });
 
-const createDefaultCategories = (t) => [
+const createDefaultCategories = (t, pointStep = POINT_STEP) => [
     { id: generateId(), name: t('defaultCategory'), questions: [
-            createEmptyQuestion(100),
-            createEmptyQuestion(200)
+            createEmptyQuestion(pointStep),
+            createEmptyQuestion(pointStep * 2)
         ]}
 ];
 
@@ -223,7 +226,6 @@ const getPreviewCategories = (categories) => categories
     .map((category) => ({
         ...category,
         questions: (category.questions || [])
-            .filter(isPreviewReadyQuestion)
             .map((question) => ({
                 ...question,
                 points: question.isSurpriseQuestion ? getSurpriseDisplayPoints(question) : normalizePoints(question.points)
@@ -231,7 +233,7 @@ const getPreviewCategories = (categories) => categories
     }))
     .filter((category) => category.questions.length > 0);
 
-function PreviewBoardGrid({ categories, onCategorySelect, t }) {
+function PreviewBoardGrid({ categories, onCategorySelect, onQuestionSelect, t }) {
     return (
         <div
             className="grid min-h-[28rem] min-w-[44rem] flex-1 gap-4"
@@ -253,12 +255,18 @@ function PreviewBoardGrid({ categories, onCategorySelect, t }) {
 
                     <div className="flex min-h-0 flex-1 flex-col gap-4">
                         {cat.questions.map((q) => (
-                            <div
+                            <button
+                                type="button"
+                                disabled={!isPreviewReadyQuestion(q)}
+                                onClick={() => onQuestionSelect(cat.id, q.id)}
+                                aria-label={t('previewQuestion', { category: cat.name, points: q.points })}
+                                title={isPreviewReadyQuestion(q) ? undefined : t('previewQuestionBlocked')}
                                 key={q.id}
-                                className="flex min-h-20 flex-1 cursor-default items-center justify-center rounded-lg bg-blue-800 font-mono text-2xl font-black text-yellow-400 shadow-[inset_0_-4px_0_0_rgba(0,0,0,0.3)] shadow-black md:text-4xl"
+                                className="flex min-h-20 flex-1 transition-colors enabled:hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-300 disabled:cursor-not-allowed disabled:bg-slate-800 disabled:text-slate-500 items-center justify-center gap-2 rounded-lg bg-blue-800 font-mono text-2xl font-black text-yellow-400 shadow-[inset_0_-4px_0_0_rgba(0,0,0,0.3)] shadow-black md:text-4xl"
                             >
+                                {!isPreviewReadyQuestion(q) && <Lock size={18} aria-hidden="true" className="shrink-0" />}
                                 {q.points}
-                            </div>
+                            </button>
                         ))}
                     </div>
                 </div>
@@ -268,6 +276,24 @@ function PreviewBoardGrid({ categories, onCategorySelect, t }) {
 }
 
 function QuestionPackPreviewModal({ categories, roundNumber, onCategorySelect, onClose, t }) {
+    const [selection, setSelection] = useState(null);
+    const [answerRevealed, setAnswerRevealed] = useState(false);
+    const selectedCategory = categories.find(category => category.id === selection?.categoryId);
+    const selectedQuestion = selectedCategory?.questions.find(question => question.id === selection?.questionId);
+    const activeQuestion = selectedQuestion && isPreviewReadyQuestion(selectedQuestion) ? selectedQuestion : null;
+
+    const handleQuestionSelect = (categoryId, questionId) => {
+        const question = categories.find(category => category.id === categoryId)?.questions.find(item => item.id === questionId);
+        if (!question || !isPreviewReadyQuestion(question)) return;
+        setAnswerRevealed(false);
+        setSelection({ categoryId, questionId });
+    };
+
+    const handleBackToTable = () => {
+        setSelection(null);
+        setAnswerRevealed(false);
+    };
+
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4 sm:p-6">
             <div className="flex max-h-[90vh] w-full max-w-6xl flex-col rounded-xl border border-slate-700 bg-slate-900 shadow-2xl">
@@ -284,14 +310,40 @@ function QuestionPackPreviewModal({ categories, roundNumber, onCategorySelect, o
                     </button>
                 </div>
                 <div className="min-h-0 flex-1 overflow-auto bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-blue-950 to-slate-900 p-5">
-                    {categories.length === 0 ? (
+                    {activeQuestion ? (
+                        <div
+                            key={activeQuestion.id}
+                            className={`active-question-enter-shell ${activeQuestion.isSurpriseQuestion ? 'active-question-enter-shell--surprise' : ''} relative mx-auto flex min-h-[28rem] w-full max-w-4xl flex-col items-center text-center`}
+                        >
+                            <div className={`relative flex w-full flex-1 flex-col items-center ${answerRevealed ? 'justify-center' : 'justify-start'}`}>
+                                <QuestionPresenter
+                                    question={activeQuestion}
+                                    categoryName={selectedCategory.name}
+                                    isAnswerRevealed={answerRevealed}
+                                    t={t}
+                                />
+                            </div>
+                        </div>
+                    ) : categories.length === 0 ? (
                         <div className="flex min-h-[18rem] items-center justify-center rounded-lg border border-dashed border-slate-700 p-8 text-center text-slate-400">
                             {t('noPreviewQuestions')}
                         </div>
                     ) : (
-                        <PreviewBoardGrid categories={categories} onCategorySelect={onCategorySelect} t={t} />
+                        <PreviewBoardGrid categories={categories} onCategorySelect={onCategorySelect} onQuestionSelect={handleQuestionSelect} t={t} />
                     )}
                 </div>
+                {activeQuestion && (
+                    <div className="flex shrink-0 flex-wrap justify-center gap-3 border-t border-slate-800 p-4">
+                        {!answerRevealed && (
+                            <button type="button" onClick={() => setAnswerRevealed(true)} className="inline-flex items-center justify-center gap-2 rounded-lg bg-green-600 px-5 py-3 font-bold text-white hover:bg-green-500">
+                                <Eye size={18} /> {t('previewRevealAnswer')}
+                            </button>
+                        )}
+                        <button type="button" onClick={handleBackToTable} className="inline-flex items-center justify-center gap-2 rounded-lg bg-slate-700 px-5 py-3 font-bold text-white hover:bg-slate-600">
+                            <ArrowLeft size={18} /> {t('previewBackToTable')}
+                        </button>
+                    </div>
+                )}
             </div>
         </div>
     );
@@ -315,8 +367,8 @@ export default function PackCreator({ pack, setView, user, setError }) {
     // Local flat editing state keeps async media callbacks bound to globally unique IDs.
     // Only nested rounds are persisted.
     const [categories, setCategories] = useState(() => ensureEditableCategoryIds(
-        pack ? getPackRounds(pack).flatMap((round, index) => (round.categories?.length ? round.categories : createDefaultCategories(t))
-            .map((category) => ({ ...category, roundId: roundIds[index], questions: category.questions?.length ? category.questions : [createEmptyQuestion()] })))
+        pack ? getPackRounds(pack).flatMap((round, index) => (round.categories?.length ? round.categories : createDefaultCategories(t, getRoundPointStep(index)))
+            .map((category) => ({ ...category, roundId: roundIds[index], questions: category.questions?.length ? category.questions : [createEmptyQuestion(getRoundPointStep(index))] })))
             : createDefaultCategories(t).map((category) => ({ ...category, roundId: roundIds[0] })), t));
     const visibleCategories = categories.filter((category) => category.roundId === activeRoundId);
     const roundPluralRules = new Intl.PluralRules(language);
@@ -335,6 +387,7 @@ export default function PackCreator({ pack, setView, user, setError }) {
     const mountedRef = useRef(false);
     const savedTimerRef = useRef(null);
     const [isPreviewOpen, setIsPreviewOpen] = useState(false);
+    const [pendingRoundRemoval, setPendingRoundRemoval] = useState(null);
     const [pendingMediaPaste, setPendingMediaPaste] = useState(null);
     const [collapsedCategoryIds, setCollapsedCategoryIds] = useState(() => new Set());
     const [mediaBusy, setMediaBusy] = useState(false);
@@ -383,7 +436,7 @@ export default function PackCreator({ pack, setView, user, setError }) {
     const addCategory = () => {
         setCategories((currentCategories) => [
             ...currentCategories,
-            { id: generateId(), roundId: activeRoundId, name: t('newCategory'), questions: [createEmptyQuestion(100)] }
+            { id: generateId(), roundId: activeRoundId, name: t('newCategory'), questions: [createEmptyQuestion(getRoundPointStep(roundIds.indexOf(activeRoundId)))] }
         ]);
     };
 
@@ -444,18 +497,19 @@ export default function PackCreator({ pack, setView, user, setError }) {
         if (roundIds.length >= MAX_PACK_ROUNDS || hasActiveMediaAction || isSaving) return;
         const id = generateId();
         setRoundIds([...roundIds, id]);
-        setCategories((current) => [...current, { id: generateId(), roundId: id, name: t('newCategory'), questions: [createEmptyQuestion()] }]);
+        setCategories((current) => [...current, { id: generateId(), roundId: id, name: t('newCategory'), questions: [createEmptyQuestion(getRoundPointStep(roundIds.length))] }]);
         setActiveRoundId(id);
     };
-    const removeRound = async () => {
-        if (roundIds.length <= 1 || hasActiveMediaAction || isSaving || !window.confirm(t('removeRoundConfirm'))) return;
-        const removed = categories.filter((category) => category.roundId === activeRoundId);
-        const next = categories.filter((category) => category.roundId !== activeRoundId);
-        const ids = roundIds.filter((id) => id !== activeRoundId);
+    const removeRound = async (roundId) => {
+        if (roundIds.length <= 1 || !roundIds.includes(roundId) || hasActiveMediaAction || isSaving) return;
+        setPendingRoundRemoval(null);
+        const removed = categories.filter((category) => category.roundId === roundId);
+        const next = categories.filter((category) => category.roundId !== roundId);
+        const ids = roundIds.filter((id) => id !== roundId);
         setIsSaving(true);
         try {
             if (persistedPackId) await updateDoc(getPackRef(persistedPackId), {
-                rounds: serializeRounds(next).filter((round) => round.id !== activeRoundId), categories: deleteField(), updatedAt: Date.now()
+                rounds: serializeRounds(next).filter((round) => round.id !== roundId), categories: deleteField(), updatedAt: Date.now()
             });
             setRoundIds(ids); setCategories(next); setActiveRoundId(ids[0]);
             await deleteMediaNow(removed.flatMap((category) => category.questions.flatMap(getSavedMediaFromQuestion)));
@@ -544,7 +598,8 @@ export default function PackCreator({ pack, setView, user, setError }) {
         setCategories((currentCategories) => currentCategories.map(c => {
             if (c.id === catId) {
                 const lastPoints = c.questions.length > 0 ? normalizePoints(c.questions[c.questions.length - 1].points, 0) : 0;
-                return { ...c, questions: [...c.questions, createEmptyQuestion(lastPoints + 100)] };
+                const pointStep = getRoundPointStep(roundIds.indexOf(c.roundId));
+                return { ...c, questions: [...c.questions, createEmptyQuestion(lastPoints + pointStep)] };
             }
             return c;
         }));
@@ -987,6 +1042,15 @@ export default function PackCreator({ pack, setView, user, setError }) {
 
     return (
         <div className="mx-auto grid min-h-screen w-full min-w-0 max-w-4xl grid-cols-1 content-start gap-x-3 p-4 sm:grid-cols-[minmax(0,1fr),auto] sm:p-6">
+            {pendingRoundRemoval && (
+                <DeleteRoundDialog
+                    roundNumber={roundIds.indexOf(pendingRoundRemoval) + 1}
+                    disabled={isSaving || hasActiveMediaAction}
+                    onCancel={() => setPendingRoundRemoval(null)}
+                    onConfirm={() => removeRound(pendingRoundRemoval)}
+                    t={t}
+                />
+            )}
             {pendingMediaPaste && (
                 <MediaPasteDialog
                     file={pendingMediaPaste.file}
@@ -1149,22 +1213,6 @@ export default function PackCreator({ pack, setView, user, setError }) {
                             })}
                         </div>
                     </div>
-                    <div className="flex flex-wrap gap-3">
-                        <button
-                            type="button"
-                            onClick={() => setIsPreviewOpen(true)}
-                            className="inline-flex max-w-full flex-wrap items-center justify-center gap-2 rounded-lg border border-blue-500/40 bg-blue-600/20 px-4 py-3 text-left font-bold text-blue-100 transition-colors hover:border-blue-400 hover:bg-blue-600/30"
-                        >
-                            <Eye size={18} className="shrink-0" /> {t('showQuestionPackPreview')}
-                        </button>
-                        <button
-                            type="button"
-                            onClick={collapseAllCategories}
-                            className="inline-flex max-w-full flex-wrap items-center justify-center gap-2 rounded-lg border border-slate-600 bg-slate-900 px-4 py-3 text-left font-bold text-slate-200 transition-colors hover:border-slate-500 hover:bg-slate-800"
-                        >
-                            <ChevronRight size={18} className="shrink-0" /> {t('collapseAllCategories')}
-                        </button>
-                    </div>
                 </div>
             </div>
 
@@ -1234,7 +1282,35 @@ export default function PackCreator({ pack, setView, user, setError }) {
                         <button onClick={addRound} disabled={roundIds.length >= MAX_PACK_ROUNDS || hasActiveMediaAction || isSaving}
                             className="flex items-center gap-2 rounded-xl border border-slate-600 px-4 py-3 text-white disabled:opacity-40"><Plus size={18} />{t('addRound')}</button>
                     </div>
-                    {roundIds.length > 1 && <button onClick={removeRound} disabled={hasActiveMediaAction || isSaving} className="flex items-center gap-2 text-sm text-red-400 disabled:opacity-40"><Trash2 size={16} />{t('removeRound')}</button>}
+                    <div className={`grid gap-3 rounded-xl border border-slate-700 bg-slate-800/50 p-4 sm:grid-cols-2 ${roundIds.length > 1 ? 'lg:grid-cols-3' : ''}`}>
+                        <button
+                            type="button"
+                            onClick={collapseAllCategories}
+                            className="flex min-w-0 items-center justify-center gap-2 rounded-lg border border-slate-600 bg-slate-900 px-4 py-2 text-sm font-bold text-slate-200 transition-colors hover:border-slate-500 hover:bg-slate-800"
+                        >
+                            <ChevronRight size={18} className="shrink-0" />
+                            <span>{t('collapseAllCategories')}</span>
+                        </button>
+                        <button
+                            type="button"
+                            onClick={() => setIsPreviewOpen(true)}
+                            className="flex min-w-0 items-center justify-center gap-2 rounded-lg border border-blue-500/40 bg-blue-600/20 px-4 py-2 text-sm font-bold text-blue-100 transition-colors hover:border-blue-400 hover:bg-blue-600/30"
+                        >
+                            <Eye size={18} className="shrink-0" />
+                            <span>{t('showQuestionPackPreview')}</span>
+                        </button>
+                        {roundIds.length > 1 && (
+                            <button
+                                type="button"
+                                onClick={() => setPendingRoundRemoval(activeRoundId)}
+                                disabled={hasActiveMediaAction || isSaving}
+                                className="flex min-w-0 items-center justify-center gap-2 rounded-lg border border-red-500/40 bg-red-950/20 px-4 py-2 text-sm font-bold text-red-400 transition-colors hover:border-red-400 hover:bg-red-950/40 disabled:opacity-40 sm:col-span-2 lg:col-span-1"
+                            >
+                                <Trash2 size={18} className="shrink-0" />
+                                <span>{t('removeRound')}</span>
+                            </button>
+                        )}
+                    </div>
                 </div>
                 <div id="round-editor" role="tabpanel" aria-labelledby={activeRoundId + '-tab'} className="space-y-6">
                 {visibleCategories.map((cat, catIdx) => {

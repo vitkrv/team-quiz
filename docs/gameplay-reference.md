@@ -201,6 +201,13 @@ category has at least one question. Authors manage rounds through tabs; reorderi
 categories/questions never moves them between rounds. The selected round has its
 own board preview. Prize and surprise-scoring settings remain pack-wide.
 
+New categories start at 100 points in round 1, 200 in round 2, and 400 in round 3.
+Adding a question increments the previous question's value by that round's starting
+value: `100, 200, 300, ...`, `200, 400, 600, ...`, or `400, 800, 1200, ...`.
+Authors can still edit values in multiples of 100; existing values are preserved,
+including when deleting a round changes the remaining round numbers. Surprise
+scoring ranges retain their existing defaults.
+
 Start Game freezes all rounds together. The host presents only the current round's
 categories, then players select from that round's board. After the final question is
 resolved and the host presses Continue, a non-final round enters the shared
