@@ -296,7 +296,7 @@ function QuestionPackPreviewModal({ categories, roundNumber, onCategorySelect, o
     );
 }
 
-export default function PackCreator({ pack, setView, user, setError, onSaved }) {
+export default function PackCreator({ pack, setView, user, setError }) {
     const { language, t } = useLanguage();
     const isEditMode = Boolean(pack?.id);
     const [persistedPackId, setPersistedPackId] = useState(pack?.id || null);
@@ -329,6 +329,10 @@ export default function PackCreator({ pack, setView, user, setError, onSaved }) 
         })
     }));
     const [isSaving, setIsSaving] = useState(false);
+    const [isSaved, setIsSaved] = useState(false);
+    const saveInFlightRef = useRef(false);
+    const mountedRef = useRef(false);
+    const savedTimerRef = useRef(null);
     const [isPreviewOpen, setIsPreviewOpen] = useState(false);
     const [collapsedCategoryIds, setCollapsedCategoryIds] = useState(() => new Set());
     const [mediaBusy, setMediaBusy] = useState(false);
@@ -343,6 +347,17 @@ export default function PackCreator({ pack, setView, user, setError, onSaved }) 
     const hasActiveMediaAction = mediaBusy || Object.values(mediaProgress).some((value) => value > 0 && value < 100);
     const packSummary = getPackSummary(categories, prize);
     const previewCategories = getPreviewCategories(visibleCategories);
+
+    useEffect(() => {
+        mountedRef.current = true;
+        return () => {
+            mountedRef.current = false;
+            clearTimeout(savedTimerRef.current);
+        };
+    }, []);
+
+    const idleSaveLabel = isEditMode ? t('updatePack') : t('savePack');
+    const saveLabel = isSaving ? t('saving') : isSaved ? t('packSaved') : idleSaveLabel;
 
     useEffect(() => () => {
         categoriesRef.current.forEach((category) => {
@@ -824,16 +839,16 @@ export default function PackCreator({ pack, setView, user, setError, onSaved }) 
 
     const validateQuestions = () => {
         const invalid = validatePackRounds({ rounds: serializeRounds(categories) });
-        if (invalid) { setActiveRoundId(roundIds[invalid.roundIndex]); alert(t(invalid.key)); return false; }
+        if (invalid) { setActiveRoundId(roundIds[invalid.roundIndex]); setError(t(invalid.key)); return false; }
         for (const category of categories) {
             for (const question of category.questions) {
                 if (!question.text.trim() && !hasEffectiveMedia(question, MEDIA_SLOTS.QUESTION)) {
-                    setActiveRoundId(category.roundId); alert(t('questionTextOrMediaRequired'));
+                    setActiveRoundId(category.roundId); setError(t('questionTextOrMediaRequired'));
                     return false;
                 }
 
                 if (!question.answer.trim() && !hasEffectiveMedia(question, MEDIA_SLOTS.ANSWER)) {
-                    setActiveRoundId(category.roundId); alert(t('answerTextOrMediaRequired'));
+                    setActiveRoundId(category.roundId); setError(t('answerTextOrMediaRequired'));
                     return false;
                 }
             }
@@ -843,12 +858,18 @@ export default function PackCreator({ pack, setView, user, setError, onSaved }) 
     };
 
     const handleSave = async () => {
-        if (!packName.trim()) return alert(t('pleaseEnterPackName'));
-        if (hasActiveMediaAction) return alert(t('mediaActionInProgress'));
+        if (saveInFlightRef.current) return;
+        clearTimeout(savedTimerRef.current);
+        setIsSaved(false);
+        setError('');
+        if (!packName.trim()) return setError(t('pleaseEnterPackName'));
+        if (hasActiveMediaAction) return setError(t('mediaActionInProgress'));
         if (!validateQuestions()) return;
 
+        saveInFlightRef.current = true;
         setIsSaving(true);
         setMediaErrors({});
+        const isUpdating = Boolean(persistedPackId);
 
         try {
             const finalCategories = stripPendingCategories(categories);
@@ -873,20 +894,27 @@ export default function PackCreator({ pack, setView, user, setError, onSaved }) 
                     ...packData,
                     createdAt: Date.now()
                 });
-                setPersistedPackId(createdDoc.id);
+                if (mountedRef.current) setPersistedPackId(createdDoc.id);
             }
 
-            trackEvent(isEditMode ? 'pack_updated' : 'pack_created', getPackAnalyticsSummary(packData));
-            onSaved();
+            trackEvent(isUpdating ? 'pack_updated' : 'pack_created', getPackAnalyticsSummary(packData));
+            if (mountedRef.current) {
+                setIsSaved(true);
+                savedTimerRef.current = setTimeout(() => setIsSaved(false), 2000);
+            }
         } catch (err) {
             console.error("Save error:", err);
-            setError(getFirestoreErrorMessage(err, isEditMode ? t('updatePackAction') : t('savePackAction'), language));
+            if (mountedRef.current) {
+                setError(getFirestoreErrorMessage(err, isUpdating ? t('updatePackAction') : t('savePackAction'), language));
+            }
+        } finally {
+            saveInFlightRef.current = false;
+            if (mountedRef.current) setIsSaving(false);
         }
-        setIsSaving(false);
     };
 
     return (
-        <div className="mx-auto flex min-h-screen w-full min-w-0 max-w-4xl flex-col p-4 sm:p-6">
+        <div className="mx-auto grid min-h-screen w-full min-w-0 max-w-4xl grid-cols-1 content-start gap-x-3 p-4 sm:grid-cols-[minmax(0,1fr),auto] sm:p-6">
             {isPreviewOpen && (
                 <QuestionPackPreviewModal
                     categories={previewCategories}
@@ -896,20 +924,33 @@ export default function PackCreator({ pack, setView, user, setError, onSaved }) 
                     onClose={() => setIsPreviewOpen(false)}
                 />
             )}
-            <div className="mb-8 flex flex-wrap items-center gap-3">
+            <div className="mb-3 flex min-w-0 items-center gap-3 sm:mb-8">
                 <button onClick={handleBack} className="shrink-0 rounded-full p-2 transition-colors hover:bg-slate-800">
                     <ArrowLeft size={24} />
                 </button>
                 <h2 className="min-w-0 flex-1 text-2xl font-bold sm:text-3xl">{isEditMode ? t('editQuestionPack') : t('createQuestionPack')}</h2>
+            </div>
+            <div className="sticky top-4 z-40 mb-8 self-start sm:top-6">
                 <button
                     onClick={handleSave}
                     disabled={isSaving || hasActiveMediaAction}
-                    className="flex w-full items-center justify-center gap-2 rounded-lg bg-green-600 px-6 py-2 font-bold text-white hover:bg-green-500 disabled:opacity-50 sm:w-auto"
+                    aria-label={saveLabel}
+                    aria-busy={isSaving}
+                    className="flex w-full items-center justify-center gap-2 rounded-lg bg-green-600 px-6 py-2 font-bold text-white shadow-lg hover:bg-green-500 disabled:opacity-50 sm:w-auto"
                 >
-                    <Check size={20} /> {isSaving ? t('saving') : isEditMode ? t('updatePack') : t('savePack')}
+                    <Check size={20} aria-hidden="true" />
+                    <span aria-hidden="true" className="grid">
+                        {[idleSaveLabel, t('saving'), t('packSaved')].map((label, index) => (
+                            <span key={index} className={`col-start-1 row-start-1 transition-opacity duration-200 motion-reduce:transition-none ${index === (isSaving ? 1 : isSaved ? 2 : 0) ? 'opacity-100' : 'opacity-0'}`}>
+                                {label}
+                            </span>
+                        ))}
+                    </span>
                 </button>
+                <span role="status" aria-live="polite" className="sr-only">{saveLabel}</span>
             </div>
 
+            <div className="col-span-full min-w-0">
             <div className="bg-slate-800 p-6 rounded-xl border border-slate-700 mb-8">
                 <div className="grid gap-4 sm:grid-cols-[auto,minmax(0,1fr)]">
                     <EmojiPicker
@@ -1337,6 +1378,7 @@ export default function PackCreator({ pack, setView, user, setError, onSaved }) 
                     <Plus size={24} /> {t('addCategory')}
                 </button>
                 </div>
+            </div>
             </div>
         </div>
     );

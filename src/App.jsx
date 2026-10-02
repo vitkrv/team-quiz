@@ -390,9 +390,9 @@ export default function App() {
         <LanguageProvider language={language} setLanguage={handleLanguageChange}>
         <div className="min-h-screen bg-slate-900 text-slate-100 font-sans selection:bg-blue-500/30">
             {error && (
-                <div className="fixed top-4 left-1/2 transform -translate-x-1/2 bg-red-500 text-white px-6 py-3 rounded-lg shadow-xl z-50 flex items-center gap-2">
-                    <span>{error}</span>
-                    <button onClick={() => setError('')} className="hover:text-red-200"><X size={18} /></button>
+                <div role="alert" className="fixed top-4 left-1/2 w-[calc(100%-2rem)] max-w-xl transform -translate-x-1/2 bg-red-500 text-white px-6 py-3 rounded-lg shadow-xl z-50 flex items-start gap-2">
+                    <span className="min-w-0 flex-1 whitespace-pre-wrap break-words [overflow-wrap:anywhere]">{error}</span>
+                    <button onClick={() => setError('')} aria-label={translate(language, 'dismissNotification')} className="shrink-0 hover:text-red-200"><X size={18} /></button>
                 </div>
             )}
 
@@ -429,10 +429,6 @@ export default function App() {
                     setView={setView}
                     user={user}
                     setError={setError}
-                    onSaved={() => {
-                        setEditingPack(null);
-                        setView('menu');
-                    }}
                 />
             )}
 

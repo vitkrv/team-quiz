@@ -56,6 +56,8 @@ A pack contains a title, optional emoji icon, ownership/sharing information, and
 
 Each question includes a point value and question/answer content. Each side must have text or media; either can have both. Supported media kinds are image, audio, and video. Ordinary point values are normalized to positive multiples of 100 in the editor.
 
+The editor's Save button stays visible at the top while scrolling. Saving a new or existing pack keeps the editor open, briefly shows localized “Saved!” feedback for two seconds with an opacity transition, then restores the original label. Later saves update the same pack. Validation and save failures appear in a dismissible notification at the top, with the reason for the failure; editor input is retained.
+
 Questions can be marked as surprise questions, with a displayed board value and a separate minimum/maximum scoring range. The pack chooses the wheel or hidden-table scoring mechanic. An optional prize uses two images: a concealed presentation and a revealed presentation.
 
 Packs are private by default. New rooms store only pack display metadata in the lobby. Start Game freezes the latest saved pack in an immutable, game-specific version document shared by all participants and spectators. Later source-pack edits do not change that version. Explicitly finishing the game deletes the version while retaining results in the room. Legacy rooms keep their embedded snapshots. Media assets remain external resources; copied metadata does not preserve a separate copy of the files.
