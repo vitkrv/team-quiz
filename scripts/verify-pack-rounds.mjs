@@ -35,7 +35,7 @@ export async function verifyPackRounds({ actions, check, denied, hostDb, playerD
         const raceRef = doc(game.host, 'buzzer', 'current');
         await updateDoc(doc(game.seed, 'buzzer', 'current'), { openedAt: Timestamp.fromMillis(Date.now() - 2200) });
         const race = await read(raceRef);
-        assert.equal(await actions.submitBuzz(game.player, race.raceId, 'player', 250, `press-${questionId}`), true);
+        assert.equal(await actions.submitBuzz(game.player, race.raceId, 'player', 250, `press-${questionId}`), 'accepted');
         // Exercise actual server acceptance/finalization in every round.
         await new Promise((resolve) => setTimeout(resolve, 2050));
         await actions.finalizeBuzz(game.host, race.raceId, 'host');

@@ -153,14 +153,14 @@ export default function PackMediaAttachment({
         >
             <input ref={inputRef} type="file" accept={accept} className="hidden" onChange={handleFileChange} disabled={disabled} />
             {media ? (
-                <div className={`flex min-w-0 flex-col gap-3 ${stacked ? '' : 'sm:flex-row sm:items-center'}`}>
-                    <div className="flex w-fit min-w-0 max-w-full flex-col gap-1">
-                        <QuestionMedia media={media} alt={label} variant="thumbnail" t={t} />
+                <div className={`flex min-w-0 flex-col gap-3 ${stacked ? '' : 'sm:flex-row sm:flex-wrap sm:items-center'}`}>
+                    <div className="flex w-fit min-w-0 max-w-full shrink-0 flex-col gap-1">
+                        <QuestionMedia media={media} alt={label} variant="thumbnail" className="max-w-full" t={t} />
                         <div className="text-xs font-medium text-slate-500">
                             {[getKindLabel(kind, t), formatBytes(media.size)].filter(Boolean).join(' · ')}
                         </div>
                     </div>
-                    <div className={stacked ? 'grid min-w-0 grid-cols-1 gap-2' : 'flex flex-wrap gap-2'}>
+                    <div className={stacked ? 'grid min-w-0 grid-cols-1 gap-2' : 'flex min-w-0 max-w-full flex-wrap gap-2'}>
                         <button
                             type="button"
                             onClick={pickFile}

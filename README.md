@@ -10,7 +10,7 @@ Question packs are owner-only by default. Authors can mark a pack as available t
 - Packs with 1–3 ordered rounds, round tabs, category/question reordering within each round, board previews, image/audio/video questions and answers, and optional concealed/revealed prize images.
 - Host-led rooms for up to 20 contestants plus the host, with six-digit invitations, remembered rooms, and spectator support after play starts.
 - Category previews, a shared question board, contestant question suggestions, and host judging/reveal controls. Answers are given outside the app; the app does not evaluate free-text answers or provide voice chat.
-- Standard scoring or optional True Competitive Mode with wrong-answer deductions and early-buzz delays. New rooms collect in-flight buzzes for two seconds and rank device-reported local reaction times; accepted losing presses retain personal reaction-gap feedback.
+- Standard scoring or optional True Competitive Mode with wrong-answer deductions and early-buzz delays. New rooms allow buzzing throughout a two-second collection window and rank device-reported local reaction times; accepted losing presses retain personal reaction-gap feedback.
 - Surprise questions with animated contestant selection and wheel or hidden-table scoring; host score adjustments and paginated game history.
 - Rock-paper-scissors side matches and final top-score tie-breakers, plus shareable results that exclude the host from contestant standings.
 
@@ -172,7 +172,7 @@ storage validation command to include the recap/achievement scenarios.
 
 ## Buzzer policy v1
 
-New rooms use `buzzerPolicyVersion: 1` and a bounded `rooms/{gameId}/buzzer/current` document. The first server-committed submission starts a two-second collection window. The host resolves accepted submissions by reported local reaction duration, then server acceptance timestamp and player ID. Device measurements and host ranking are trusted; there is no new backend service or latency estimate. Shared penalties apply to button and Space, and the answer countdown begins only when the winner is finalized. Existing rooms keep their previous policy.
+New rooms use `buzzerPolicyVersion: 1` and a bounded `rooms/{gameId}/buzzer/current` document. The first server-committed submission starts a two-second collection window. Eligible players can still press Buzz or Space during collection. A delayed client keeps a one-second local opportunity from its enabled-button render, ending immediately when a winner is announced; refresh restores the existing timing instead of restarting it. This local grace does not extend server acceptance: presses committed after the deadline receive neutral too-late feedback and cannot change the result. Genuine save failures receive connection/error feedback separately. The host resolves accepted submissions by reported local reaction duration, then server acceptance timestamp and player ID. Device measurements and host ranking are trusted; there is no new backend service or latency estimate. Shared penalties apply to button and Space, and the answer countdown begins only when the winner is finalized. Existing rooms keep their previous policy.
 
 Rules and frontend require a coordinated release; older clients must reload before creating new rooms. No migration or new indexes are required. The existing storage verification command also runs `scripts/verify-buzzer.mjs`. See the [gameplay reference](docs/gameplay-reference.md#4-ordinary-question-sequence) for refresh, penalties, deadlines, and host recovery.
 

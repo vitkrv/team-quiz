@@ -838,12 +838,11 @@ export default function ActiveQuestionView({ room, roomCode, roomRef, user, isHo
         <>
             {buzzer.enabled && !isSurpriseQuestion && !isAnswerRevealed && (
                 <div className="mt-3 shrink-0 text-center text-sm text-slate-400" role="status" aria-live="polite">
-                    {buzzer.error ? <p className="text-red-300">{t(buzzer.error)}</p> : null}
+                    {buzzer.status ? <p className={buzzer.error ? 'text-red-300' : 'font-bold'}>{t(buzzer.status)}</p> : null}
+                    {buzzer.error === 'buzzNotAccepted' && canIBuzz && !buzzer.waitingForHost ? <p>{t('buzzRetryAvailable')}</p> : null}
                     {!buzzer.online ? <p>{t('buzzOffline')}</p> : !clockQuality.ready ? <p>{t('buzzClockSyncing')}</p>
                         : Date.now() - clockQuality.lastSyncedAt > 6 * 60 * 1000 ? <p>{t('buzzClockStale')}</p>
                         : clockQuality.roundTripMs > 750 ? <p>{t('buzzConnectionSlow')}</p> : null}
-                    {buzzer.pending ? <p>{t('buzzSubmitting')}</p> : null}
-                    {buzzer.collecting ? <p className="font-bold">{t(buzzer.waitingForHost ? 'buzzWaitingHost' : 'buzzCollecting')}</p> : null}
                 </div>
             )}
         </>

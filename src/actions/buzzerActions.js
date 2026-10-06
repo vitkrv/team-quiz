@@ -2,7 +2,7 @@ import { getDocFromServer, runTransaction, serverTimestamp } from 'firebase/fire
 import { buzzerRef } from './buzzerState';
 import { updateRoomInTransaction } from './gameStorage';
 import { createHistoryItem } from './gameActions';
-import { EARLY_BUZZ_DELAY_MS, personalUnlockAt, rankBuzzAttempts } from '../utils/buzzerPolicy';
+import { collectionDeadline, EARLY_BUZZ_DELAY_MS, personalUnlockAt, rankBuzzAttempts } from '../utils/buzzerPolicy';
 
 function eligible(room, race, raceId, uid) {
     return room?.buzzerPolicyVersion === 1 && room.status === 'playing' && !room.answerRevealed
@@ -31,25 +31,76 @@ export async function recordEarlyBuzz(roomRef, raceId, uid, operationId) {
     });
 }
 
-export async function submitBuzz(roomRef, raceId, uid, reactionMs, operationId) {
+function submissionOutcome(room, race, { raceId, uid, operationId }) {
+    if (race?.raceId === raceId && race.attempts[uid]) {
+        return race.attempts[uid].operationId === operationId ? 'accepted' : 'already-submitted';
+    }
+    if (!room || !race || room.buzzerRoundId !== raceId || race.raceId !== raceId
+        || race.questionId !== room.activeQuestionId || room.status !== 'playing' || room.answerRevealed
+        || room.buzzedPlayerId || !['open', 'collecting'].includes(race.phase)) return 'race-ended';
+    if (!eligible(room, race, raceId, uid)) return 'ineligible';
+    return null;
+}
+
+// A failed recovery read must not replace the original write error.
+export async function recoverBuzzSubmission(error, readState, submission, serverNow = Date.now) {
+    let state;
+    try { state = await readState(); } catch { throw error; }
+    const outcome = submissionOutcome(state.room, state.race, submission);
+    if (outcome) return outcome;
+    const { race } = state;
+    // A permission error alone is insufficient: verify the same race's deadline
+    // and personal unlock. Clock estimates classify feedback, never acceptance.
+    if (error.code === 'permission-denied' && race.phase === 'collecting'
+        && serverNow() >= collectionDeadline(race) && serverNow() >= personalUnlockAt(race, submission.uid)) {
+        return 'collection-closed';
+    }
+    throw error;
+}
+
+export async function submitBuzz(roomRef, raceId, uid, reactionMs, operationId, serverNow = Date.now) {
     if (!Number.isFinite(reactionMs) || reactionMs < 0) throw new Error('Invalid reaction duration');
-    return runTransaction(roomRef.firestore, async (tx) => {
-        const room = (await tx.get(roomRef)).data();
-        const race = (await tx.get(buzzerRef(roomRef))).data();
-        if (!eligible(room, race, raceId, uid) || !['open', 'collecting'].includes(race.phase)) return false;
-        if (race.attempts[uid]) return race.attempts[uid].operationId === operationId;
-        // The captured duration never changes when Firestore retries this transaction.
-        tx.update(buzzerRef(roomRef), {
-            phase: 'collecting',
-            firstAcceptedAt: race.firstAcceptedAt || serverTimestamp(),
-            attempts: { ...race.attempts, [uid]: { playerId: uid, reactionMs, operationId, acceptedAt: serverTimestamp() } }
-        });
-        return true;
-    }).catch(async (error) => {
-        const race = (await getDocFromServer(buzzerRef(roomRef))).data();
-        if (race?.raceId === raceId && race.attempts[uid]?.operationId === operationId) return true;
-        throw error;
-    });
+    const submission = { raceId, uid, operationId };
+    const submit = async (retries = 0) => {
+        let attemptedRace;
+        try {
+            return await runTransaction(roomRef.firestore, async (tx) => {
+                const room = (await tx.get(roomRef)).data();
+                const race = (await tx.get(buzzerRef(roomRef))).data();
+                const outcome = submissionOutcome(room, race, submission);
+                if (outcome) return outcome;
+                attemptedRace = race;
+                // Retries always reuse the captured duration and operation ID.
+                tx.update(buzzerRef(roomRef), {
+                    phase: 'collecting',
+                    firstAcceptedAt: race.firstAcceptedAt || serverTimestamp(),
+                    attempts: { ...race.attempts, [uid]: { playerId: uid, reactionMs, operationId, acceptedAt: serverTimestamp() } }
+                });
+                return 'accepted';
+            });
+        } catch (error) {
+            let state;
+            try {
+                return await recoverBuzzSubmission(error, async () => {
+                    const [room, race] = await Promise.all([getDocFromServer(roomRef), getDocFromServer(buzzerRef(roomRef))]);
+                    state = { room: room.data(), race: race.data() };
+                    return state;
+                }, submission, serverNow);
+            } catch (failure) {
+                // Rules can reject a stale attempts-map write before Firestore
+                // reports a transaction conflict. Retry only confirmed growth
+                // from another contestant in this same, still-open race.
+                if (error.code === 'permission-denied' && retries < 3 && attemptedRace && state
+                    && !submissionOutcome(state.room, state.race, submission)
+                    && state.race.phase === 'collecting' && serverNow() < collectionDeadline(state.race)
+                    && Object.keys(state.race.attempts).length > Object.keys(attemptedRace.attempts).length) {
+                    return submit(retries + 1);
+                }
+                throw failure;
+            }
+        }
+    };
+    return submit();
 }
 
 export async function finalizeBuzz(roomRef, raceId, actorId) {

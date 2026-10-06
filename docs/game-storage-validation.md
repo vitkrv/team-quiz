@@ -43,6 +43,38 @@ directory when starting Java. This validation used the standalone Firestore Emul
 
 ## Covered cases
 
+The buzzer checks also cover collection-time input, one-second local grace boundaries,
+winner/cancellation interruption, refresh timing, personal penalties, explicit submission
+outcomes, delayed acknowledgments after resolution, deadline rejection without state changes,
+and recovery that preserves genuine write/read failures. These non-browser checks run only
+through `scripts/verify-game-storage.mjs`, including the actual action modules and checked-in rules.
+
+Browser verification for the Buzz flow uses this checklist, requiring an explicit
+browser-testing request for agent execution. Use a host and two contestants; record the
+language, device/viewport, steps, and observed behavior:
+
+- Open a question; after one contestant presses, confirm the other can still use Buzz or
+  Space before collection closes, and a later-arriving faster reaction can win.
+- Delay question/race delivery to one contestant until less than one second remains.
+  Confirm local input lasts one second from activation unless a winner is announced first;
+  a press committed after the deadline shows neutral too-late/ended feedback.
+- Refresh during collection/grace, check competitive penalties and wrong-answer reopening,
+  and confirm neither refresh nor repeated snapshots restart existing timing.
+- Test offline/reconnect and failed submissions: show error feedback only for genuine
+  failures, clear it when the press is confirmed, and offer retry only while collection permits it.
+- Compare button and Space, including repeated Space and editable fields; check received/waiting,
+  accepted-loser and tie feedback in English/Ukrainian at desktop/mobile widths.
+
+Local browser verification on 2026-10-06 used the production active-question component
+and buzzer hook in an isolated Emulator-backed harness, with host/two contestant roles,
+English/Ukrainian, 1440×900 desktop and 390×844 mobile viewports. Collection-time mouse/Space
+presses, delayed unlock/grace expiration, neutral deadline rejection, winner interruption,
+penalty persistence through refresh, offline/reconnect, and listener retry exhaustion passed.
+Snapshot delay and listener failures were injected by the harness. The checks found and fixed
+stale submission-map contention, repeated input after a confirmed deadline rejection, and
+stale collection status after winner announcement. This does not verify production sign-in
+or physical-device browser behavior.
+
 The same entry point includes `scripts/verify-pack-rounds.mjs`; do not run it as a
 separate suite. Round checks cover legacy normalization, one/two/three-round starts,
 invalid or empty rounds, duplicate IDs, frozen content, current-round selection,

@@ -1,1 +1,93 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="1100" height="1020" viewBox="0 0 1100 1020" role="img" aria-labelledby="title desc"><title id="title">Buzz winner selection flow</title><desc id="desc">After an initial unlock delay, eligible contestants submit local reaction durations. The first server commit starts a two-second collection window. The host ranks accepted submissions by reaction duration, then acceptance timestamp, then player ID, and announces the winner.</desc><defs><marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10" fill="#94a3b8"/></marker></defs><rect width="1100" height="1020" rx="20" fill="#0f172a"/><g font-family="Segoe UI, Arial, sans-serif"><text x="40" y="48" fill="#f8fafc" font-size="30" font-weight="700">How the Buzz winner is selected</text><text x="40" y="78" fill="#cbd5e1" font-size="17" font-weight="400">Ordinary questions • buzzer policy v1</text><rect x="40" y="110" width="640" height="100" rx="14" fill="#1e293b" stroke="#38bdf8" stroke-width="1.5"/><text x="62" y="142" fill="#38bdf8" font-size="20" font-weight="700">1  Open the race</text><text x="62" y="171" fill="#cbd5e1" font-size="17" font-weight="400">Wait 2 seconds; each eligible player gets a local reaction origin.</text><text x="62" y="196" fill="#cbd5e1" font-size="17" font-weight="400">A competitive early press adds a fixed 2.5-second personal delay.</text><path d="M360 210 L360 237" stroke="#94a3b8" stroke-width="2" fill="none" marker-end="url(#arrow)"/><rect x="40" y="240" width="640" height="100" rx="14" fill="#1e293b" stroke="#38bdf8" stroke-width="1.5"/><text x="62" y="272" fill="#38bdf8" font-size="20" font-weight="700">2  Capture an eligible press</text><text x="62" y="301" fill="#cbd5e1" font-size="17" font-weight="400">Reaction = press time − local button availability time.</text><text x="62" y="326" fill="#cbd5e1" font-size="17" font-weight="400">Capture once; network travel and retries do not change it.</text><path d="M360 340 L360 367" stroke="#94a3b8" stroke-width="2" fill="none" marker-end="url(#arrow)"/><rect x="40" y="370" width="640" height="120" rx="14" fill="#1e293b" stroke="#38bdf8" stroke-width="1.5"/><text x="62" y="402" fill="#38bdf8" font-size="20" font-weight="700">3  Commit the first accepted submission</text><text x="62" y="431" fill="#cbd5e1" font-size="17" font-weight="400">Firestore records the first acceptance time: T.</text><text x="62" y="456" fill="#cbd5e1" font-size="17" font-weight="400">Collection deadline = T + 2 seconds.</text><text x="62" y="481" fill="#cbd5e1" font-size="17" font-weight="400">No provisional winner is announced.</text><path d="M360 490 L360 517" stroke="#94a3b8" stroke-width="2" fill="none" marker-end="url(#arrow)"/><rect x="40" y="520" width="640" height="120" rx="14" fill="#1e293b" stroke="#38bdf8" stroke-width="1.5"/><text x="62" y="552" fill="#38bdf8" font-size="20" font-weight="700">4  Collect accepted submissions</text><text x="62" y="581" fill="#cbd5e1" font-size="17" font-weight="400">Clients close input as soon as they observe collection.</text><text x="62" y="606" fill="#cbd5e1" font-size="17" font-weight="400">Already captured presses may still commit strictly before T + 2s.</text><text x="62" y="631" fill="#cbd5e1" font-size="17" font-weight="400">One immutable submission per eligible contestant.</text><path d="M360 640 L360 667" stroke="#94a3b8" stroke-width="2" fill="none" marker-end="url(#arrow)"/><rect x="40" y="670" width="640" height="145" rx="14" fill="#1e293b" stroke="#c4b5fd" stroke-width="1.5"/><text x="62" y="702" fill="#c4b5fd" font-size="20" font-weight="700">5  Host finalizes after the deadline</text><text x="62" y="731" fill="#cbd5e1" font-size="17" font-weight="400">Order committed submissions by:</text><text x="62" y="756" fill="#cbd5e1" font-size="17" font-weight="400">1. Smallest reported reaction duration</text><text x="62" y="781" fill="#cbd5e1" font-size="17" font-weight="400">2. Earliest acceptance timestamp   3. Stable player ID</text><path d="M360 815 L360 842" stroke="#94a3b8" stroke-width="2" fill="none" marker-end="url(#arrow)"/><rect x="40" y="845" width="640" height="100" rx="14" fill="#1e293b" stroke="#34d399" stroke-width="1.5"/><text x="62" y="877" fill="#34d399" font-size="20" font-weight="700">6  Announce the winner</text><text x="62" y="906" fill="#cbd5e1" font-size="17" font-weight="400">Write winner, history, and recap atomically.</text><text x="62" y="931" fill="#cbd5e1" font-size="17" font-weight="400">Start the 10-second visual answer timer; host judges the answer.</text><rect x="725" y="110" width="335" height="125" rx="14" fill="#1e293b" stroke="#94a3b8" stroke-width="1.5"/><text x="747" y="142" fill="#94a3b8" font-size="20" font-weight="700">Personal reaction origin</text><text x="747" y="171" fill="#cbd5e1" font-size="17" font-weight="400">Penalty time is not added</text><text x="747" y="196" fill="#cbd5e1" font-size="17" font-weight="400">to the ranking duration.</text><text x="747" y="221" fill="#cbd5e1" font-size="17" font-weight="400">Refresh restores the origin.</text><rect x="725" y="370" width="335" height="145" rx="14" fill="#1e293b" stroke="#fda4af" stroke-width="1.5"/><text x="747" y="402" fill="#fda4af" font-size="20" font-weight="700">Acceptance is a commit</text><text x="747" y="431" fill="#cbd5e1" font-size="17" font-weight="400">Not initial network arrival.</text><text x="747" y="456" fill="#cbd5e1" font-size="17" font-weight="400">At / after the deadline: rejected.</text><text x="747" y="481" fill="#cbd5e1" font-size="17" font-weight="400">A rejected press cannot change</text><text x="747" y="506" fill="#cbd5e1" font-size="17" font-weight="400">the result or recap.</text><rect x="725" y="555" width="335" height="120" rx="14" fill="#1e293b" stroke="#c4b5fd" stroke-width="1.5"/><text x="747" y="587" fill="#c4b5fd" font-size="20" font-weight="700">Host unavailable?</text><text x="747" y="616" fill="#cbd5e1" font-size="17" font-weight="400">Wait for the host to reconnect.</text><text x="747" y="641" fill="#cbd5e1" font-size="17" font-weight="400">The deadline stays fixed.</text><text x="747" y="666" fill="#cbd5e1" font-size="17" font-weight="400">Final delivery can take longer.</text><rect x="725" y="715" width="335" height="145" rx="14" fill="#1e293b" stroke="#94a3b8" stroke-width="1.5"/><text x="747" y="747" fill="#94a3b8" font-size="20" font-weight="700">Race interrupted?</text><text x="747" y="776" fill="#cbd5e1" font-size="17" font-weight="400">Reveal, question change, or</text><text x="747" y="801" fill="#cbd5e1" font-size="17" font-weight="400">finish cancels an unresolved race.</text><text x="747" y="826" fill="#cbd5e1" font-size="17" font-weight="400">Wrong answer: a fresh race,</text><text x="747" y="851" fill="#cbd5e1" font-size="17" font-weight="400">without a new opening delay.</text><text x="40" y="987" fill="#94a3b8" font-size="18" font-weight="400">Trust boundary: device reaction measurements and host ranking are trusted.</text></g></svg>
+<svg xmlns="http://www.w3.org/2000/svg" width="1100" height="1270" viewBox="0 0 1100 1270" role="img" aria-labelledby="title desc">
+  <title id="title">Buzz availability, submission, and winner selection</title>
+  <desc id="desc">Policy v1 contestants can press during open and collecting after personal unlock. One second of local grace does not extend the strict two-second server commit deadline. Winner announcement immediately ends input. Submissions preserve their reaction and operation ID through retries and reconciliation. Listener recovery is silent for three retries, then asks for a refresh and logs only the final error.</desc>
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10" fill="#94a3b8"/></marker>
+  </defs>
+  <rect width="1100" height="1270" rx="20" fill="#0f172a"/>
+  <g font-family="Segoe UI, Arial, sans-serif">
+  <text x="40" y="48" fill="#f8fafc" font-size="30" font-weight="700">How the Buzz winner is selected</text>
+  <text x="40" y="78" fill="#cbd5e1" font-size="17">Ordinary questions • buzzer policy v1 • button and Space use the same handler</text>
+  <rect x="40" y="110" width="640" height="145" rx="14" fill="#1e293b" stroke="#38bdf8" stroke-width="1.5"/>
+  <text x="62" y="142" fill="#38bdf8" font-size="20" font-weight="700">1  Unlock eligible players locally</text>
+  <text x="62" y="171" fill="#cbd5e1" font-size="17">Initial opening delay: 2 seconds; competitive early press: +2.5s.</text>
+  <text x="62" y="196" fill="#cbd5e1" font-size="17">A player still locked during collection cannot buzz or get a new penalty.</text>
+  <text x="62" y="221" fill="#cbd5e1" font-size="17">First enabled render starts reaction timing and 1 second of local grace.</text>
+  <text x="62" y="246" fill="#cbd5e1" font-size="17">Delayed loading can unlock a player during collection.</text>
+  <path d="M360 255 L360 282" stroke="#94a3b8" stroke-width="2" fill="none" marker-end="url(#arrow)"/>
+  <rect x="40" y="285" width="640" height="145" rx="14" fill="#1e293b" stroke="#38bdf8" stroke-width="1.5"/>
+  <text x="62" y="317" fill="#38bdf8" font-size="20" font-weight="700">2  Keep input available during collection</text>
+  <text x="62" y="346" fill="#cbd5e1" font-size="17">After personal unlock: collection still open OR local grace remains.</text>
+  <text x="62" y="371" fill="#cbd5e1" font-size="17">Offline and pending submissions disable input.</text>
+  <text x="62" y="396" fill="#cbd5e1" font-size="17">Acceptance, winner, cancellation, reveal, or lost eligibility ends input.</text>
+  <text x="62" y="421" fill="#cbd5e1" font-size="17">Refresh restores the reaction origin; it does not restart grace.</text>
+  <path d="M360 430 L360 457" stroke="#94a3b8" stroke-width="2" fill="none" marker-end="url(#arrow)"/>
+  <rect x="40" y="460" width="640" height="120" rx="14" fill="#1e293b" stroke="#38bdf8" stroke-width="1.5"/>
+  <text x="62" y="492" fill="#38bdf8" font-size="20" font-weight="700">3  Capture and submit the press</text>
+  <text x="62" y="521" fill="#cbd5e1" font-size="17">Reaction = press time − local reaction origin (monotonic clock).</text>
+  <text x="62" y="546" fill="#cbd5e1" font-size="17">Capture reaction and operation ID once; preserve both on retries.</text>
+  <text x="62" y="571" fill="#cbd5e1" font-size="17">First accepted Firestore commit at T starts the 2-second window.</text>
+  <path d="M360 580 L360 607" stroke="#94a3b8" stroke-width="2" fill="none" marker-end="url(#arrow)"/>
+  <rect x="40" y="610" width="640" height="170" rx="14" fill="#1e293b" stroke="#38bdf8" stroke-width="1.5"/>
+  <text x="62" y="642" fill="#38bdf8" font-size="20" font-weight="700">4  Accept commits strictly before T + 2 seconds</text>
+  <text x="62" y="671" fill="#cbd5e1" font-size="17">One immutable submission per eligible contestant; no provisional winner.</text>
+  <text x="62" y="696" fill="#cbd5e1" font-size="17">Reconcile write failures against fresh server state.</text>
+  <text x="62" y="721" fill="#cbd5e1" font-size="17">Check a saved submission before rejecting a finished race.</text>
+  <text x="62" y="746" fill="#cbd5e1" font-size="17">Retry confirmed contention with the original reaction and operation ID.</text>
+  <text x="62" y="771" fill="#cbd5e1" font-size="17">Deadline rejection is neutral; genuine save failures remain errors.</text>
+  <path d="M360 780 L360 807" stroke="#94a3b8" stroke-width="2" fill="none" marker-end="url(#arrow)"/>
+  <rect x="40" y="810" width="640" height="145" rx="14" fill="#1e293b" stroke="#c4b5fd" stroke-width="1.5"/>
+  <text x="62" y="842" fill="#c4b5fd" font-size="20" font-weight="700">5  Host ranks accepted submissions after the deadline</text>
+  <text x="62" y="871" fill="#cbd5e1" font-size="17">1. Smallest reported reaction duration</text>
+  <text x="62" y="896" fill="#cbd5e1" font-size="17">2. Earliest server acceptance timestamp</text>
+  <text x="62" y="921" fill="#cbd5e1" font-size="17">3. Stable player ID</text>
+  <text x="62" y="946" fill="#cbd5e1" font-size="17">Host offline: wait for reconnect; the deadline stays fixed.</text>
+  <path d="M360 955 L360 982" stroke="#94a3b8" stroke-width="2" fill="none" marker-end="url(#arrow)"/>
+  <rect x="40" y="985" width="640" height="145" rx="14" fill="#1e293b" stroke="#34d399" stroke-width="1.5"/>
+  <text x="62" y="1017" fill="#34d399" font-size="20" font-weight="700">6  Announce the winner and end all input</text>
+  <text x="62" y="1046" fill="#cbd5e1" font-size="17">Write winner, history, and recap atomically.</text>
+  <text x="62" y="1071" fill="#cbd5e1" font-size="17">Winner announcement immediately interrupts any remaining grace.</text>
+  <text x="62" y="1096" fill="#cbd5e1" font-size="17">Start the 10-second visual answer timer; host judges the answer.</text>
+  <text x="62" y="1121" fill="#cbd5e1" font-size="17">Accepted losers keep reaction-gap / tie feedback.</text>
+  <rect x="725" y="110" width="335" height="170" rx="14" fill="#1e293b" stroke="#38bdf8" stroke-width="1.5"/>
+  <text x="747" y="142" fill="#38bdf8" font-size="20" font-weight="700">Local grace ≠ acceptance</text>
+  <text x="747" y="171" fill="#cbd5e1" font-size="17">Grace lasts 1 second from the</text>
+  <text x="747" y="196" fill="#cbd5e1" font-size="17">local reaction origin.</text>
+  <text x="747" y="221" fill="#cbd5e1" font-size="17">It can outlast the deadline,</text>
+  <text x="747" y="246" fill="#cbd5e1" font-size="17">but cannot extend server</text>
+  <text x="747" y="271" fill="#cbd5e1" font-size="17">acceptance or override a winner.</text>
+  <rect x="725" y="310" width="335" height="145" rx="14" fill="#1e293b" stroke="#94a3b8" stroke-width="1.5"/>
+  <text x="747" y="342" fill="#94a3b8" font-size="20" font-weight="700">Personal timing</text>
+  <text x="747" y="371" fill="#cbd5e1" font-size="17">Penalty time is not added</text>
+  <text x="747" y="396" fill="#cbd5e1" font-size="17">to the ranking duration.</text>
+  <text x="747" y="421" fill="#cbd5e1" font-size="17">Refresh / clock sync / snapshots</text>
+  <text x="747" y="446" fill="#cbd5e1" font-size="17">do not restart the origin.</text>
+  <rect x="725" y="485" width="335" height="170" rx="14" fill="#1e293b" stroke="#fda4af" stroke-width="1.5"/>
+  <text x="747" y="517" fill="#fda4af" font-size="20" font-weight="700">Rejected submissions</text>
+  <text x="747" y="546" fill="#cbd5e1" font-size="17">Commit at / after T + 2s:</text>
+  <text x="747" y="571" fill="#cbd5e1" font-size="17">collection closed.</text>
+  <text x="747" y="596" fill="#cbd5e1" font-size="17">No new attempt, history,</text>
+  <text x="747" y="621" fill="#cbd5e1" font-size="17">recap, score, or reaction gap.</text>
+  <text x="747" y="646" fill="#cbd5e1" font-size="17">Permission error alone ≠ loss.</text>
+  <rect x="725" y="685" width="335" height="195" rx="14" fill="#1e293b" stroke="#94a3b8" stroke-width="1.5"/>
+  <text x="747" y="717" fill="#94a3b8" font-size="20" font-weight="700">Listener recovery</text>
+  <text x="747" y="746" fill="#cbd5e1" font-size="17">Disable stale input on failure.</text>
+  <text x="747" y="771" fill="#cbd5e1" font-size="17">Retry 3 times, 500ms apart;</text>
+  <text x="747" y="796" fill="#cbd5e1" font-size="17">hide errors during recovery.</text>
+  <text x="747" y="821" fill="#cbd5e1" font-size="17">All 3 retries fail: ask to refresh</text>
+  <text x="747" y="846" fill="#cbd5e1" font-size="17">and log only the final error.</text>
+  <text x="747" y="871" fill="#cbd5e1" font-size="17">Server-confirmed state resets it.</text>
+  <rect x="725" y="910" width="335" height="245" rx="14" fill="#1e293b" stroke="#34d399" stroke-width="1.5"/>
+  <text x="747" y="942" fill="#34d399" font-size="20" font-weight="700">Player feedback</text>
+  <text x="747" y="971" fill="#cbd5e1" font-size="17">Ready → submitting → received.</text>
+  <text x="747" y="996" fill="#cbd5e1" font-size="17">During collection: still buzz</text>
+  <text x="747" y="1021" fill="#cbd5e1" font-size="17">if personally unlocked.</text>
+  <text x="747" y="1046" fill="#cbd5e1" font-size="17">Expired press: neutral notice.</text>
+  <text x="747" y="1071" fill="#cbd5e1" font-size="17">One primary status; connection</text>
+  <text x="747" y="1096" fill="#cbd5e1" font-size="17">warnings remain secondary.</text>
+  <text x="747" y="1121" fill="#cbd5e1" font-size="17">Wrong answer: fresh race;</text>
+  <text x="747" y="1146" fill="#cbd5e1" font-size="17">unexpired penalties still apply.</text>
+  <text x="40" y="1180" fill="#cbd5e1" font-size="18">Local grace gives a click opportunity while unresolved; only an on-time server commit can enter the result.</text>
+  <text x="40" y="1220" fill="#94a3b8" font-size="18">Trust boundary: device reaction measurements and host ranking are trusted.</text>
+</g>
+</svg>
