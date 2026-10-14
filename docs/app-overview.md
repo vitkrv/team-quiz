@@ -102,6 +102,24 @@ Deleting a saved pack from My Question Packs uses two app-styled confirmation st
 
 Each question includes a point value and question/answer content. Each side must have text or media; either can have both. Supported media kinds are image, audio, and video. In the create/edit pack editor, each media panel accepts one dropped local file or web image, including replacement of an existing attachment. Question/answer panels accept images up to 10 MB and audio/video up to 100 MB; both prize panels accept images only. Web images are downloaded without credentials in the browser with a 15-second timeout; websites that block downloading require saving the image locally first. Multiple-file drops are rejected. Pasting a clipboard media file into a focused question or answer text field opens an app-styled confirmation dialog before uploading it to that side’s media slot. The dialog highlights the Question or Answer media destination and warns when replacing an existing attachment; Cancel, Escape, or clicking the backdrop dismisses it. The same type/size validation applies; multiple-file pastes are rejected, declining keeps the attachment and text unchanged, and ordinary text pastes retain their normal behavior. Saving, round changes, and other media actions are blocked during downloading and uploading; file-picker buttons remain available for keyboard and touch use. Ordinary point values are normalized to positive multiples of 100 in the editor.
 
+Question audio/video attachments also offer **Stop points** in both editor modes.
+The owner can add, edit, or remove up to five timestamps in seconds or `mm:ss`,
+with up to two decimal places. Values must be positive, strictly increasing, and
+strictly below the loaded media duration. The accessible dialog applies changes to
+the shared draft; the editor's Save persists them. New stop inputs show a time-format
+placeholder. Cancel and Escape discard only the dialog's changes; clicking the
+backdrop does not close it. Duration loading failures offer Retry.
+Answer attachments and images do not offer stop points. Editor/pack previews show
+numbered timeline markers and allow unrestricted local playback.
+
+Replacing question media retains timestamps below the replacement's duration and
+reports removed stops. Replacing with an image or deleting the attachment removes
+the stops. A replacement carrying stops must load its duration before upload/save;
+metadata failure retains the original attachment and settings. Stop metadata is
+included in the frozen game pack, so later source edits do not affect active games.
+During gameplay, the host releases each stop; each client's timeline stays locked
+until its own playback finishes. See the gameplay reference for pause and recovery.
+
 In **Question pack preview**, clicking a question value opens the same question/answer presenter used for players and spectators during gameplay, using current editor content without saving. **Reveal Answer** replaces the question with the centered answer; **Back to the table** returns to the board. Reopening a question hides its answer again. Only questions with non-whitespace text or attached media on both the question and answer sides are eligible; incomplete questions remain visible in the table as disabled, muted tiles with a lock icon and a translated explanation. They cannot open a question preview. This follows the existing editor content checks, without checking factual correctness or adding stricter media validation. Media playback and image enlargement remain available locally, alongside the modal close control. No buzzer, judging, timers, or surprise-scoring controls appear, and previewing does not change gameplay state.
 
 The editor's Save button stays visible at the top while scrolling. Saving a new or existing pack keeps the editor open, briefly shows localized “Saved!” feedback for two seconds with an opacity transition, then restores the original label. Later saves update the same pack. Validation and save failures appear in a dismissible notification at the top, with the reason for the failure; editor input is retained.

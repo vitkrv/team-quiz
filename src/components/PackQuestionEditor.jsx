@@ -9,7 +9,7 @@ export default function PackQuestionEditor({
     category, question, questionIndex, t, disabled, compact = false, formLayout = false, dialogLayout = false,
     roundNumber, pointIncrement, surpriseMin, surpriseMax, surpriseDisplay,
     onUpdate, onValidatePoints, onMove, onRemove, onPaste,
-    onMediaChange, onMediaResolve, onMediaRemove, mediaProgress, mediaErrors
+    onMediaChange, onMediaResolve, onMediaRemove, mediaProgress, mediaErrors, mediaNotices = {}
 }) {
     const id = useId();
     const [expanded, setExpanded] = useState(false);
@@ -32,8 +32,10 @@ export default function PackQuestionEditor({
     const mediaPanel = (field, label) => (
         <PackMediaAttachment media={q[field]} label={label} disabled={disabled} stacked={!formLayout}
             progress={mediaProgress[`${q.id}:${field}`] || 0} error={mediaErrors[`${q.id}:${field}`]} t={t}
+            notice={mediaNotices[`${q.id}:${field}`]}
             onChange={(file) => onMediaChange(field, file)}
             onResolveFile={(resolveFile) => onMediaResolve(field, resolveFile)}
+            onStopPointsChange={field === MEDIA_SLOTS.QUESTION ? (media) => onUpdate(field, media) : undefined}
             onRemove={() => onMediaRemove(field)} />
     );
     return (

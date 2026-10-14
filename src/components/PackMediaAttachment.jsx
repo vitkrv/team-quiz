@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
-import { FileAudio, FileVideo, ImagePlus, RefreshCw, Trash2 } from 'lucide-react';
+import { FileAudio, FileVideo, ImagePlus, RefreshCw, Trash2, Flag } from 'lucide-react';
+import MediaStopPointsDialog from './MediaStopPointsDialog';
 import QuestionMedia from './QuestionMedia';
 import { getMediaKind, MEDIA_KINDS, validateMediaFile } from '../services/imageStorage';
 import { downloadDroppedImage, getDroppedImageUrl } from '../utils/mediaDrop';
@@ -30,6 +31,7 @@ export default function PackMediaAttachment({
     disabled,
     progress,
     error,
+    notice,
     t,
     onChange,
     onResolveFile,
@@ -37,10 +39,12 @@ export default function PackMediaAttachment({
     accept = 'image/*,audio/*,video/*',
     allowedKinds = [MEDIA_KINDS.IMAGE, MEDIA_KINDS.AUDIO, MEDIA_KINDS.VIDEO],
     hint,
-    stacked = false
+    stacked = false,
+    onStopPointsChange
 }) {
     const inputRef = useRef(null);
     const [localError, setLocalError] = useState('');
+    const [editingStops, setEditingStops] = useState(false);
     const [dragActive, setDragActive] = useState(false);
     const [fetching, setFetching] = useState(false);
     const dragDepth = useRef(0);
@@ -161,6 +165,10 @@ export default function PackMediaAttachment({
                         </div>
                     </div>
                     <div className={stacked ? 'grid min-w-0 grid-cols-1 gap-2' : 'flex min-w-0 max-w-full flex-wrap gap-2'}>
+                        {onStopPointsChange && [MEDIA_KINDS.AUDIO, MEDIA_KINDS.VIDEO].includes(kind) && <button type="button" disabled={disabled}
+                            onClick={() => setEditingStops(true)} className="inline-flex min-h-11 items-center gap-2 rounded-lg border border-slate-700 px-3 py-2 text-sm font-bold text-amber-200 disabled:opacity-50">
+                            <Flag size={16} />{t('mediaStopPoints')}{media.stopPoints?.length ? ` (${media.stopPoints.length})` : ''}
+                        </button>}
                         <button
                             type="button"
                             onClick={pickFile}
@@ -195,10 +203,13 @@ export default function PackMediaAttachment({
                 </div>
             )}
             {message && <div className="mt-2 text-xs font-medium text-red-300">{message}</div>}
+            {notice && <div role="status" className="mt-2 text-xs font-medium text-amber-200">{notice}</div>}
             <div className="mt-2 text-xs text-slate-400" role="status">
                 {fetching ? t('mediaDropDownloading') : t(media ? 'mediaDropReplace' : 'mediaDropAttach')}
             </div>
             <div className="mt-2 text-xs text-slate-500">{hint || t('mediaUploadHint')}</div>
+            {editingStops && <MediaStopPointsDialog media={media} t={t} onCancel={() => setEditingStops(false)}
+                onApply={(next) => { onStopPointsChange(next); setEditingStops(false); }} />}
         </div>
     );
 }

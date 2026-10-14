@@ -47,6 +47,8 @@ service cloud.firestore {
         && canHostPack(appId, request.resource.data.packId, request.auth.uid);
       allow update: if isGoogleUser()
         && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['roomCode', 'hostId', 'recapVersion', 'buzzerPolicyVersion'])
+        && (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['mediaPlayback'])
+          || resource.data.hostId == request.auth.uid)
         && validBuzzerRoomUpdate(appId, gameId, resource.data, request.resource.data)
         && validGameStorageUpdate(appId, gameId, resource.data, request.resource.data)
         && validPackRoundUpdate(resource.data, request.resource.data)

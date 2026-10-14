@@ -1,4 +1,5 @@
 import { verifyPackRounds } from './verify-pack-rounds.mjs';
+import { verifyMediaStops } from './verify-media-stops.mjs';
 import { verifyBuzzer } from './verify-buzzer.mjs';
 import { verifyWheel } from './verify-wheel.mjs';
 import { verifyGameRecap } from './verify-game-recap.mjs';
@@ -239,6 +240,7 @@ try {
     await verifyBuzzer({ actions, check, denied, hostDb, playerDb, lateDb, spectatorDb, seedDb, namespace, ref, roomRef, event, t, client });
     await verifyWheel({ actions, check, denied, hostDb, playerDb, spectatorDb, seedDb, ref, roomRef, event, t, client });
     await verifyPackRounds({ actions, check, denied, hostDb, playerDb, spectatorDb, seedDb, ref, roomRef, event, t, client });
+    await verifyMediaStops({ actions, check, denied, hostDb, playerDb, spectatorDb, seedDb, ref, roomRef, event, t });
     console.log(`${checks} scenario groups passed. Namespace: ${namespace}`);
 } finally {
     await Promise.all(clients.map(async ({ db, app }) => { await terminate(db); await deleteApp(app); }));

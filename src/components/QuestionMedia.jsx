@@ -5,6 +5,8 @@ import MediaVolumeControl from './MediaVolumeControl';
 import MediaLightbox from './MediaLightbox';
 import RetryableImage from './RetryableImage';
 import useLocalMediaVolume from '../hooks/useLocalMediaVolume';
+import StopPointMedia from './StopPointMedia';
+import { getMediaStops } from '../utils/mediaStops';
 import { getMediaKind, getMediaUrl, MEDIA_KINDS } from '../services/imageStorage';
 
 const variantClasses = {
@@ -38,7 +40,8 @@ export default function QuestionMedia({
     shouldStart = false,
     startAt = 0,
     pauseSignal = 0,
-    onBlocked
+    onBlocked,
+    stopPlayback
 }) {
     const [isOpen, setIsOpen] = useState(false);
     const [isBlocked, setIsBlocked] = useState(false);
@@ -89,6 +92,9 @@ export default function QuestionMedia({
     }, [kind, volume]);
 
     if (!media) return null;
+
+    if (getMediaStops(media).length) return <StopPointMedia media={media} t={t} className={className} compact={variant === 'thumbnail'}
+        pauseSignal={pauseSignal} {...stopPlayback} />;
 
     if (kind === MEDIA_KINDS.IMAGE) {
         return (

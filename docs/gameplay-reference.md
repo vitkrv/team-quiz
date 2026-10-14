@@ -160,6 +160,38 @@ If a contestant has 200 points, answers correctly, and receives -100, their tota
 
 Question and answer content can contain text, images, audio, or video. Question audio/video uses a host start action with a shared scheduled start timestamp, currently 600 ms ahead of the host's local time. Browser playback restrictions and connection delays can affect actual playback. Buzzer unlock is based on question opening, not on pressing media Play.
 
+Question audio/video may contain up to five owner-defined stop points. The host's
+initial Play authorizes playback from zero to the first unreleased stop. Each
+client pauses and clamps its player at that boundary. When the host's player reaches
+it, **Continue after stop** becomes available in the host panel. A successful host
+action releases exactly one stop. Waiting clients resume automatically unless
+locally paused or blocked by browser autoplay; slower clients pass stops already
+released without pausing or jumping forward. The final release permits the last
+segment through the end. There is no wait for every contestant or spectator.
+
+Before a client's own playback reaches the end, its timeline and playback speed
+are locked, with numbered markers for pending/released stops. Volume remains local
+and available. Ordinary pause/play controls are hidden; a limited Resume appears
+after a buzz pause, browser interruption, or autoplay rejection. A host release
+does not cancel a local buzz pause. Seeking, replay, and normal controls unlock only
+after that client finishes the last authorized segment; markers then become
+inactive. Question media without stops and answer media keep their existing behavior.
+
+Refresh in the same tab restores saved local progress and pause/completion state,
+keyed to that user, room, question, media, and playback session. Restored progress
+is clamped to host permission. New clients start at zero and can cross already
+released stops; host completion does not unlock another client's controls. Storage
+unavailability falls back to in-memory progress. Reveal stops gated question media
+and disables continuation; board/question changes and game finish clear the shared
+session. Stale or repeated Continue requests cannot release additional stops.
+
+The player checks boundaries on playback events, timers, and foreground recovery.
+Browser scheduling can cause brief overshoot before clamping; stopping is not
+sample-exact. These controls enforce the app's UI flow, not confidentiality of the
+underlying external media URL or restrictions on modified clients. Firestore rules
+restrict shared media permission writes to the host. Stop-point games require the
+updated frontend and rules together, with clients reloaded; no migration is needed.
+
 An accepted buzz attempt signals a pause to media on that contestant's client. Do not assume this pauses every participant's player. Volume controls are local. Answer media is presented with the revealed answer; the host has advance access to answer content.
 
 During an active question, the host's media start, judging, skip/reveal, wheel start, and continue controls share one panel with the current answerer and ordinary-answer timer. When the question area has at least 56rem of available width, this panel sits on the right; narrower layouts place it below the content with full-width touch controls. The wheel/table remains in the question content, and contestant/spectator controls keep their existing layout. Skip/reveal still requires a two-second hold, and continue remains unavailable while a surprise award is unresolved.

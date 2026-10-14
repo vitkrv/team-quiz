@@ -43,6 +43,48 @@ directory when starting Java. This validation used the standalone Firestore Emul
 
 ## Covered cases
 
+The same entry point runs `verify-media-stops.mjs`, including non-browser
+playback-event checks from `verify-media-playback.mjs`. These cover timestamp parsing,
+ordering/bounds/the five-stop limit, replacement pruning, frozen metadata,
+host-only start/release, concurrent/duplicate continuation, stale sessions,
+reveal/board/question/finish resets, and legacy/no-stop media compatibility.
+Plain event targets and a controlled timer exercise the actual playback policy:
+boundary clamping without seek loops, released stops for slower clients, seek/speed
+blocking, buzz pause and refresh, autoplay failure, foreground correction,
+per-client completion, unrestricted previews, and cleanup. No browser is launched;
+these checks do not verify browser-specific native media behavior.
+
+### Stop-point browser checklist (pending)
+
+Agent execution requires a separate explicit browser-testing request. Use disposable
+packs and host, two contestants, and spectator roles. Repeat audio/video with one
+and five stops in English/Ukrainian at desktop and mobile widths; record roles,
+language, viewport/device, steps, and observed behavior.
+
+1. In Form and Table editors, add/edit/remove stops, test seconds and `mm:ss`
+   fractions, duplicate/out-of-order/zero/end timestamps, and the five-stop cap.
+   Check the new-input time placeholder, Cancel/Escape dismissal, ignored backdrop
+   clicks, focus containment/restoration, Save/reopen, and
+   unrestricted marked previews. Answer media and images must have no stop editor.
+2. Replace with shorter/longer media and an image, remove the attachment, and
+   simulate metadata/upload/save errors. Check pruning notices, retained valid
+   times, original-media recovery, and frozen content after source edits.
+3. Start from the host, check every boundary and disabled seeking/speed controls,
+   and release each stop. A delayed client must cross already-released stops
+   without jumping forward. Try double-clicking Continue and reconnecting.
+4. Test autoplay rejection and limited Resume, accepted buzz pause, release while
+   locally paused, refresh before/during/at a stop and after completion, and a new
+   spectator joining mid-question. Check saved position and independent completion.
+5. Try pointer/touch/keyboard/native seek paths, buffering, background/foreground,
+   and browser media interruptions. Confirm the next boundary remains enforced.
+6. Finish playback, then seek backward/forward and replay without active stops.
+   Reveal early, return to the board, change questions, and finish the game; gated
+   playback must stop and old permissions must not apply to the next session.
+
+Release the frontend and Firestore rules together when deployment is explicitly
+authorized, and reload clients before stop-point games. The feature adds no Worker
+API change, new dependency, migration, or index.
+
 The buzzer checks also cover collection-time input, one-second local grace boundaries,
 winner/cancellation interruption, refresh timing, personal penalties, explicit submission
 outcomes, delayed acknowledgments after resolution, deadline rejection without state changes,

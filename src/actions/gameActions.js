@@ -1,4 +1,5 @@
 import { getRoundCategories, isRoundComplete } from '../utils/packRounds';
+import { getMediaStops, mediaIdentity } from '../utils/mediaStops';
 import { BUZZ_OPEN_DELAY_MS } from '../utils/buzzerPolicy';
 import { prepareFinalRecap } from './gameRecap';
 import { packVersionRef, readRoomPack, runRoomTransaction, updateRoom, updateRoomInTransaction } from './gameStorage';
@@ -20,6 +21,40 @@ export const RPS_MODES = {
 
 export const SURPRISE_PLAYER_DRAW_MS = 4000;
 export const SURPRISE_PLAYER_DRAW_RESULT_HOLD_MS = 2000;
+
+export async function startQuestionMedia(roomRef, hostId, questionId) {
+    const sessionId = generateId();
+    return runRoomTransaction(roomRef, async (transaction, room) => {
+        if (!room || room.hostId !== hostId || room.status !== 'playing' || room.answerRevealed || room.activeQuestionId !== questionId) return false;
+        if (room.mediaPlayback?.questionId === questionId && room.mediaPlayback.status === 'started') return false;
+        const pack = await readRoomPack(transaction, roomRef, room);
+        const media = getRoundCategories(pack, room.currentRoundIndex || 0).flatMap((cat) => cat.questions || [])
+            .find((question) => question.id === questionId)?.questionMedia;
+        const kind = media?.mimeType?.split('/')[0] || media?.kind;
+        if (!['audio', 'video'].includes(kind) || !mediaIdentity(media)) return false;
+        const stops = getMediaStops(media);
+        await updateRoomInTransaction(transaction, roomRef, room, {
+            mediaPlayback: { questionId, slot: 'questionMedia', status: 'started', startedAt: Date.now() + 600, startedBy: hostId,
+                ...(stops.length ? { policyVersion: 1, sessionId, mediaId: mediaIdentity(media), releasedStopCount: 0 } : {}) }
+        });
+        return true;
+    });
+}
+
+export async function continueQuestionMedia(roomRef, hostId, questionId, sessionId, expectedReleasedCount) {
+    return runRoomTransaction(roomRef, async (transaction, room) => {
+        const playback = room?.mediaPlayback;
+        if (!room || room.hostId !== hostId || room.status !== 'playing' || room.answerRevealed || room.activeQuestionId !== questionId
+            || playback?.questionId !== questionId || playback.policyVersion !== 1 || playback.sessionId !== sessionId
+            || playback.releasedStopCount !== expectedReleasedCount) return false;
+        const pack = await readRoomPack(transaction, roomRef, room);
+        const media = getRoundCategories(pack, room.currentRoundIndex || 0).flatMap((cat) => cat.questions || [])
+            .find((question) => question.id === questionId)?.questionMedia;
+        if (mediaIdentity(media) !== playback.mediaId || expectedReleasedCount >= getMediaStops(media).length) return false;
+        await updateRoomInTransaction(transaction, roomRef, room, { mediaPlayback: { ...playback, releasedStopCount: expectedReleasedCount + 1 } });
+        return true;
+    });
+}
 
 const normalizeRpsMode = (mode) => (RPS_MODES[mode] ? mode : 'one');
 

@@ -17,6 +17,7 @@ import { getPackAnalyticsSummary, trackEvent } from '../services/analytics';
 import { useLanguage } from '../useLanguage';
 import { generateId } from '../utils/ids';
 import { getFirestoreErrorMessage } from '../utils/errors';
+import { pruneMediaStops, readMediaDuration } from '../utils/mediaStops';
 
 const SURPRISE_DEFAULT_MIN_POINTS = 100;
 const SURPRISE_DEFAULT_MAX_POINTS = 500;
@@ -406,6 +407,7 @@ export default function PackCreator({ pack, setView, user, setError }) {
     const remoteMediaBusyRef = useRef(false);
     const [mediaProgress, setMediaProgress] = useState({});
     const [mediaErrors, setMediaErrors] = useState({});
+    const [mediaNotices, setMediaNotices] = useState({});
     const categoriesRef = useRef(categories);
     const prizeRef = useRef(prize);
     const categoryElementsRef = useRef({});
@@ -923,10 +925,19 @@ export default function PackCreator({ pack, setView, user, setError }) {
         const previewCategories = setQuestionMediaInCategories(sourceCategories, catId, qId, field, previewMedia);
 
         setMediaErrors((errors) => ({ ...errors, [`${qId}:${field}`]: '' }));
+        setMediaNotices((notices) => ({ ...notices, [progressKey]: '' }));
         setMediaProgress((progress) => ({ ...progress, [progressKey]: 1 }));
         setCategories(previewCategories);
 
         try {
+            let durationSeconds;
+            let retainedStops;
+            if (field === MEDIA_SLOTS.QUESTION && previousMedia?.stopPoints?.length) {
+                if ([MEDIA_KINDS.AUDIO, MEDIA_KINDS.VIDEO].includes(getMediaKind(file))) {
+                    durationSeconds = await readMediaDuration(previewUrl, getMediaKind(file));
+                    retainedStops = pruneMediaStops(previousMedia.stopPoints, durationSeconds);
+                } else retainedStops = [];
+            }
             const packId = await ensurePackForMediaAction(stripPendingCategories(sourceCategories));
             const uploadedMedia = await uploadMedia(file, {
                 packId,
@@ -934,6 +945,7 @@ export default function PackCreator({ pack, setView, user, setError }) {
                 slot: field,
                 onProgress: (value) => setMediaProgress((progress) => ({ ...progress, [progressKey]: value }))
             });
+            if (durationSeconds) Object.assign(uploadedMedia, { durationSeconds, stopPoints: retainedStops });
             const nextCategories = setQuestionMediaInCategories(categoriesRef.current, catId, qId, field, uploadedMedia);
             setCategories(nextCategories);
             await updateDoc(getPackRef(packId), {
@@ -944,6 +956,9 @@ export default function PackCreator({ pack, setView, user, setError }) {
                 await deleteMedia(previousMedia);
             }
             setMediaProgress((progress) => ({ ...progress, [progressKey]: 100 }));
+            if (retainedStops && retainedStops.length < previousMedia.stopPoints.length) {
+                setMediaNotices((notices) => ({ ...notices, [progressKey]: t('mediaStopsRemoved', { count: previousMedia.stopPoints.length - retainedStops.length }) }));
+            }
         } catch (err) {
             console.error("Media upload error:", err);
             const restoredCategories = setQuestionMediaInCategories(categoriesRef.current, catId, qId, field, previousMedia);
@@ -961,6 +976,7 @@ export default function PackCreator({ pack, setView, user, setError }) {
         if (editorLocked) return;
         setMediaBusy(true);
         const progressKey = `${qId}:${field}`;
+        setMediaNotices((notices) => ({ ...notices, [progressKey]: '' }));
         const previousQuestion = categories
             .find((category) => category.id === catId)
             ?.questions.find((question) => question.id === qId);
@@ -1161,7 +1177,7 @@ export default function PackCreator({ pack, setView, user, setError }) {
             onPaste={(event, field) => handleQuestionMediaPaste(event, category.id, question.id, field)}
             onMediaChange={(field, file) => updateQuestionMedia(category.id, question.id, field, file)}
             onMediaResolve={(field, resolveFile) => resolveDroppedMedia(resolveFile, (file) => updateQuestionMedia(category.id, question.id, field, file))}
-            onMediaRemove={(field) => removeQuestionMedia(category.id, question.id, field)} mediaProgress={mediaProgress} mediaErrors={mediaErrors} />
+            onMediaRemove={(field) => removeQuestionMedia(category.id, question.id, field)} mediaProgress={mediaProgress} mediaErrors={mediaErrors} mediaNotices={mediaNotices} />
     );
 
     return (
