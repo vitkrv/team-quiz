@@ -52,6 +52,13 @@ games without saved awards are not backfilled.
 
 ## Question packs
 
+On Create Game, each owned/shared pack tile has **Preview themes**. Its dialog shows
+the pack name, author (or an unknown-author fallback), round/category/question counts,
+and category theme names grouped in saved round order. Older category-only packs
+appear as Round 1. The dialog contains no question/answer text, values, or media;
+opening or dismissing it does not create a room. Escape, the close button, and
+the backdrop dismiss it and restore focus to the preview button.
+
 A pack contains a title, optional emoji icon, ownership/sharing information, and one to three ordered rounds with categories and questions. Numbered tabs let authors add/delete rounds and edit or preview one round at a time. Each round needs at least one category and each category needs at least one question. Category/question reordering stays within its round; cross-round movement is unavailable. Existing category-only packs are treated as a single round and converted when saved. Round support was checked against source on 2026-09-28.
 
 Preview, collapse-all, and round deletion controls share a panel below the round tabs. Round deletion opens an app-styled confirmation dialog identifying the selected round and warning that its categories, questions, and media will be deleted. Cancel, Escape, or clicking outside dismisses the dialog without deleting anything; confirmation retains the existing deletion and media cleanup behavior.

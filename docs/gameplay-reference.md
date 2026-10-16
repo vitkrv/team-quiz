@@ -25,6 +25,11 @@ Competitive mode does not replace surprise scoring with the ordinary right/wrong
 
 ## 2. Lobby and starting play
 
+Before creating a room, the host can use **Preview themes** on any owned/public
+pack tile in Create Game. This shows the pack name, author, counts, and theme names
+grouped by round, without question/answer content or media. Previewing does not
+create a room or select a pack for play.
+
 1. The host creates a room from an owned or public pack. New lobbies store pack display metadata; scores begin at zero and the host has a crown avatar.
 2. Contestants join using the six-digit code or join link. Names are limited to 18 characters. A saved profile username prefills the editable nickname; otherwise the Google display name or email prefix is used. The host name still defaults to the localized Host label. Profile edits do not rename existing room entries or historical records. New contestants receive an unused animal avatar; an existing participant can retain their avatar and score.
 3. The lobby allows 20 contestants plus one host. A contestant can explicitly leave the lobby, removing their entry.

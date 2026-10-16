@@ -1,9 +1,10 @@
 import { getAllCategories, getAllQuestions, getPackRounds } from '../utils/packRounds';
 import { useEffect, useRef, useState } from 'react';
 import { collection, getDocs, query, where } from 'firebase/firestore';
-import { ArrowLeft, ChevronDown, ChevronRight, Play } from 'lucide-react';
+import { ArrowLeft, ChevronDown, ChevronRight, Eye, Play } from 'lucide-react';
 import { HOST_AVATAR } from '../constants';
 import PackTitle from '../components/PackTitle';
+import PackThemesDialog from '../components/PackThemesDialog';
 import { appId, db } from '../firebase';
 import { getPackAnalyticsSummary, trackEvent } from '../services/analytics';
 import { useLanguage } from '../useLanguage';
@@ -12,12 +13,24 @@ import { createHistoryItem } from '../actions/gameActions';
 
 const sortPacksByUpdatedAt = (packs) => packs.sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
 
-function PackCard({ pack, onStartRoom, t }) {
+function PackCard({ pack, onStartRoom, onPreviewPack, t }) {
     return (
         <div className="flex flex-col rounded-xl border border-slate-600 bg-slate-800 p-5 transition-colors hover:border-purple-500">
-            <h4 className="mb-1 text-lg font-bold">
-                <PackTitle pack={pack} iconClassName="text-xl" />
-            </h4>
+            <div className="mb-1 flex items-start justify-between gap-2">
+                <h4 className="min-w-0 text-lg font-bold">
+                    <PackTitle pack={pack} iconClassName="text-xl" />
+                </h4>
+                <button
+                    type="button"
+                    onClick={() => onPreviewPack(pack)}
+                    aria-label={t('previewPackThemesLabel', { packName: pack.name })}
+                    title={t('previewPackThemes')}
+                    aria-haspopup="dialog"
+                    className="shrink-0 rounded-lg p-1.5 text-slate-400 hover:bg-slate-700 hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-purple-400"
+                >
+                    <Eye size={18} aria-hidden="true" />
+                </button>
+            </div>
             <p className="mb-2 text-sm text-slate-400">
                 {t('packStats', {
                     rounds: getPackRounds(pack).length, categories: getAllCategories(pack).length,
@@ -37,7 +50,7 @@ function PackCard({ pack, onStartRoom, t }) {
     );
 }
 
-function PackSection({ id, title, packs, isCollapsed, emptyMessage, onToggle, onStartRoom, onCreatePack, t }) {
+function PackSection({ id, title, packs, isCollapsed, emptyMessage, onToggle, onStartRoom, onPreviewPack, onCreatePack, t }) {
     const toggleLabel = isCollapsed ? t('expandPackSection', { section: title }) : t('collapsePackSection', { section: title });
 
     return (
@@ -76,7 +89,7 @@ function PackSection({ id, title, packs, isCollapsed, emptyMessage, onToggle, on
                     ) : (
                         <div className="grid gap-4 md:grid-cols-2">
                             {packs.map((pack) => (
-                                <PackCard key={pack.id} pack={pack} onStartRoom={onStartRoom} t={t} />
+                                <PackCard key={pack.id} pack={pack} onStartRoom={onStartRoom} onPreviewPack={onPreviewPack} t={t} />
                             ))}
                         </div>
                     )}
@@ -94,6 +107,7 @@ export default function HostSetup({ setView, user, setCurrentRoomCode, onCreateP
     const creatingRoomRef = useRef(false);
     const [hostName, setHostName] = useState(() => t('hostLabel'));
     const [collapsedSections, setCollapsedSections] = useState({ owned: false, shared: false });
+    const [packPreview, setPackPreview] = useState(null);
 
     useEffect(() => {
         const fetchPacks = async () => {
@@ -137,6 +151,20 @@ export default function HostSetup({ setView, user, setCurrentRoomCode, onCreateP
             ...currentSections,
             [sectionId]: !currentSections[sectionId]
         }));
+    };
+
+    const handlePreviewPack = (pack) => {
+        // Pass only display metadata and theme names to the dialog, never question/answer data.
+        setPackPreview({
+            name: pack.name,
+            iconEmoji: pack.iconEmoji,
+            ownerEmail: pack.ownerEmail,
+            questionCount: getAllQuestions(pack).length,
+            categoryCount: getAllCategories(pack).length,
+            rounds: getPackRounds(pack).map((round) => ({
+                themes: (round.categories || []).map((category) => category.name)
+            }))
+        });
     };
 
     const handleStartRoom = async (pack) => {
@@ -225,6 +253,7 @@ export default function HostSetup({ setView, user, setCurrentRoomCode, onCreateP
                         emptyMessage={t('noOwnedPacksForHosting')}
                         onToggle={toggleSection}
                         onStartRoom={handleStartRoom}
+                        onPreviewPack={handlePreviewPack}
                         onCreatePack={onCreatePack}
                         t={t}
                     />
@@ -236,9 +265,13 @@ export default function HostSetup({ setView, user, setCurrentRoomCode, onCreateP
                         emptyMessage={t('noSharedPacks')}
                         onToggle={toggleSection}
                         onStartRoom={handleStartRoom}
+                        onPreviewPack={handlePreviewPack}
                         t={t}
                     />
                 </div>
+            )}
+            {packPreview && (
+                <PackThemesDialog preview={packPreview} onClose={() => setPackPreview(null)} t={t} />
             )}
         </div>
     );

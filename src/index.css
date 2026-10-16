@@ -2,6 +2,44 @@
 @tailwind components;
 @tailwind utilities;
 
+.pack-themes-scroll {
+    scrollbar-width: auto;
+    scrollbar-color: #475569 #0f172a;
+    overscroll-behavior-y: contain;
+}
+
+/* Prefer native pseudo-elements where available to control width and hide arrows. */
+@supports selector(::-webkit-scrollbar) {
+    .pack-themes-scroll {
+        scrollbar-color: auto;
+    }
+
+    .pack-themes-scroll::-webkit-scrollbar {
+        width: 12px;
+    }
+
+    .pack-themes-scroll::-webkit-scrollbar-track {
+        margin-block: 4px;
+        background: transparent;
+    }
+
+    .pack-themes-scroll::-webkit-scrollbar-thumb {
+        border: 2px solid #0f172a;
+        border-radius: 999px;
+        background: #475569;
+    }
+
+    .pack-themes-scroll::-webkit-scrollbar-thumb:hover {
+        background: #64748b;
+    }
+
+    .pack-themes-scroll::-webkit-scrollbar-button {
+        display: none;
+        width: 0;
+        height: 0;
+    }
+}
+
 /* Base the host sidebar on space left after the game's leaderboard and padding. */
 .host-question-shell {
     --host-question-controls-width: 17rem;
