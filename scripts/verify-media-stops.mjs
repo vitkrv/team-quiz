@@ -7,10 +7,10 @@ import { formatMediaTime, getMediaStops, parseMediaTime, pruneMediaStops, validM
 export async function verifyMediaStops({ actions, check, denied, hostDb, playerDb, spectatorDb, seedDb, ref, roomRef, event, t }) {
     await verifyMediaPlayback(check);
     const read = async (target) => (await getDocFromServer(target)).data();
-    const media = { kind: 'video', fileId: 'stops-video', url: 'https://example.invalid/video.mp4', durationSeconds: 60, stopPoints: [10, 20, 30, 40, 50] };
+    const media = { kind: 'video', fileId: 'stops-video', url: 'https://example.invalid/video.mp4', durationSeconds: 60, stopPoints: [10, 20, 30, 40, 50], allowParticipantMediaReplay: false };
     const pack = { ownerId: 'host', name: 'Media stops', isPublic: false, categories: [{ id: 'stops-category', name: 'Media', questions: [
         { id: 'stops-question', text: 'Q', answer: 'A', points: 100, questionMedia: media },
-        { id: 'stops-audio', text: 'Q', answer: 'A', points: 100, questionMedia: { ...media, kind: 'audio', fileId: 'stops-audio', stopPoints: [10] } },
+        { id: 'stops-audio', text: 'Q', answer: 'A', points: 100, questionMedia: { ...media, kind: 'audio', fileId: 'stops-audio', stopPoints: [10], allowParticipantMediaReplay: true } },
         { id: 'plain-media', text: 'Q', answer: 'A', points: 100, questionMedia: { kind: 'audio', fileId: 'plain', url: 'https://example.invalid/audio.mp3' } }
     ] }] };
     await check('media stops: parsing, ordering, bounds, cap and replacement pruning', async () => {
@@ -35,6 +35,7 @@ export async function verifyMediaStops({ actions, check, denied, hostDb, playerD
     const player = roomRef(playerDb, id);
     const spectator = roomRef(spectatorDb, id);
     await check('media stops: frozen metadata survives source changes', async () => {
+        assert.equal((await read(host)).allowParticipantMediaReplay, undefined);
         await actions.startGame(host, { id: 'host', name: 'host' }, t);
         const room = await read(host);
         const frozen = await read(ref(hostDb, 'gamePackVersions', room.packVersionId));
@@ -42,6 +43,14 @@ export async function verifyMediaStops({ actions, check, denied, hostDb, playerD
         await updateDoc(ref(hostDb, 'packs', 'media-stops-pack'), { categories: [{ ...pack.categories[0], questions: [] }] });
         assert.deepEqual((await read(ref(hostDb, 'gamePackVersions', room.packVersionId))).content.categories[0].questions[0].questionMedia, media);
         await updateDoc(host, { status: 'playing' });
+        for (const db of [playerDb, spectatorDb]) {
+            const shared = await read(ref(db, 'gamePackVersions', room.packVersionId));
+            assert.equal(shared.content.categories[0].questions[0].questionMedia.allowParticipantMediaReplay, false);
+            assert.equal(shared.content.categories[0].questions[1].questionMedia.allowParticipantMediaReplay, true);
+            assert.equal(shared.content.categories[0].questions[2].questionMedia.allowParticipantMediaReplay, undefined);
+            await denied(updateDoc(ref(db, 'packs', 'media-stops-pack'), { categories: pack.categories }));
+            await denied(updateDoc(ref(db, 'gamePackVersions', room.packVersionId), { 'content.categories': pack.categories }));
+        }
         assert.equal(await actions.handlePickQuestion(host, 'stops-question', 'host', event('question_picked')), true);
     });
     await check('media stops: start is host-only, scoped and idempotent', async () => {
@@ -94,6 +103,26 @@ export async function verifyMediaStops({ actions, check, denied, hostDb, playerD
         assert.equal(await actions.continueQuestionMedia(legacy, 'host', 'stops-question', state.sessionId, 0), true);
         await updateDoc(legacy, { activeQuestionId: 'plain-media', mediaPlayback: null });
         assert.equal(await actions.startQuestionMedia(legacy, 'host', 'plain-media'), true);
-        assert.equal((await read(legacy)).mediaPlayback.policyVersion, undefined);
+        assert.equal((await read(legacy)).mediaPlayback.policyVersion, 1);
+        assert.equal((await read(legacy)).allowParticipantMediaReplay, undefined);
+    });
+    await check('media replay: creator preference stays per media and shared replay resets session and stops', async () => {
+        const legacy = roomRef(hostDb, 'media-stops-legacy');
+        const before = (await read(legacy)).mediaPlayback;
+        const replay = () => actions.startQuestionMedia(legacy, 'host', 'plain-media', before.startedAt);
+        const outcomes = await Promise.all([replay(), replay()]);
+        assert.equal(outcomes.filter(Boolean).length, 1);
+        const after = await read(legacy);
+        assert.notEqual(after.mediaPlayback.sessionId, before.sessionId);
+        assert.equal(after.pack.categories[0].questions[0].questionMedia.allowParticipantMediaReplay, false);
+        await updateDoc(legacy, { activeQuestionId: 'stops-question', mediaPlayback: null });
+        await actions.startQuestionMedia(legacy, 'host', 'stops-question');
+        const started = (await read(legacy)).mediaPlayback;
+        await actions.continueQuestionMedia(legacy, 'host', 'stops-question', started.sessionId, 0);
+        assert.equal(await actions.startQuestionMedia(legacy, 'host', 'stops-question', started.startedAt), true);
+        const restarted = await read(legacy);
+        assert.notEqual(restarted.mediaPlayback.sessionId, started.sessionId);
+        assert.equal(restarted.mediaPlayback.releasedStopCount, 0);
+        assert.equal(restarted.pack.categories[0].questions[0].questionMedia.allowParticipantMediaReplay, false);
     });
 }

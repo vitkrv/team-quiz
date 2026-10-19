@@ -15,6 +15,7 @@ class MediaElement extends EventTarget {
     set currentTime(value) {
         if (++this.seekCount > 50) throw new Error('Repeated internal seeking');
         this._time = value;
+        this.ended = value >= this.duration;
         this.seeking = true;
         this.dispatchEvent(new Event('seeking'));
         this.seeking = false;
@@ -41,7 +42,7 @@ class MediaElement extends EventTarget {
     }
 }
 
-function fixture({ released = 0, session = 'session', gated = true, storage = new Map(), blocked = false, initialPause = false, loading = false } = {}) {
+function fixture({ released = 0, session = 'session', gated = true, storage = new Map(), blocked = false, initialPause = false, loading = false, stopPoints = [10, 20], allowReplay = true } = {}) {
     let serial = 0;
     const timers = new Map();
     const element = new MediaElement();
@@ -52,10 +53,10 @@ function fixture({ released = 0, session = 'session', gated = true, storage = ne
     const window = new EventTarget();
     const environment = { document, window, sessionStorage: { getItem: (key) => storage.get(key), setItem: (key, value) => storage.set(key, value) },
         setTimeout: (fn, delay) => { const id = ++serial; timers.set(id, { fn, delay }); return id; }, clearTimeout: (id) => timers.delete(id) };
-    const latest = { current: { playback: session ? { sessionId: session, releasedStopCount: released, startedAt: 0 } : null, stopped: false } };
+    const latest = { current: { playback: session ? { sessionId: session, releasedStopCount: released, startedAt: 0 } : null, stopped: false, allowReplay } };
     let view;
     const runtime = createMediaStopPlayback({ element, gated, session, storageScope: 'user:room:question', identity: 'file', latest,
-        media: { kind: 'audio', durationSeconds: 30, stopPoints: [10, 20] }, onView: (next) => { view = next; }, initialPause, environment });
+        media: { kind: 'audio', durationSeconds: 30, stopPoints }, onView: (next) => { view = next; }, initialPause, environment });
     const flushStart = () => { for (const [id, timer] of [...timers]) if (timer.delay === 0) { timers.delete(id); timer.fn(); } };
     const nextTimer = () => { const first = timers.entries().next().value; if (first) { timers.delete(first[0]); first[1].fn(); } };
     const release = (count) => { latest.current.playback.releasedStopCount = count; runtime.sync(); };
@@ -63,6 +64,83 @@ function fixture({ released = 0, session = 'session', gated = true, storage = ne
 }
 
 export async function verifyMediaPlayback(check) {
+    await check('media replay: disabled participant controls stay locked before and after completion and refresh', async () => {
+        for (const stopPoints of [[], [10, 20]]) {
+            const f = fixture({ stopPoints, allowReplay: false });
+            try {
+                f.flushStart();
+                assert.equal(f.element.paused, false, 'Host-authorized initial playback starts');
+                f.element.advance(5);
+                f.runtime.seek(25);
+                f.element.currentTime = 25;
+                assert.equal(f.element.currentTime, 5, 'Seeking is locked during the first playback');
+                for (let index = 0; index < stopPoints.length; index++) {
+                    f.element.advance(stopPoints[index]);
+                    assert.equal(f.element.paused, true);
+                    f.release(index + 1);
+                    assert.equal(f.element.paused, false);
+                }
+                f.element.finish();
+                assert.equal(f.view().complete, true);
+                f.runtime.toggle();
+                f.runtime.seek(10);
+                f.element.currentTime = 10;
+                await f.element.play();
+                assert.equal(f.element.currentTime, 30, 'Seeking stays locked after completion');
+                assert.equal(f.element.paused, true, 'Local replay stays blocked after completion');
+            } finally { f.runtime.dispose(); }
+            const restored = fixture({ stopPoints, released: stopPoints.length, storage: f.storage, allowReplay: false });
+            try {
+                assert.equal(restored.view().complete, true);
+                restored.runtime.toggle();
+                restored.runtime.seek(1);
+                assert.equal(restored.element.paused, true);
+                assert.equal(restored.element.currentTime, 30);
+            } finally { restored.runtime.dispose(); }
+            const replay = fixture({ stopPoints, session: 'shared-host-replay', storage: f.storage, allowReplay: false });
+            try {
+                replay.flushStart();
+                assert.equal(replay.element.currentTime, 0);
+                assert.equal(replay.element.paused, false, 'A fresh host session still authorizes playback');
+            } finally { replay.runtime.dispose(); }
+        }
+        const preview = fixture({ gated: false, allowReplay: false });
+        try { preview.runtime.seek(12); preview.runtime.toggle(); assert.equal(preview.element.paused, false); }
+        finally { preview.runtime.dispose(); }
+    });
+    await check('media replay: first-playback controls unlock on completion and reset for a shared replay', async () => {
+        for (const stopPoints of [[], [10, 20]]) {
+            const f = fixture({ stopPoints, released: stopPoints.length });
+            try {
+                f.flushStart();
+                f.element.advance(5);
+                f.runtime.seek(25);
+                assert.equal(f.element.currentTime, 5);
+                f.element.finish();
+                assert.equal(f.view().complete, true);
+                f.runtime.seek(10);
+                f.runtime.toggle();
+                assert.equal(f.element.currentTime, 10);
+                assert.equal(f.element.paused, false);
+            } finally { f.runtime.dispose(); }
+            const restored = fixture({ stopPoints, released: stopPoints.length, storage: f.storage });
+            try {
+                assert.equal(restored.view().complete, true);
+                restored.runtime.toggle();
+                assert.equal(restored.element.paused, false);
+            } finally { restored.runtime.dispose(); }
+            const replay = fixture({ stopPoints, session: 'new-host-replay', storage: f.storage });
+            try {
+                assert.equal(replay.view().complete, false);
+                assert.equal(replay.element.currentTime, 0);
+                replay.flushStart();
+                assert.equal(replay.element.paused, false);
+            } finally { replay.runtime.dispose(); }
+        }
+        const preview = fixture({ gated: false });
+        try { preview.runtime.seek(12); preview.runtime.toggle(); assert.equal(preview.element.paused, false); }
+        finally { preview.runtime.dispose(); }
+    });
     await check('media playback: buzz before metadata or host launch stays paused', async () => {
         const f = fixture({ loading: true, session: '' });
         f.runtime.buzzPause();

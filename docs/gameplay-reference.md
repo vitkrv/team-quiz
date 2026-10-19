@@ -174,15 +174,57 @@ locally paused or blocked by browser autoplay; slower clients pass stops already
 released without pausing or jumping forward. The final release permits the last
 segment through the end. There is no wait for every contestant or spectator.
 
-Before a client's own playback reaches the end, its timeline and playback speed
+For stop-point media, before a client's own playback reaches the end, its timeline and playback speed
 are locked, with numbered markers for pending/released stops. Volume remains local
 and available. Ordinary pause/play controls are hidden; a limited Resume appears
 after a buzz pause, browser interruption, or autoplay rejection. A host release
 does not cancel a local buzz pause. Seeking, replay, and normal controls unlock only
 after that client finishes the last authorized segment; markers then become
-inactive. Question media without stops and answer media keep their existing behavior.
+inactive when the creator permits participant replay. This first-playback restriction
+also applies to question media without stops. When participant replay is disabled,
+independent controls remain locked even after completion.
+Answer media retains its existing unrestricted controls.
 
-Refresh in the same tab restores saved local progress and pause/completion state,
+In both Form and Table pack editors, the question audio/video panel offers **Allow
+participants to freely control media after playback ends**, checked by default.
+It is stored as `questionMedia.allowParticipantMediaReplay` alongside the asset and
+saved with the pack. Older media with no field defaults to enabled. Replacing
+audio/video preserves the preference; removing the attachment and adding a new one
+starts with the default. Answer-media and image panels do not show this option.
+The saved value is frozen with the pack at game start; later source edits do not
+change an active game. Any old game-wide preference is ignored.
+
+Checked: ordinary question audio/video unlocks independent participant controls
+after each viewer completes their own first playback. Unchecked: participants and
+spectators cannot use ordinary play/pause, seeking, or replay before or after
+completion. This applies to audio/video with or without stop points and survives
+refresh. Only a fresh host-authorized playback session can replay the media.
+Limited recovery Resume can still finish an interrupted authorized segment without
+seeking; local volume remains available.
+
+The host sees no checkbox or help control during play. When the mode is unchecked,
+a notice says the replay-after-completion mode is disabled for this question and
+the host fully controls media for everyone. Host panel Start/Continue/Replay actions affect all
+viewers. With stops, only Start/Continue appears during initial playback; Continue
+is visibly disabled until the host reaches the pending boundary. Shared Replay
+becomes available when the host finishes and resets the playback session and stops
+only when the creator disabled the replay-after-completion mode. Without stops,
+shared Replay remains available after start only in that disabled mode. When the
+mode is enabled, shared Replay is hidden and regular local Play/Pause, seeking,
+and native video controls appear beneath the host's media after the host completes
+the first full playback. Before completion, or when the mode is disabled, those
+local host controls remain hidden/disabled; volume remains local.
+Recovery Resume still allows an interrupted host playback to
+finish its authorized segment. Participant controls remain beneath their media.
+
+The question-mark beside the editor checkbox opens the same keyboard-accessible
+help dialog, including when editing in the Table question dialog. The introduction
+comes first, then a 30-second example comparing both settings with and without
+stops, followed by detailed cases. The title and close icon remain visible while
+scrolling; there is no footer Close button. Escape closes only the help dialog and
+restores focus to its trigger. Answer media and pack previews are unaffected.
+
+For the locked-first-playback mode and stop-point media, refresh in the same tab restores saved local progress and pause/completion state,
 keyed to that user, room, question, media, and playback session. Restored progress
 is clamped to host permission. New clients start at zero and can cross already
 released stops; host completion does not unlock another client's controls. Storage

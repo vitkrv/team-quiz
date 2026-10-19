@@ -110,6 +110,15 @@ Deleting a saved pack from My Question Packs uses two app-styled confirmation st
 Each question includes a point value and question/answer content. Each side must have text or media; either can have both. Supported media kinds are image, audio, and video. In the create/edit pack editor, each media panel accepts one dropped local file or web image, including replacement of an existing attachment. Question/answer panels accept images up to 10 MB and audio/video up to 100 MB; both prize panels accept images only. Web images are downloaded without credentials in the browser with a 15-second timeout; websites that block downloading require saving the image locally first. Multiple-file drops are rejected. Pasting a clipboard media file into a focused question or answer text field opens an app-styled confirmation dialog before uploading it to that side’s media slot. The dialog highlights the Question or Answer media destination and warns when replacing an existing attachment; Cancel, Escape, or clicking the backdrop dismisses it. The same type/size validation applies; multiple-file pastes are rejected, declining keeps the attachment and text unchanged, and ordinary text pastes retain their normal behavior. Saving, round changes, and other media actions are blocked during downloading and uploading; file-picker buttons remain available for keyboard and touch use. Ordinary point values are normalized to positive multiples of 100 in the editor.
 
 Question audio/video attachments also offer **Stop points** in both editor modes.
+These question-media panels also offer **Allow participants to freely control media
+after playback ends**, enabled by default, with a question-mark help dialog. The
+choice is saved per asset with the pack and frozen at game start. When unchecked,
+participant playback controls stay locked before and after full playback, including
+after refresh, for both ordinary and stop-point media. Only the host can authorize
+another playback. The host sees a notice instead of an
+editable checkbox and uses shared Start/Continue/Replay controls. Answer media and
+previews are unaffected.
+
 The owner can add, edit, or remove up to five timestamps in seconds or `mm:ss`,
 with up to two decimal places. Values must be positive, strictly increasing, and
 strictly below the loaded media duration. The accessible dialog applies changes to

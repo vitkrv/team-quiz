@@ -36,6 +36,7 @@ export default function PackQuestionEditor({
             onChange={(file) => onMediaChange(field, file)}
             onResolveFile={(resolveFile) => onMediaResolve(field, resolveFile)}
             onStopPointsChange={field === MEDIA_SLOTS.QUESTION ? (media) => onUpdate(field, media) : undefined}
+            onReplayChange={field === MEDIA_SLOTS.QUESTION ? (allowed) => onUpdate(field, { ...q[field], allowParticipantMediaReplay: allowed }) : undefined}
             onRemove={() => onMediaRemove(field)} />
     );
     return (

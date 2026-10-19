@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
-import { FileAudio, FileVideo, ImagePlus, RefreshCw, Trash2, Flag } from 'lucide-react';
+import { FileAudio, FileVideo, HelpCircle, ImagePlus, RefreshCw, Trash2, Flag } from 'lucide-react';
 import MediaStopPointsDialog from './MediaStopPointsDialog';
+import MediaPlaybackHelpDialog from './MediaPlaybackHelpDialog';
 import QuestionMedia from './QuestionMedia';
 import { getMediaKind, MEDIA_KINDS, validateMediaFile } from '../services/imageStorage';
 import { downloadDroppedImage, getDroppedImageUrl } from '../utils/mediaDrop';
@@ -40,11 +41,13 @@ export default function PackMediaAttachment({
     allowedKinds = [MEDIA_KINDS.IMAGE, MEDIA_KINDS.AUDIO, MEDIA_KINDS.VIDEO],
     hint,
     stacked = false,
-    onStopPointsChange
+    onStopPointsChange,
+    onReplayChange
 }) {
     const inputRef = useRef(null);
     const [localError, setLocalError] = useState('');
     const [editingStops, setEditingStops] = useState(false);
+    const [replayHelpOpen, setReplayHelpOpen] = useState(false);
     const [dragActive, setDragActive] = useState(false);
     const [fetching, setFetching] = useState(false);
     const dragDepth = useRef(0);
@@ -197,6 +200,20 @@ export default function PackMediaAttachment({
                     <EmptyIcon size={16} /> {t('attachMedia')}
                 </button>
             )}
+            {media && onReplayChange && [MEDIA_KINDS.AUDIO, MEDIA_KINDS.VIDEO].includes(kind) && (
+                <div className="mt-3 flex items-center gap-1">
+                    <label className="flex flex-1 items-start gap-2 text-sm text-slate-300">
+                        <input type="checkbox" checked={media.allowParticipantMediaReplay !== false} disabled={disabled || fetching}
+                            onChange={(event) => onReplayChange(event.target.checked)} className="mt-1 h-4 w-4 shrink-0 accent-blue-500" />
+                        {t('allowParticipantMediaReplay')}
+                    </label>
+                    <button type="button" onClick={() => setReplayHelpOpen(true)} aria-label={t('mediaPlaybackHelpTitle')}
+                        aria-haspopup="dialog" className="flex min-h-11 min-w-11 shrink-0 items-center justify-center rounded-lg text-slate-400 hover:bg-slate-800 hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-blue-400">
+                        <HelpCircle size={19} />
+                    </button>
+                </div>
+            )}
+            {replayHelpOpen && <MediaPlaybackHelpDialog t={t} onClose={() => setReplayHelpOpen(false)} />}
             {progress > 0 && progress < 100 && (
                 <div className="mt-3 h-2 overflow-hidden rounded-full bg-slate-800">
                     <div className="h-full bg-blue-500 transition-all" style={{ width: `${progress}%` }} />

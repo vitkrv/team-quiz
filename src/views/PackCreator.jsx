@@ -922,6 +922,9 @@ export default function PackCreator({ pack, setView, user, setError }) {
             mimeType: file.type,
             previousMedia
         };
+        if (field === MEDIA_SLOTS.QUESTION && [MEDIA_KINDS.AUDIO, MEDIA_KINDS.VIDEO].includes(getMediaKind(file))) {
+            previewMedia.allowParticipantMediaReplay = previousMedia?.allowParticipantMediaReplay !== false;
+        }
         const previewCategories = setQuestionMediaInCategories(sourceCategories, catId, qId, field, previewMedia);
 
         setMediaErrors((errors) => ({ ...errors, [`${qId}:${field}`]: '' }));
@@ -946,6 +949,9 @@ export default function PackCreator({ pack, setView, user, setError }) {
                 onProgress: (value) => setMediaProgress((progress) => ({ ...progress, [progressKey]: value }))
             });
             if (durationSeconds) Object.assign(uploadedMedia, { durationSeconds, stopPoints: retainedStops });
+            if (field === MEDIA_SLOTS.QUESTION && [MEDIA_KINDS.AUDIO, MEDIA_KINDS.VIDEO].includes(getMediaKind(file))) {
+                uploadedMedia.allowParticipantMediaReplay = previousMedia?.allowParticipantMediaReplay !== false;
+            }
             const nextCategories = setQuestionMediaInCategories(categoriesRef.current, catId, qId, field, uploadedMedia);
             setCategories(nextCategories);
             await updateDoc(getPackRef(packId), {

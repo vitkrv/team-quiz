@@ -281,6 +281,8 @@ export default function ActiveQuestionView({ room, roomCode, roomRef, user, isHo
     const [buzzMediaPauseSignal, setBuzzMediaPauseSignal] = useState(0);
     const [mediaStopReached, setMediaStopReached] = useState(null);
     const [mediaActionBusy, setMediaActionBusy] = useState(false);
+    const [hostMediaState, setHostMediaState] = useState({});
+    const hostMediaController = useRef(null);
     const [mediaActionError, setMediaActionError] = useState('');
     useEffect(() => { setMediaStopReached(null); setMediaActionError(''); }, [room.activeQuestionId]);
     const [isEntranceContentVisible, setIsEntranceContentVisible] = useState(false);
@@ -457,6 +459,16 @@ export default function ActiveQuestionView({ room, roomCode, roomRef, user, isHo
         && mediaPlayback?.status === 'started'
     );
     const questionMediaStartAt = mediaPlayback?.startedAt || 0;
+    const hostNeedsMediaResume = isQuestionMediaStarted
+        && hostMediaState.session === (matchingStopPlayback?.sessionId || `legacy:${questionMediaStartAt}`)
+        && !hostMediaState.complete && hostMediaState.resume && hostMediaState.boundary === null;
+    const hasPendingMediaStop = matchingStopPlayback && matchingStopPlayback.releasedStopCount < questionStops.length;
+    const canContinueQuestionMedia = Boolean(hasPendingMediaStop
+        && hostMediaState.session === matchingStopPlayback.sessionId
+        && mediaStopReached !== null && mediaStopReached === matchingStopPlayback.releasedStopCount);
+    const hostMediaCompleted = isQuestionMediaStarted && hostMediaState.complete
+        && hostMediaState.session === (matchingStopPlayback?.sessionId || `legacy:${questionMediaStartAt}`);
+    const allowParticipantMediaReplay = activeQ.questionMedia?.allowParticipantMediaReplay !== false;
 
     const handleBuzzIn = async () => {
         if (!canClickBuzzButton) return;
@@ -817,16 +829,16 @@ export default function ActiveQuestionView({ room, roomCode, roomRef, user, isHo
     };
 
     const handleStartQuestionMedia = async () => {
-        if (!isHost || isAnswerRevealed || !hasGatedQuestionMedia || isQuestionMediaStarted) return;
+        if (!isHost || isAnswerRevealed || !hasGatedQuestionMedia) return;
         if (mediaActionBusy) return;
         setMediaActionBusy(true);
         setMediaActionError('');
-        try { await startQuestionMedia(roomRef, user.uid, activeQ.id); }
+        try { await startQuestionMedia(roomRef, user.uid, activeQ.id, isQuestionMediaStarted ? questionMediaStartAt : null); }
         catch { setMediaActionError(t('mediaActionFailed')); }
         finally { setMediaActionBusy(false); }
     };
     const handleContinueQuestionMedia = async () => {
-        if (mediaActionBusy || mediaStopReached === null || mediaStopReached !== matchingStopPlayback?.releasedStopCount) return;
+        if (mediaActionBusy || !canContinueQuestionMedia) return;
         setMediaActionBusy(true);
         setMediaActionError('');
         try { await continueQuestionMedia(roomRef, user.uid, activeQ.id, matchingStopPlayback.sessionId, matchingStopPlayback.releasedStopCount); }
@@ -900,8 +912,17 @@ export default function ActiveQuestionView({ room, roomCode, roomRef, user, isHo
                     shouldStart: hasGatedQuestionMedia && isQuestionMediaStarted,
                     startAt: questionMediaStartAt,
                     pauseSignal: buzzMediaPauseSignal,
-                    stopPlayback: questionStops.length ? {
-                        gated: true, playback: matchingStopPlayback,
+                    stopPlayback: hasGatedQuestionMedia ? {
+                        gated: true, playback: matchingStopPlayback || (isQuestionMediaStarted && !questionStops.length ? {
+                            ...mediaPlayback, sessionId: `legacy:${questionMediaStartAt}`
+                        } : null),
+                        allowReplay: isHost || allowParticipantMediaReplay,
+                        hidePlaybackControls: isHost && (!allowParticipantMediaReplay || !hostMediaCompleted),
+                        controllerRef: isHost ? hostMediaController : undefined,
+                        onPlaybackState: isHost ? (next) => setHostMediaState((previous) =>
+                            previous.session === next.session && previous.complete === next.complete
+                            && previous.resume === next.resume
+                            && previous.boundary === next.boundary ? previous : next) : undefined,
                         storageScope: `${user.uid}:${roomRef.id}:${activeQ.id}`,
                         stopped: isAnswerRevealed,
                         onStop: isHost ? setMediaStopReached : undefined
@@ -1082,22 +1103,29 @@ export default function ActiveQuestionView({ room, roomCode, roomRef, user, isHo
                     {!isAnswerRevealed && !isSurpriseQuestion && !hasBuzzed && !buzzer.collecting && (
                         <p className="text-sm text-slate-400">{t('waitingForBuzz')}</p>
                     )}
-                    {!isAnswerRevealed && hasGatedQuestionMedia && !isQuestionMediaStarted && (
-                        <button
-                            type="button"
-                            onClick={handleStartQuestionMedia}
-                            disabled={mediaActionBusy}
-                            className="inline-flex items-center justify-center gap-2 rounded-xl bg-blue-600 px-5 py-3 text-base font-bold text-white shadow-lg shadow-blue-900 transition-colors hover:bg-blue-500 md:px-6 md:text-lg"
-                        >
-                            <Play size={22} /> {t('startMediaForEveryone')}
-                        </button>
-                    )}
-                    {!isAnswerRevealed && matchingStopPlayback && matchingStopPlayback.releasedStopCount < questionStops.length && (
-                        <button type="button" onClick={handleContinueQuestionMedia}
-                            disabled={mediaActionBusy || mediaStopReached !== matchingStopPlayback.releasedStopCount}
-                            className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 py-3 font-bold disabled:opacity-50">
-                            <Play size={20} />{t('mediaContinueAt', { number: matchingStopPlayback.releasedStopCount + 1, time: formatMediaTime(questionStops[matchingStopPlayback.releasedStopCount]) })}
-                        </button>
+                    {!isAnswerRevealed && hasGatedQuestionMedia && (
+                        <div className="flex flex-col gap-3">
+                            {(!isQuestionMediaStarted || hasPendingMediaStop || hostNeedsMediaResume
+                                || (!allowParticipantMediaReplay && (!questionStops.length || hostMediaCompleted))) && (
+                                <button
+                                    type="button"
+                                    onClick={!isQuestionMediaStarted ? handleStartQuestionMedia
+                                        : hostNeedsMediaResume ? () => hostMediaController.current?.toggle()
+                                            : questionStops.length && !hostMediaCompleted ? handleContinueQuestionMedia : handleStartQuestionMedia}
+                                    disabled={mediaActionBusy || (isQuestionMediaStarted && questionStops.length > 0
+                                        && !hostNeedsMediaResume && !hostMediaCompleted && !canContinueQuestionMedia)}
+                                    className="inline-flex items-center justify-center gap-2 rounded-xl bg-blue-600 px-5 py-3 text-base font-bold text-white shadow-lg shadow-blue-900 transition-colors enabled:hover:bg-blue-500 disabled:cursor-not-allowed disabled:bg-slate-700 disabled:text-slate-400 disabled:opacity-60 disabled:shadow-none md:px-6 md:text-lg"
+                                >
+                                    <Play size={22} />
+                                    {!isQuestionMediaStarted ? t('startMediaForEveryone')
+                                        : hostNeedsMediaResume ? t('mediaResume')
+                                            : questionStops.length && !hostMediaCompleted ? t('mediaContinueAt', { number: matchingStopPlayback.releasedStopCount + 1,
+                                                time: formatMediaTime(questionStops[matchingStopPlayback.releasedStopCount]) })
+                                                : t('replayMediaForEveryone')}
+                                </button>
+                            )}
+                            {!allowParticipantMediaReplay && <p role="status" className="text-sm text-amber-200">{t('questionMediaReplayDisabled')}</p>}
+                        </div>
                     )}
                     {mediaActionError && <p role="alert" className="text-sm text-red-300">{mediaActionError}</p>}
                     {!isAnswerRevealed && (isSurpriseQuestion || hasBuzzed) && (

@@ -67,6 +67,7 @@ export default function QuestionMedia({
         const delay = Math.max(0, Number(startAt || Date.now()) - Date.now());
         const timeoutId = window.setTimeout(() => {
             setIsBlocked(false);
+            if (Number.isFinite(element.duration)) element.currentTime = 0;
             element.play().catch(() => {
                 startedKeyRef.current = '';
                 setIsBlocked(true);
@@ -93,7 +94,7 @@ export default function QuestionMedia({
 
     if (!media) return null;
 
-    if (getMediaStops(media).length) return <StopPointMedia media={media} t={t} className={className} compact={variant === 'thumbnail'}
+    if (stopPlayback || getMediaStops(media).length) return <StopPointMedia media={media} t={t} className={className} compact={variant === 'thumbnail'}
         pauseSignal={pauseSignal} {...stopPlayback} />;
 
     if (kind === MEDIA_KINDS.IMAGE) {

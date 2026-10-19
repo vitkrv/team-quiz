@@ -54,6 +54,50 @@ blocking, buzz pause and refresh, autoplay failure, foreground correction,
 per-client completion, unrestricted previews, and cleanup. No browser is launched;
 these checks do not verify browser-specific native media behavior.
 
+Question-media replay checks cover enabled/disabled/missing preferences saved on
+question media and frozen at start, participant/spectator reads, source edits after
+start, and rejected non-owner pack/frozen-snapshot writes. There is no game-wide
+preference or host setter. Legacy games and concurrent shared replays are covered;
+replay creates one fresh session and resets stop permissions. Non-browser playback
+checks exercise first-playback locking with and without stops, completion recovery,
+and fresh-session resets. Disabled participant controls are checked before and after
+completion, against local/native replay and seeking attempts, across refresh, and
+through a fresh host-authorized playback. Unrestricted previews remain unaffected.
+
+### Question-media replay browser checklist (pending)
+
+Use host, contestant, and spectator sessions in English and Ukrainian at desktop
+and mobile widths. Browser checks require an explicit user request for agent execution.
+
+1. In Form and Table editors, attach audio/video to a question. Confirm the media
+   checkbox defaults to checked, can be changed independently per question, and
+   survives Save/reopen, mode switching, and audio/video replacement. Removing and
+   attaching anew should restore the default. Images and answer-media panels must
+   have no checkbox; their previews stay unrestricted.
+2. Open the question-mark help in both editors, including the Table question dialog.
+   Check focus containment/restoration, Escape closing only the help, backdrop/icon
+   dismissal, sticky title/close icon, and mobile scrolling. The example follows
+   the intro, before the detailed cases; no footer Close button is present.
+3. Start a game with checked, unchecked, and older/missing-value media. The host
+   must have no checkbox/help control and should see the host-control notice
+   only when unchecked. Later source-pack edits must not alter the active game.
+4. With checked ordinary media, participant controls unlock only after their full
+   playback. When unchecked, controls must stay locked before, during, and after
+   playback, both with and without stops. Confirm participant/spectator play/pause,
+   replay and seeking cannot unlock after completion or refresh; volume and limited
+   recovery Resume remain available. Shared host replay must still play from zero.
+5. Verify shared host Start/Replay resets everyone from zero. With stops, only
+   Start/Continue appears during first playback, Continue is visibly disabled until
+   the host reaches the boundary. When the mode is unchecked, shared Replay after
+   completion resets stop releases and host question timelines stay read-only with
+   no local playback buttons/native video controls. When checked, shared Replay is
+   hidden and the host gets regular local Play/Pause, seeking, and video controls
+   beneath the media after their first full playback. Confirm local replay does not
+   restart participant playback. Check local recovery Resume after interruption.
+6. Refresh during initial playback and after completion, join as a new spectator,
+   and reveal audio/video answers. Verify documented recovery and unchanged answer
+   controls, image display, and pack previews under both saved settings.
+
 ### Stop-point browser checklist (pending)
 
 Agent execution requires a separate explicit browser-testing request. Use disposable

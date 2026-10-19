@@ -22,6 +22,7 @@ export function createMediaStopPlayback({ element, media, gated, session, storag
     const released = () => Math.min(points.length, Math.max(0, latest.current.playback?.releasedStopCount || 0));
     const limit = () => points[released()] ?? element.duration;
     const authorized = () => !gated || Boolean(session && latest.current.playback?.sessionId === session);
+    const freeControls = () => complete && (!gated || latest.current.allowReplay !== false);
     const seek = (time) => {
         lastTime = time;
         if (Math.abs(element.currentTime - time) < 0.0001) return;
@@ -43,7 +44,7 @@ export function createMediaStopPlayback({ element, media, gated, session, storag
         playing = false;
     };
     const play = () => {
-        if (disposed || latest.current.stopped || !authorized() || (!complete && (localPause || lastTime >= limit()))) return;
+        if (disposed || latest.current.stopped || !authorized() || (complete && !freeControls()) || (!complete && (localPause || lastTime >= limit()))) return;
         const delay = gated ? (latest.current.playback?.startedAt || 0) - Date.now() : 0;
         if (delay > 0) {
             environment.clearTimeout(launchTimer);
@@ -57,8 +58,8 @@ export function createMediaStopPlayback({ element, media, gated, session, storag
     const check = () => {
         environment.clearTimeout(timer);
         if (!initialized) return;
-        if (latest.current.stopped || !authorized()) { pause(); paint(); return; }
-        if (!complete && element.playbackRate !== 1) element.playbackRate = 1;
+        if (!freeControls() && element.playbackRate !== 1) element.playbackRate = 1;
+        if (latest.current.stopped || !authorized() || (complete && !freeControls())) { pause(); paint(); return; }
         if (!element.seeking) lastTime = element.currentTime;
         const end = limit();
         if (!complete && released() < points.length && lastTime >= end) {
@@ -92,12 +93,13 @@ export function createMediaStopPlayback({ element, media, gated, session, storag
         }
     };
     const seeking = () => {
-        if (!gated || complete) return;
+        if (!gated || freeControls()) return;
         if (internalTarget !== null && Math.abs(element.currentTime - internalTarget) < 0.005) return;
         seek(lastTime);
     };
     const seeked = () => { internalTarget = null; check(); };
     const played = () => {
+        if (complete && (!freeControls() || latest.current.stopped)) { pause(); return; }
         if (!complete && (!authorized() || latest.current.stopped || localPause || lastTime >= limit())) { pause(); return; }
         playing = true;
         resume = false;
@@ -132,12 +134,12 @@ export function createMediaStopPlayback({ element, media, gated, session, storag
         sync: check,
         buzzPause: () => { localPause = true; resume = true; pause(); persist(true); paint(); },
         toggle: () => {
-            if (latest.current.stopped) return;
+            if (latest.current.stopped || (complete && !freeControls())) return;
             if (complete && !element.paused) pause();
             else { localPause = false; resume = false; if (complete && element.ended) seek(0); play(); persist(true); }
             paint();
         },
-        seek: (time) => { if (complete) { seek(time); persist(true); paint(); } }
+        seek: (time) => { if (freeControls() && !latest.current.stopped) { seek(time); persist(true); paint(); } }
     };
     paint();
     initialize();
