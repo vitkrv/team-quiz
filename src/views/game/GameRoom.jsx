@@ -882,9 +882,9 @@ function GameRoomContent({ room, roomCode, user, onPrepareRoomExit, onLeaveRoom,
                     </div>
 
                     <div className="flex flex-wrap gap-3">
-                        {Object.values(room.players).map((p, i) => (
-                            <div key={i} className={`px-4 py-2 rounded-full border font-medium flex items-center gap-2 ${p.isHost ? 'bg-purple-900/50 border-purple-500/50 text-purple-200' : 'bg-slate-700 border-slate-600 text-white'}`}>
-                                <span className="text-xl">{getPlayerAvatar(p)}</span> {p.name} {p.isHost && <span className="text-xs ml-1 opacity-70">({t('hostLabel')})</span>}
+                        {getPlayerEntries(room.players).map(([playerId, p]) => (
+                            <div key={playerId} className="px-4 py-2 rounded-full border font-medium flex items-center gap-2 bg-slate-700 border-slate-600 text-white">
+                                <span className="text-xl">{getPlayerAvatar(p)}</span> {p.name}
                             </div>
                         ))}
                         {Object.keys(room.players).length === 1 && (
@@ -950,7 +950,6 @@ function GameRoomContent({ room, roomCode, user, onPrepareRoomExit, onLeaveRoom,
                             <PackTitle pack={room.pack} />
                             {room.roundCount > 1 && <span className="ml-2 text-xs text-slate-400">{t('packRound', { round: (room.currentRoundIndex || 0) + 1 })} / {room.roundCount}</span>}
                         </h1>
-                        <span className="hidden shrink-0 rounded-full bg-slate-800 px-3 py-1 font-mono text-xs text-slate-400 sm:inline-flex">{t('codeLabel', { roomCode: invitationCode })}</span>
                         <button
                             onClick={() => setIsLeaderboardOpen(true)}
                             className="inline-flex shrink-0 items-center justify-center rounded-lg border border-slate-700 p-2 text-slate-300 hover:bg-slate-800 md:hidden"
@@ -961,7 +960,6 @@ function GameRoomContent({ room, roomCode, user, onPrepareRoomExit, onLeaveRoom,
                         </button>
                     </div>
                     <div className="flex w-full min-w-0 items-center justify-between gap-2 text-xs font-medium text-slate-300 md:w-auto md:justify-end md:text-sm">
-                        <span className="shrink-0 rounded-full bg-slate-800 px-2 py-1 font-mono text-[11px] text-slate-400 sm:hidden">{t('codeLabel', { roomCode: invitationCode })}</span>
                         {room.currentTurn && room.players[room.currentTurn] && (
                             <span className="min-w-0 flex-1 truncate text-right md:flex-none">
                                 {t('currentPick')} <span className="font-bold text-yellow-400">{room.players[room.currentTurn].name}</span>

@@ -863,7 +863,7 @@ export default function ActiveQuestionView({ room, roomCode, roomRef, user, isHo
         <>
             {buzzer.enabled && !isSurpriseQuestion && !isAnswerRevealed && (
                 <div className="mt-3 shrink-0 text-center text-sm text-slate-400" role="status" aria-live="polite">
-                    {buzzer.status ? <p className={buzzer.error ? 'text-red-300' : 'font-bold'}>{t(buzzer.status)}</p> : null}
+                    {buzzer.status ? <p className={buzzer.error ? 'text-red-300' : isHost && buzzer.status === 'buzzCollecting' ? 'font-bold text-yellow-400' : 'font-bold'}>{t(buzzer.status)}</p> : null}
                     {buzzer.error === 'buzzNotAccepted' && canIBuzz && !buzzer.waitingForHost ? <p>{t('buzzRetryAvailable')}</p> : null}
                     {!buzzer.online ? <p>{t('buzzOffline')}</p> : !clockQuality.ready ? <p>{t('buzzClockSyncing')}</p>
                         : Date.now() - clockQuality.lastSyncedAt > 6 * 60 * 1000 ? <p>{t('buzzClockStale')}</p>
@@ -1100,9 +1100,6 @@ export default function ActiveQuestionView({ room, roomCode, roomRef, user, isHo
                             {!isSurpriseQuestion && answerTimer}
                         </div>
                     )}
-                    {!isAnswerRevealed && !isSurpriseQuestion && !hasBuzzed && !buzzer.collecting && (
-                        <p className="text-sm text-slate-400">{t('waitingForBuzz')}</p>
-                    )}
                     {!isAnswerRevealed && hasGatedQuestionMedia && (
                         <div className="flex flex-col gap-3">
                             {(!isQuestionMediaStarted || hasPendingMediaStop || hostNeedsMediaResume
@@ -1165,6 +1162,9 @@ export default function ActiveQuestionView({ room, roomCode, roomRef, user, isHo
                         >
                             {t('continue')}
                         </button>
+                    )}
+                    {!isAnswerRevealed && !isSurpriseQuestion && !hasBuzzed && !buzzer.collecting && (
+                        <p className="text-sm text-slate-400">{t('waitingForBuzz')}</p>
                     )}
                     {buzzerStatus}
                 </aside>

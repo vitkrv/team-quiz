@@ -158,7 +158,11 @@ and 390 px mobile widths:
    category hold cancellation, stable selection, focus after adding/deleting/closing,
    and empty board space. Check Previous/Next navigation, Escape/backdrop dismissal,
    and return focus from the question dialog. Check round deletion cancellation separately.
-4. Check surprise minimum/maximum/display values and round increment hints, both
+4. Open the question-mark help beside Surprise Question in Form and the Table
+   question dialog, with the checkbox both on and off. Check introduction, example,
+   then details; keyboard focus containment, Escape closing only help, backdrop/close
+   dismissal, and focus returning to the trigger without toggling the checkbox.
+   Check surprise minimum/maximum/display values and round increment hints, both
    scoring mechanics, both prize images, sharing, emoji, and cross-mode save/reopen.
 5. Upload, replace, remove, and preview question/answer image/audio/video. Test local
    and web-image drops, media-paste confirmation/cancellation, invalid files, failure

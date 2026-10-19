@@ -50,15 +50,15 @@ export default function LanguagePicker({ className = '' }) {
     const { language, setLanguage, t } = useLanguage();
 
     return (
-        <div className={`flex flex-col items-center gap-3 ${className}`}>
-            <div className="text-xs font-bold uppercase tracking-widest text-slate-500">{t('interfaceLanguage')}</div>
-            <div className="flex items-center gap-3 rounded-full border border-slate-700 bg-slate-950/60 px-3 py-2 shadow-lg">
+        <div className={`flex flex-col items-center gap-[9px] ${className}`}>
+            <div className="text-[9px] font-bold uppercase leading-3 tracking-widest text-slate-500">{t('interfaceLanguage')}</div>
+            <div className="flex items-center gap-[9px] rounded-full border border-slate-700 bg-slate-950/60 px-[9px] py-1.5 shadow-lg">
                 {LANGUAGES.map((item) => (
                     <button
                         key={item.code}
                         type="button"
                         onClick={() => setLanguage(item.code)}
-                        className={`h-9 w-14 overflow-hidden rounded-md border border-slate-700 bg-slate-900 transition-all hover:border-blue-300 focus:outline-none focus:ring-2 focus:ring-blue-400 ${language === item.code ? 'ring-2 ring-blue-400' : ''}`}
+                        className={`h-[27px] w-[42px] overflow-hidden rounded-[4.5px] border border-slate-700 bg-slate-900 transition-all hover:border-blue-300 focus:outline-none focus:ring-2 focus:ring-blue-400 ${language === item.code ? 'ring-2 ring-blue-400' : ''}`}
                         title={item.label}
                         aria-label={item.label}
                         aria-pressed={language === item.code}
