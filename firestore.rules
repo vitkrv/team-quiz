@@ -2,6 +2,9 @@ rules_version = '2';
 
 service cloud.firestore {
   match /databases/{database}/documents {
+    function validTheme(data) {
+      return !('themeId' in data) || data.themeId in ['default', 'halloween'];
+    }
     match /artifacts/{appId}/public/data/packs/{packId} {
       allow read: if isAdmin(appId)
         || (
@@ -12,10 +15,12 @@ service cloud.firestore {
           )
         );
       allow create: if isGoogleUser()
-        && request.resource.data.ownerId == request.auth.uid;
+        && request.resource.data.ownerId == request.auth.uid
+        && validTheme(request.resource.data);
       allow update: if isGoogleUser()
         && resource.data.ownerId == request.auth.uid
-        && request.resource.data.ownerId == request.auth.uid;
+        && request.resource.data.ownerId == request.auth.uid
+        && validTheme(request.resource.data);
       allow delete: if isGoogleUser()
         && resource.data.ownerId == request.auth.uid;
     }
@@ -32,6 +37,7 @@ service cloud.firestore {
     match /artifacts/{appId}/public/data/rooms/{gameId} {
       allow read: if isAdmin(appId) || isGoogleUser();
       allow create: if isGoogleUser()
+        && validTheme(request.resource.data)
         && request.resource.data.hostId == request.auth.uid
         && request.resource.data.buzzerPolicyVersion == 1 && request.resource.data.buzzerRoundId == null
         && request.resource.data.dataVersion == 2
@@ -46,7 +52,7 @@ service cloud.firestore {
         && request.resource.data.packId is string
         && canHostPack(appId, request.resource.data.packId, request.auth.uid);
       allow update: if isGoogleUser()
-        && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['roomCode', 'hostId', 'recapVersion', 'buzzerPolicyVersion'])
+        && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['roomCode', 'hostId', 'recapVersion', 'buzzerPolicyVersion', 'themeId'])
         && (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['mediaPlayback'])
           || resource.data.hostId == request.auth.uid)
         && validBuzzerRoomUpdate(appId, gameId, resource.data, request.resource.data)

@@ -49,9 +49,9 @@ function SurprisePlayerModal({ players, question, onPick, onClose, t }) {
 
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-6">
-            <div className="w-full max-w-md rounded-xl border border-yellow-500/50 bg-slate-900 shadow-2xl">
-                <div className="flex items-center justify-between border-b border-slate-800 p-5">
-                    <h2 className="text-xl font-bold text-white">{t('selectSurprisePlayer')}</h2>
+            <div className="w-full max-w-md rounded-xl border border-yellow-500/50 bg-slate-900 theme-room-background shadow-2xl">
+                <div className="flex items-center justify-between border-b border-slate-800 theme-border p-5">
+                    <h2 className="text-xl font-bold text-white theme-text">{t('selectSurprisePlayer')}</h2>
                     <button onClick={onClose} className="text-slate-500 hover:text-white">
                         <X size={22} />
                     </button>
@@ -64,7 +64,7 @@ function SurprisePlayerModal({ players, question, onPick, onClose, t }) {
                         type="button"
                         onClick={() => onPick(null)}
                         disabled={playerEntries.length === 0}
-                        className="flex w-full items-center justify-center gap-2 rounded-lg border border-yellow-500/50 bg-yellow-500 px-4 py-3 font-black text-slate-950 transition-colors hover:bg-yellow-300 disabled:cursor-not-allowed disabled:border-slate-700 disabled:bg-slate-800 disabled:text-slate-500"
+                        className="flex w-full items-center justify-center gap-2 rounded-lg border border-yellow-500/50 bg-yellow-500 theme-primary px-4 py-3 font-black text-slate-950 transition-colors hover:bg-yellow-300 disabled:cursor-not-allowed disabled:border-slate-700 disabled:bg-slate-800 disabled:text-slate-500"
                     >
                         <Shuffle size={18} />
                         {t('surpriseRandomPlayer')}
@@ -73,7 +73,7 @@ function SurprisePlayerModal({ players, question, onPick, onClose, t }) {
                         <button
                             key={playerId}
                             onClick={() => onPick(playerId)}
-                            className="flex w-full items-center gap-3 rounded-lg border border-slate-800 bg-slate-950 p-4 text-left font-bold text-slate-100 hover:border-yellow-500/60 hover:bg-slate-800"
+                            className="flex w-full items-center gap-3 rounded-lg border border-slate-800 theme-border bg-slate-950 theme-surface p-4 text-left font-bold text-slate-100 hover:border-yellow-500/60 hover:bg-slate-800"
                         >
                             <span className="text-2xl">{player.avatar}</span>
                             <span className="truncate">{player.name}</span>
@@ -248,7 +248,7 @@ export default function BoardView({ room, roomRef, user, isHost, isSpectator = f
             )}
             {!allDone && (
                 <div className="mb-4 flex flex-col items-stretch gap-3 sm:flex-row sm:items-center sm:justify-between md:mb-6">
-                    <h2 className="text-xl font-black leading-tight text-slate-300 md:text-2xl">
+                    <h2 className="text-xl font-black leading-tight text-slate-300 theme-muted md:text-2xl">
                         {isHost ? t('hostAwaitingSelection') : isSpectator ? t('spectatorWaitingForPick') : isMyTurn ? t('yourTurnPickQuestion') : t('waitingForPick')}
                     </h2>
                     {isHost && (
@@ -265,13 +265,13 @@ export default function BoardView({ room, roomRef, user, isHost, isSpectator = f
 
             {allDone ? (
                 <div className="flex flex-1 flex-col items-center justify-center text-center">
-                    <h2 className="mb-6 text-2xl font-bold text-white md:text-4xl">
+                    <h2 className="mb-6 text-2xl font-bold text-white theme-text md:text-4xl">
                         {isHost ? t('boardEmpty') : t('boardCompleteWaitingResults')}
                     </h2>
                     {isHost && (
                         <button
                             onClick={hasTopScoreTie ? () => setIsTieBreakerSetupOpen(true) : handleHostEndGame}
-                            className="rounded-xl bg-purple-600 px-6 py-3 text-lg font-black text-white shadow-lg shadow-purple-600/30 transition-transform hover:scale-105 hover:bg-purple-500 md:px-8 md:py-4 md:text-2xl"
+                            className="rounded-xl bg-purple-600 theme-primary px-6 py-3 text-lg font-black text-white theme-text shadow-lg shadow-purple-600/30 transition-transform hover:scale-105 hover:bg-purple-500 md:px-8 md:py-4 md:text-2xl"
                         >
                             {hasTopScoreTie ? t('determineWinner') : t('showFinalResults')}
                         </button>
@@ -285,7 +285,7 @@ export default function BoardView({ room, roomRef, user, isHost, isSpectator = f
                     >
                         {categories.map((cat, i) => (
                             <div key={cat.id || i} className="flex min-h-0 flex-col gap-2 md:gap-4">
-                                <div className="flex h-16 items-center justify-center rounded-lg border-2 border-blue-500 bg-blue-900 p-2 text-center shadow-md shadow-black/50 md:h-24 md:p-3">
+                                <div className="flex h-16 items-center justify-center rounded-lg border-2 border-blue-500 theme-secondary-border bg-blue-900 theme-question-surface p-2 text-center shadow-md shadow-black/50 md:h-24 md:p-3">
                                     <span className="text-xs font-bold uppercase leading-tight tracking-wide text-blue-100 drop-shadow-md md:text-base">
                                         {cat.name}
                                     </span>
@@ -326,7 +326,7 @@ export default function BoardView({ room, roomRef, user, isHost, isSpectator = f
                                                     flex min-h-14 items-center justify-center rounded-lg font-mono text-xl font-black transition-all duration-200 md:min-h-0 md:text-4xl
                                                     ${isAvailable
                                                         ? (shouldShowAvailableQuestion
-                                                            ? `bg-blue-800 hover:bg-blue-700 text-yellow-400 cursor-pointer shadow-[inset_0_-4px_0_0_rgba(0,0,0,0.3)] shadow-black hover:shadow-[0_0_18px_3px_rgba(59,130,246,0.55),inset_0_-4px_0_0_rgba(0,0,0,0.3)] ${isPulsed ? 'question-tile-pulse' : ''}`
+                                                            ? `bg-blue-800 theme-tile hover:bg-blue-700 text-yellow-400 theme-accent cursor-pointer shadow-[inset_0_-4px_0_0_rgba(0,0,0,0.3)] shadow-black hover:shadow-[0_0_18px_3px_rgba(59,130,246,0.55),inset_0_-4px_0_0_rgba(0,0,0,0.3)] ${isPulsed ? 'question-tile-pulse' : ''}`
                                                             : 'bg-blue-900/50 text-yellow-500/50 cursor-not-allowed border border-blue-800/30')
                                                         : 'bg-gray-400/10 border-2 border-slate-500/10 text-transparent cursor-default'
                                                     }

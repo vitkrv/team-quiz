@@ -22,8 +22,8 @@ export default function PlayersScoreProgression({ players, scores, t, number }) 
     const y = (value) => 180 - (value - min) / (max - min) * 160;
     const toggle = (id) => setHighlighted((previous) => previous === id ? null : id);
     return <>
-        <p className="text-sm text-slate-400 mb-3">{t('recapChartHint')}</p>
-        <svg viewBox="0 0 600 220" role="group" aria-label={t('recapAllProgression')} className="w-full rounded-lg bg-slate-950">
+        <p className="text-sm text-slate-400 theme-muted mb-3">{t('recapChartHint')}</p>
+        <svg viewBox="0 0 600 220" role="group" aria-label={t('recapAllProgression')} className="w-full rounded-lg bg-slate-950 theme-surface">
             {[min, (min + max) / 2, max].map((value) => <g key={value}>
                 <line x1="72" x2="580" y1={y(value)} y2={y(value)} stroke="#334155" strokeDasharray="4 4" />
                 <text x="64" y={y(value) + 4} textAnchor="end" fill="#94a3b8" fontSize="12">{number(value)}</text>
@@ -45,9 +45,9 @@ export default function PlayersScoreProgression({ players, scores, t, number }) 
         <div className="flex flex-wrap gap-2 mt-4" role="group" aria-label={t('recapChartLegend')}>
             {series.map(({ id, player, color, values }) => <button key={id} type="button" onClick={() => toggle(id)} aria-pressed={highlighted === id}
                 aria-label={t('recapHighlightPlayer', { player: player.name })}
-                className={`flex items-center gap-2 min-w-0 max-w-full rounded-lg border px-3 py-2 text-left text-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-white ${highlighted === id ? 'border-white bg-slate-700 font-bold' : 'border-slate-600'} ${highlighted && highlighted !== id ? 'opacity-50' : ''}`}>
+                className={`flex items-center gap-2 min-w-0 max-w-full rounded-lg border px-3 py-2 text-left text-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-white ${highlighted === id ? 'border-white bg-slate-700 theme-raised font-bold' : 'border-slate-600'} ${highlighted && highlighted !== id ? 'opacity-50' : ''}`}>
                 <span className="h-3 w-3 shrink-0 rounded-full" style={{ backgroundColor: color }} aria-hidden="true" />
-                <span className="break-words min-w-0">{player.avatar} {player.name} <span className="text-slate-300">{t('scorePts', { score: number(values.at(-1)) })}</span></span>
+                <span className="break-words min-w-0">{player.avatar} {player.name} <span className="text-slate-300 theme-muted">{t('scorePts', { score: number(values.at(-1)) })}</span></span>
             </button>)}
         </div>
     </>;

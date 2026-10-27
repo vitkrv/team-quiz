@@ -59,7 +59,7 @@ try {
     globalThis.__gameStorageTest = { db: hostDb, appId: namespace };
     await mkdir('.firebase/validation', { recursive: true });
     await build({
-        stdin: { contents: "export * from './src/actions/roomActions.js'; export * from './src/actions/gameActions.js'; export * from './src/actions/gameStorage.js'; export * from './src/actions/buzzerActions.js';", resolveDir: process.cwd() },
+        stdin: { contents: "export * from './src/utils/packTheme.js'; export * from './src/actions/roomActions.js'; export * from './src/actions/gameActions.js'; export * from './src/actions/gameStorage.js'; export * from './src/actions/buzzerActions.js';", resolveDir: process.cwd() },
         bundle: true, platform: 'node', format: 'esm', external: ['firebase/firestore'],
         outfile: '.firebase/validation/actions.mjs',
         plugins: [{ name: 'emulator-config', setup(builder) {
@@ -235,6 +235,62 @@ try {
         await updateDoc(ref(seedDb, 'packs', 'pack'), { isPublic: false });
         await denied(actions.startGame(roomRef(hostDb, pendingId), { id: 'host', name: 'host' }, t));
         assert.equal((await getDocFromServer(roomRef(hostDb, pendingId))).data().status, 'lobby');
+    });
+    await check('theme IDs, balanced avatars, and rejoining', async () => {
+        assert.equal(actions.normalizeThemeId('unknown'), 'default');
+        assert.equal(actions.normalizeThemeId(undefined), 'default');
+        const players = { host: { isHost: true, avatar: '👑' } };
+        for (let index = 0; index < 20; index++) {
+            const uid = 'theme-player-' + index;
+            players[uid] = { avatar: actions.choosePlayerAvatar(players, uid, 'halloween', () => 0) };
+            if (index === 14) assert.equal(new Set(Object.values(players).filter(p => !p.isHost).map(p => p.avatar)).size, 15);
+        }
+        const pool = actions.getPackTheme('halloween').avatars;
+        const counts = pool.map(a => Object.values(players).filter(p => p.avatar === a).length);
+        assert.equal(Math.max(...counts), 2);
+        assert.equal(actions.choosePlayerAvatar(players, 'theme-player-0', 'halloween'), players['theme-player-0'].avatar);
+        const vacated = players['theme-player-10'].avatar;
+        delete players['theme-player-10'];
+        assert.equal(actions.choosePlayerAvatar(players, 'replacement', 'halloween', () => 0), vacated);
+    });
+    await check('theme snapshot, pack persistence, immutable room theme, and legacy compatibility', async () => {
+        await setDoc(ref(seedDb, 'packs', 'pack'), { ...pack, themeId: 'halloween' });
+        const themedId = await newRoom();
+        const themedRoom = roomRef(hostDb, themedId);
+        assert.equal((await getDocFromServer(themedRoom)).data().themeId, 'halloween');
+        await updateDoc(roomRef(seedDb, themedId), { players: { host: { name: 'host', score: 0, isHost: true, avatar: '👑' } } });
+        for (let batch = 0; batch < 5; batch++) {
+            await Promise.all(Array.from({ length: 4 }, async (_, offset) => {
+                const uid = 'theme-' + (batch * 4 + offset);
+                const db = client(uid);
+                const target = roomRef(db, themedId);
+                await runTransaction(db, async transaction => {
+                    const room = (await transaction.get(target)).data();
+                    assert.ok(Object.keys(room.players).length < 21);
+                    transaction.update(target, { ['players.' + uid]: { name: uid, isHost: false, score: 0, avatar: actions.choosePlayerAvatar(room.players, uid, room.themeId) } });
+                });
+            }));
+        }
+        const joined = (await getDocFromServer(themedRoom)).data().players;
+        assert.equal(Object.keys(joined).length, 21);
+        const avatarCounts = actions.getPackTheme('halloween').avatars.map(a => Object.values(joined).filter(p => p.avatar === a).length);
+        assert.equal(Math.min(...avatarCounts), 1);
+        assert.equal(Math.max(...avatarCounts), 2);
+        await denied(updateDoc(themedRoom, { themeId: 'default' }));
+        await denied(updateDoc(roomRef(playerDb, themedId), { themeId: 'default' }));
+        await denied(updateDoc(themedRoom, { themeId: deleteField() }));
+        await denied(updateDoc(ref(hostDb, 'packs', 'pack'), { themeId: 'invalid' }));
+        await updateDoc(ref(hostDb, 'packs', 'pack'), { prize: {}, themeId: 'default' });
+        await actions.startGame(themedRoom, { id: 'host', name: 'host' }, t);
+        assert.equal((await getDocFromServer(themedRoom)).data().themeId, 'halloween');
+        await updateDoc(ref(hostDb, 'packs', 'pack'), { themeId: 'halloween', name: 'Edited source' });
+        await actions.handleEndGame(themedRoom, event('game_finished'));
+        assert.equal((await getDocFromServer(themedRoom)).data().themeId, 'halloween');
+        await setDoc(ref(hostDb, 'packs', 'pack'), pack);
+        const legacyId = await newRoom();
+        assert.equal((await getDocFromServer(roomRef(hostDb, legacyId))).data().themeId, 'default');
+        await updateDoc(roomRef(seedDb, legacyId), { themeId: deleteField() });
+        await denied(updateDoc(roomRef(hostDb, legacyId), { themeId: 'halloween' }));
     });
     await verifyGameRecap({ actions, check, denied, hostDb, playerDb, lateDb, spectatorDb, adminDb, seedDb, namespace, ref, roomRef, event, t });
     await verifyBuzzer({ actions, check, denied, hostDb, playerDb, lateDb, spectatorDb, seedDb, namespace, ref, roomRef, event, t, client });

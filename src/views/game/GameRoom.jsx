@@ -1,3 +1,4 @@
+import PackThemeScope from '../../components/PackThemeScope';
 import { getRoundCategories } from '../../utils/packRounds';
 import { ANSWER_WINDOW_MS, LATE_BUZZ_WINDOW_MS, timestampMillis } from '../../utils/buzzerPolicy';
 import { startGame } from '../../actions/roomActions';
@@ -215,21 +216,21 @@ function ScoreEditorModal({ players, roomRef, host, onClose, t }) {
 
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-6">
-            <div className="w-full max-w-lg rounded-xl border border-slate-700 bg-slate-900 shadow-2xl">
-                <div className="flex items-center justify-between border-b border-slate-800 p-5">
-                    <h2 className="text-xl font-bold text-white">{t('advancedScoreEditor')}</h2>
+            <div className="w-full max-w-lg rounded-xl border border-slate-700 theme-border bg-slate-900 theme-room-background shadow-2xl">
+                <div className="flex items-center justify-between border-b border-slate-800 theme-border p-5">
+                    <h2 className="text-xl font-bold text-white theme-text">{t('advancedScoreEditor')}</h2>
                     <button onClick={onClose} className="text-slate-500 hover:text-white">
                         <X size={22} />
                     </button>
                 </div>
                 <div className="max-h-[60vh] space-y-3 overflow-y-auto p-5">
                     {playerEntries.length === 0 ? (
-                        <div className="rounded-lg border border-dashed border-slate-700 p-8 text-center text-slate-500">
+                        <div className="rounded-lg border border-dashed border-slate-700 theme-border p-8 text-center text-slate-500">
                             {t('noPlayersForScoreEditor')}
                         </div>
                     ) : (
                         playerEntries.map(([playerId, player]) => (
-                            <label key={playerId} className="flex items-center justify-between gap-4 rounded-lg border border-slate-800 bg-slate-950 p-4">
+                            <label key={playerId} className="flex items-center justify-between gap-4 rounded-lg border border-slate-800 theme-border bg-slate-950 theme-surface p-4">
                                 <span className="flex min-w-0 items-center gap-3">
                                     <span className="text-2xl">{player.avatar}</span>
                                     <span className="truncate font-bold text-slate-100">{player.name}</span>
@@ -238,20 +239,20 @@ function ScoreEditorModal({ players, roomRef, host, onClose, t }) {
                                     type="number"
                                     value={scores[playerId] ?? '0'}
                                     onChange={(event) => setScores({ ...scores, [playerId]: event.target.value })}
-                                    className="w-28 rounded-lg border border-slate-700 bg-slate-900 p-2 text-right font-mono text-yellow-400 outline-none focus:border-blue-500"
+                                    className="w-28 rounded-lg border border-slate-700 theme-border bg-slate-900 theme-room-background p-2 text-right font-mono text-yellow-400 theme-accent outline-none focus:border-blue-500"
                                 />
                             </label>
                         ))
                     )}
                 </div>
-                <div className="flex justify-end gap-3 border-t border-slate-800 p-5">
-                    <button onClick={onClose} className="rounded-lg border border-slate-700 px-4 py-2 font-bold text-slate-300 hover:bg-slate-800">
+                <div className="flex justify-end gap-3 border-t border-slate-800 theme-border p-5">
+                    <button onClick={onClose} className="rounded-lg border border-slate-700 theme-border px-4 py-2 font-bold text-slate-300 theme-muted hover:bg-slate-800">
                         {t('cancel')}
                     </button>
                     <button
                         onClick={handleSave}
                         disabled={isSaving || playerEntries.length === 0}
-                        className="rounded-lg bg-blue-600 px-5 py-2 font-bold text-white hover:bg-blue-500 disabled:bg-slate-700 disabled:text-slate-500"
+                        className="rounded-lg bg-blue-600 theme-primary px-5 py-2 font-bold text-white theme-text hover:bg-blue-500 disabled:bg-slate-700 disabled:text-slate-500"
                     >
                         {isSaving ? t('saving') : t('saveScores')}
                     </button>
@@ -262,12 +263,12 @@ function ScoreEditorModal({ players, roomRef, host, onClose, t }) {
 }
 
 const PlayerName = ({ children }) => (
-    <span className="font-black text-yellow-400">{children}</span>
+    <span className="font-black text-yellow-400 theme-accent">{children}</span>
 );
 
 const PointValue = ({ value, showSign = false }) => {
     const numericValue = Number(value) || 0;
-    const color = numericValue >= 0 ? 'text-green-400' : 'text-red-400';
+    const color = numericValue >= 0 ? 'text-green-400 theme-positive' : 'text-red-400';
     const displayValue = showSign && numericValue > 0 ? `+${numericValue}` : numericValue;
 
     return <span className={`font-black ${color}`}>{displayValue}</span>;
@@ -332,24 +333,24 @@ function HistoryModal({ room, gameId, onClose, t }) {
 
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-6">
-            <div className="w-full max-w-2xl rounded-xl border border-slate-700 bg-slate-900 shadow-2xl">
-                <div className="flex items-center justify-between border-b border-slate-800 p-5">
-                    <h2 className="text-xl font-bold text-white">{t('gameHistory')}</h2>
+            <div className="w-full max-w-2xl rounded-xl border border-slate-700 theme-border bg-slate-900 theme-room-background shadow-2xl">
+                <div className="flex items-center justify-between border-b border-slate-800 theme-border p-5">
+                    <h2 className="text-xl font-bold text-white theme-text">{t('gameHistory')}</h2>
                     <button onClick={onClose} className="text-slate-500 hover:text-white">
                         <X size={22} />
                     </button>
                 </div>
                 <div className="max-h-[65vh] overflow-y-auto p-5">
-                    {loading && <p className="mb-3 text-slate-400">{t('gameDataLoading')}</p>}
+                    {loading && <p className="mb-3 text-slate-400 theme-muted">{t('gameDataLoading')}</p>}
                     {error && <button onClick={retry} className="mb-3 text-red-300">{t('historyLoadFailed')} {t('gameDataRetry')}</button>}
                     {sortedHistory.length === 0 && !loading && !error ? (
-                        <div className="rounded-lg border border-dashed border-slate-700 p-8 text-center text-slate-500">
+                        <div className="rounded-lg border border-dashed border-slate-700 theme-border p-8 text-center text-slate-500">
                             {t('historyEmpty')}
                         </div>
                     ) : (
                         <div className="space-y-3">
                             {sortedHistory.map((item) => (
-                                <div key={item.id} className="rounded-lg border border-slate-800 bg-slate-950 p-4">
+                                <div key={item.id} className="rounded-lg border border-slate-800 theme-border bg-slate-950 theme-surface p-4">
                                     <div className="mb-1 flex items-center justify-between gap-4 text-xs uppercase tracking-widest text-slate-500">
                                         <span>{item.actorName || t('hostLabel')}</span>
                                         <time dateTime={new Date(item.timestamp || 0).toISOString()}>
@@ -361,7 +362,7 @@ function HistoryModal({ room, gameId, onClose, t }) {
                             ))}
                         </div>
                     )}
-                    {hasMore && <button onClick={loadMore} disabled={loading} className="mt-4 rounded-lg bg-slate-800 px-4 py-2 text-white disabled:opacity-50">{t('historyLoadMore')}</button>}
+                    {hasMore && <button onClick={loadMore} disabled={loading} className="mt-4 rounded-lg bg-slate-800 theme-surface px-4 py-2 text-white theme-text disabled:opacity-50">{t('historyLoadMore')}</button>}
                 </div>
             </div>
         </div>
@@ -371,21 +372,21 @@ function HistoryModal({ room, gameId, onClose, t }) {
 function LobbyLeaveConfirmModal({ isLeaving, onCancel, onConfirm, t }) {
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-6" role="dialog" aria-modal="true" aria-labelledby="leave-lobby-title">
-            <div className="w-full max-w-md rounded-xl border border-slate-700 bg-slate-900 shadow-2xl">
-                <div className="flex items-center justify-between border-b border-slate-800 p-5">
-                    <h2 id="leave-lobby-title" className="text-xl font-bold text-white">{t('leaveLobbyConfirmTitle')}</h2>
+            <div className="w-full max-w-md rounded-xl border border-slate-700 theme-border bg-slate-900 theme-room-background shadow-2xl">
+                <div className="flex items-center justify-between border-b border-slate-800 theme-border p-5">
+                    <h2 id="leave-lobby-title" className="text-xl font-bold text-white theme-text">{t('leaveLobbyConfirmTitle')}</h2>
                     <button onClick={onCancel} disabled={isLeaving} className="text-slate-500 hover:text-white disabled:opacity-50" aria-label={t('cancel')}>
                         <X size={22} />
                     </button>
                 </div>
-                <div className="p-5 text-slate-300">
+                <div className="p-5 text-slate-300 theme-muted">
                     {t('leaveLobbyConfirmDescription')}
                 </div>
-                <div className="flex justify-end gap-3 border-t border-slate-800 p-5">
-                    <button onClick={onCancel} disabled={isLeaving} className="rounded-lg border border-slate-700 px-4 py-2 font-bold text-slate-300 hover:bg-slate-800 disabled:opacity-50">
+                <div className="flex justify-end gap-3 border-t border-slate-800 theme-border p-5">
+                    <button onClick={onCancel} disabled={isLeaving} className="rounded-lg border border-slate-700 theme-border px-4 py-2 font-bold text-slate-300 theme-muted hover:bg-slate-800 disabled:opacity-50">
                         {t('cancel')}
                     </button>
-                    <button onClick={onConfirm} disabled={isLeaving} className="rounded-lg bg-red-600 px-5 py-2 font-bold text-white hover:bg-red-500 disabled:bg-slate-700 disabled:text-slate-500">
+                    <button onClick={onConfirm} disabled={isLeaving} className="rounded-lg bg-red-600 px-5 py-2 font-bold text-white theme-text hover:bg-red-500 disabled:bg-slate-700 disabled:text-slate-500">
                         {isLeaving ? t('leavingLobby') : t('leave')}
                     </button>
                 </div>
@@ -406,7 +407,7 @@ function LeaderboardContent({ room, roomRef, isHost, viewerId, now, createScoreA
                     const isSelf = !isHost && pid === viewerId;
 
                     return (
-                        <div key={pid} className={`group flex items-center justify-between rounded-lg border p-3 ${room.currentTurn === pid ? 'bg-blue-900/30 border-blue-500/50 shadow-[inset_2px_0_0_0_#3b82f6]' : 'bg-slate-800/50 border-transparent'}`}>
+                        <div key={pid} className={`group flex items-center justify-between rounded-lg border p-3 ${room.currentTurn === pid ? 'theme-current-player bg-blue-900/30 border-blue-500/50 shadow-[inset_2px_0_0_0_#3b82f6]' : 'bg-slate-800/50 theme-surface border-transparent'}`}>
                             <div className="flex min-w-0 items-center gap-2 pr-2">
                                 <span className="relative flex h-8 w-14 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-transparent">
                                     <span className={`absolute inset-0 flex items-center justify-center rounded-lg text-2xl transition-all duration-200 ${isSelf ? 'bg-slate-900/40 ring-1 ring-inset ring-slate-400/30' : ''} ${buzzDeltaLabel ? 'scale-90 opacity-0' : 'scale-100 opacity-100'}`}>
@@ -423,21 +424,21 @@ function LeaderboardContent({ room, roomRef, isHost, viewerId, now, createScoreA
                                     >
                                         {player.name}
                                     </div>
-                                    <div className="font-mono text-sm text-yellow-400">{t('scorePts', { score: player.score })}</div>
+                                    <div className="font-mono text-sm text-yellow-400 theme-accent">{t('scorePts', { score: player.score })}</div>
                                 </div>
                             </div>
                             {isHost && (
                                 <div className="flex flex-col gap-1 opacity-100 transition-opacity md:opacity-0 md:group-hover:opacity-100">
                                     <button
                                         onClick={() => adjustScore(roomRef, pid, player.score, 100, createScoreAdjustmentHistory(player, 100, player.score + 100))}
-                                        className="p-1 text-slate-400 hover:text-green-400"
+                                        className="p-1 text-slate-400 theme-muted hover:text-green-400"
                                         aria-label={`Add points to ${player.name}`}
                                     >
                                         <PlusCircle size={14}/>
                                     </button>
                                     <button
                                         onClick={() => adjustScore(roomRef, pid, player.score, -100, createScoreAdjustmentHistory(player, -100, player.score - 100))}
-                                        className="p-1 text-slate-400 hover:text-red-400"
+                                        className="p-1 text-slate-400 theme-muted hover:text-red-400"
                                         aria-label={`Remove points from ${player.name}`}
                                     >
                                         <MinusCircle size={14}/>
@@ -458,12 +459,12 @@ function MobileLeaderboardDrawer({ room, roomRef, isHost, viewerId, now, createS
                 type="button"
                 className="absolute inset-0 h-full w-full bg-black/60"
                 onClick={onClose}
-                aria-label="Close leaderboard"
+                aria-label={t('closeLeaderboard', { title: t('leaderboard') })}
             />
-            <aside className="absolute right-0 top-0 flex h-full w-[min(20rem,calc(100vw-2rem))] flex-col border-l border-slate-700 bg-slate-900 shadow-2xl">
-                <div className="flex items-center justify-between border-b border-slate-800 bg-slate-950/80 p-4">
-                    <h2 id="mobile-leaderboard-title" className="text-xs font-black uppercase tracking-widest text-slate-500">{t('leaderboard')}</h2>
-                    <button onClick={onClose} className="rounded-lg border border-slate-700 p-2 text-slate-300 hover:bg-slate-800" aria-label="Close leaderboard">
+            <aside className="absolute right-0 top-0 flex h-full w-[min(20rem,calc(100vw-2rem))] flex-col border-l border-slate-700 theme-border bg-slate-900 theme-room-background shadow-2xl">
+                <div className="flex items-center justify-between border-b border-slate-800 theme-border bg-slate-950/80 p-4">
+                    <h2 id="mobile-leaderboard-title" className="theme-secondary break-words text-xs font-black uppercase tracking-widest text-slate-500">{t('leaderboard')}</h2>
+                    <button onClick={onClose} className="rounded-lg border border-slate-700 theme-border p-2 text-slate-300 theme-muted hover:bg-slate-800" aria-label={t('closeLeaderboard', { title: t('leaderboard') })}>
                         <X size={18} />
                     </button>
                 </div>
@@ -495,7 +496,7 @@ function PrizeModal({ room, roomRef, isHost, t }) {
 
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center overflow-hidden bg-black/40 p-4 backdrop-blur-sm md:p-8">
-            <div className="relative flex h-full max-h-[48rem] w-full max-w-5xl flex-col items-center justify-center gap-5 text-center">
+            <div className="theme-prize-frame relative flex h-full max-h-[48rem] w-full max-w-5xl flex-col items-center justify-center gap-5 text-center">
                 <h2 className="relative z-10 text-5xl font-black uppercase tracking-wide text-yellow-300 drop-shadow-[0_5px_18px_rgba(0,0,0,0.75)] md:text-8xl">
                     {t('prizeTitle')}
                 </h2>
@@ -514,7 +515,7 @@ function PrizeModal({ room, roomRef, isHost, t }) {
                             <button
                                 type="button"
                                 onClick={() => revealPrizeModal(roomRef)}
-                                className="rounded-xl bg-yellow-400 px-6 py-3 text-lg font-black text-slate-950 shadow-lg shadow-yellow-950/40 transition-colors hover:bg-yellow-300"
+                                className="rounded-xl bg-yellow-400 theme-primary px-6 py-3 text-lg font-black text-slate-950 shadow-lg shadow-yellow-950/40 transition-colors hover:bg-yellow-300"
                             >
                                 {t('revealPrize')}
                             </button>
@@ -581,7 +582,7 @@ function CategoryPreviewView({ room, roomRef, isHost, t }) {
                         type="button"
                         onClick={handleAdvance}
                         disabled={isSaving}
-                        className="inline-flex items-center justify-center gap-3 rounded-xl bg-yellow-400 px-6 py-3 text-lg font-black text-slate-950 shadow-lg shadow-yellow-950/40 transition-colors hover:bg-yellow-300 disabled:cursor-wait disabled:bg-slate-700 disabled:text-slate-500 md:px-8 md:py-4 md:text-2xl"
+                        className="inline-flex items-center justify-center gap-3 rounded-xl bg-yellow-400 theme-primary px-6 py-3 text-lg font-black text-slate-950 shadow-lg shadow-yellow-950/40 transition-colors hover:bg-yellow-300 disabled:cursor-wait disabled:bg-slate-700 disabled:text-slate-500 md:px-8 md:py-4 md:text-2xl"
                     >
                         {isLastCategory ? (
                             <>
@@ -759,7 +760,7 @@ function GameRoomContent({ room, roomCode, user, onPrepareRoomExit, onLeaveRoom,
 
     if (room.status === 'lobby') {
         return (
-            <div className="min-h-screen flex flex-col items-center justify-center p-6 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-slate-800 via-slate-900 to-black">
+            <div className="theme-room-background min-h-screen flex flex-col items-center justify-center p-6 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-slate-800 via-slate-900 to-black">
                 {isHost && isHistoryOpen && <HistoryModal room={room} gameId={roomCode} onClose={() => setIsHistoryOpen(false)} t={t} />}
                 {isLeaveLobbyConfirmOpen && (
                     <LobbyLeaveConfirmModal
@@ -771,27 +772,27 @@ function GameRoomContent({ room, roomCode, user, onPrepareRoomExit, onLeaveRoom,
                 )}
                 {isHost && (
                     <div className="absolute top-4 left-4">
-                        <button onClick={leaveRoom} className="text-slate-400 hover:text-white flex items-center gap-2">
+                        <button onClick={leaveRoom} className="text-slate-400 theme-muted hover:text-white flex items-center gap-2">
                             <ArrowLeft size={20} /> {t('leave')}
                         </button>
                     </div>
                 )}
 
                 <div className="text-center mb-12">
-                    <h2 className="text-slate-400 uppercase tracking-widest text-sm mb-2 font-bold">{t('roomCode')}</h2>
+                    <h2 className="text-slate-400 theme-muted uppercase tracking-widest text-sm mb-2 font-bold">{t('roomCode')}</h2>
                     <div className="flex items-center justify-center">
-                        <div className="text-7xl font-black font-mono tracking-widest text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-purple-500 bg-slate-800 px-6 py-5 rounded-2xl border border-slate-700 shadow-2xl">
+                        <div className="theme-room-code text-7xl font-black font-mono tracking-widest text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-purple-500 bg-slate-800 theme-surface px-6 py-5 rounded-2xl border border-slate-700 theme-border shadow-2xl">
                             {invitationCode}
                         </div>
                     </div>
                     <div className="mt-4 flex flex-col sm:flex-row items-center justify-center gap-4 sm:gap-8">
                         <button
                             onClick={handleCopyRoomCode}
-                            className="bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 px-5 py-3 rounded-xl font-bold inline-flex items-center justify-center gap-2 transition-colors shadow-lg"
+                            className="bg-slate-800 theme-surface hover:bg-slate-700 border border-slate-700 theme-border text-slate-200 px-5 py-3 rounded-xl font-bold inline-flex items-center justify-center gap-2 transition-colors shadow-lg"
                         >
                             {copiedRoomCode ? (
                                 <>
-                                    <Check size={20} className="text-green-400" /> {t('roomCodeCopied')}
+                                    <Check size={20} className="text-green-400 theme-positive" /> {t('roomCodeCopied')}
                                 </>
                             ) : (
                                 <>
@@ -801,11 +802,11 @@ function GameRoomContent({ room, roomCode, user, onPrepareRoomExit, onLeaveRoom,
                         </button>
                         <button
                             onClick={handleCopyJoinLink}
-                            className="bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 px-5 py-3 rounded-xl font-bold inline-flex items-center justify-center gap-2 transition-colors shadow-lg"
+                            className="bg-slate-800 theme-surface hover:bg-slate-700 border border-slate-700 theme-border text-slate-200 px-5 py-3 rounded-xl font-bold inline-flex items-center justify-center gap-2 transition-colors shadow-lg"
                         >
                             {copiedJoinLink ? (
                                 <>
-                                    <Check size={20} className="text-green-400" /> {t('joinLinkCopied')}
+                                    <Check size={20} className="text-green-400 theme-positive" /> {t('joinLinkCopied')}
                                 </>
                             ) : (
                                 <>
@@ -816,7 +817,7 @@ function GameRoomContent({ room, roomCode, user, onPrepareRoomExit, onLeaveRoom,
                     </div>
                 </div>
 
-                <div className="mb-6 w-full max-w-2xl rounded-xl border border-slate-700 bg-slate-900/70 p-4 text-center">
+                <div className="mb-6 w-full max-w-2xl rounded-xl border border-slate-700 theme-border bg-slate-900/70 p-4 text-center">
                     <div className="mb-1 text-xs font-black uppercase tracking-widest text-slate-500">
                         {t('pickedQuestionPack')}
                     </div>
@@ -825,14 +826,14 @@ function GameRoomContent({ room, roomCode, user, onPrepareRoomExit, onLeaveRoom,
                     </div>
                 </div>
 
-                <div className="mb-6 w-full max-w-2xl rounded-2xl border border-slate-700 bg-slate-800/50 p-6 backdrop-blur-sm">
+                <div className="mb-6 w-full max-w-2xl rounded-2xl border border-slate-700 theme-border bg-slate-800/50 theme-surface p-6 backdrop-blur-sm">
                     <h3 className="mb-4 flex items-center gap-2 text-xl font-bold">
                         <Swords className="text-red-400" /> {t('gameMode')}
                     </h3>
-                    <label className={`flex flex-col gap-3 rounded-lg border border-slate-700 bg-slate-900 p-4 sm:flex-row sm:items-center ${isHost ? 'cursor-pointer hover:border-slate-600' : 'cursor-default'}`}>
+                    <label className={`flex flex-col gap-3 rounded-lg border border-slate-700 theme-border bg-slate-900 theme-room-background p-4 sm:flex-row sm:items-center ${isHost ? 'cursor-pointer hover:border-slate-600' : 'cursor-default'}`}>
                         <span className="min-w-0 flex-1">
-                            <span className="block font-bold text-white">{t('trueCompetitiveMode')}</span>
-                            <span className="mt-1 block text-sm text-slate-400">{t('trueCompetitiveModeDescription')}</span>
+                            <span className="block font-bold text-white theme-text">{t('trueCompetitiveMode')}</span>
+                            <span className="mt-1 block text-sm text-slate-400 theme-muted">{t('trueCompetitiveModeDescription')}</span>
                         </span>
                         <span className="relative inline-flex h-7 w-12 shrink-0 items-center">
                             <input
@@ -842,14 +843,14 @@ function GameRoomContent({ room, roomCode, user, onPrepareRoomExit, onLeaveRoom,
                                 disabled={!isHost}
                                 className="peer sr-only"
                             />
-                            <span className="absolute inset-0 rounded-full bg-slate-700 transition-colors peer-checked:bg-red-600 peer-disabled:opacity-50" />
+                            <span className="absolute inset-0 rounded-full bg-slate-700 theme-raised transition-colors peer-checked:bg-red-600 peer-disabled:opacity-50" />
                             <span className="absolute left-1 h-5 w-5 rounded-full bg-white transition-transform peer-checked:translate-x-5 peer-disabled:opacity-80" />
                         </span>
                     </label>
                 </div>
 
-                <div className="w-full max-w-2xl bg-slate-800/50 p-6 rounded-2xl border border-slate-700 backdrop-blur-sm">
-                    <div className="flex items-center justify-between mb-6 border-b border-slate-700 pb-4">
+                <div className="w-full max-w-2xl bg-slate-800/50 theme-surface p-6 rounded-2xl border border-slate-700 theme-border backdrop-blur-sm">
+                    <div className="flex items-center justify-between mb-6 border-b border-slate-700 theme-border pb-4">
                         <h3 className="text-xl font-bold flex items-center gap-2">
                             <Users className="text-blue-400" /> {t('playersCount', { count: Object.keys(room.players).length - 1 })}
                         </h3>
@@ -857,7 +858,7 @@ function GameRoomContent({ room, roomCode, user, onPrepareRoomExit, onLeaveRoom,
                             <div className="flex items-center gap-2">
                                 <button
                                     onClick={() => setIsHistoryOpen(true)}
-                                    className="rounded-lg border border-slate-700 p-2 text-slate-300 hover:bg-slate-700"
+                                    className="rounded-lg border border-slate-700 theme-border p-2 text-slate-300 theme-muted hover:bg-slate-700"
                                     title={t('gameHistory')}
                                 >
                                     <ScrollText size={18} />
@@ -865,7 +866,7 @@ function GameRoomContent({ room, roomCode, user, onPrepareRoomExit, onLeaveRoom,
                                 <button
                                     onClick={handleStartGame}
                                     disabled={isStarting || Object.keys(room.players).length < 2} // need at least 1 player + host
-                                    className="bg-green-600 hover:bg-green-500 disabled:opacity-50 text-white px-6 py-2 rounded-lg font-bold flex items-center gap-2 transition-all shadow-lg shadow-green-600/20"
+                                    className="theme-primary bg-green-600 hover:bg-green-500 disabled:opacity-50 text-white theme-text px-6 py-2 rounded-lg font-bold flex items-center gap-2 transition-all shadow-lg shadow-green-600/20"
                                 >
                                     <Play size={18} /> {t('startGame')}
                                 </button>
@@ -883,7 +884,7 @@ function GameRoomContent({ room, roomCode, user, onPrepareRoomExit, onLeaveRoom,
 
                     <div className="flex flex-wrap gap-3">
                         {getPlayerEntries(room.players).map(([playerId, p]) => (
-                            <div key={playerId} className="px-4 py-2 rounded-full border font-medium flex items-center gap-2 bg-slate-700 border-slate-600 text-white">
+                            <div key={playerId} className="px-4 py-2 rounded-full border font-medium flex items-center gap-2 bg-slate-700 theme-raised border-slate-600 text-white theme-text">
                                 <span className="text-xl">{getPlayerAvatar(p)}</span> {p.name}
                             </div>
                         ))}
@@ -904,7 +905,7 @@ function GameRoomContent({ room, roomCode, user, onPrepareRoomExit, onLeaveRoom,
 
     if (room.status === 'round_break' || room.status === 'category_preview' || room.status === 'playing') {
         return (
-            <div className="min-h-screen flex flex-col bg-slate-900 overflow-hidden">
+            <div className="min-h-screen flex flex-col bg-slate-900 theme-room-background overflow-hidden">
                 {isHost && isScoreEditorOpen && (
                     <ScoreEditorModal
                         players={room.players}
@@ -943,26 +944,26 @@ function GameRoomContent({ room, roomCode, user, onPrepareRoomExit, onLeaveRoom,
                     />
                 )}
                 {/* Header bar */}
-                <header className="z-10 flex flex-col gap-2 border-b border-slate-800 bg-slate-950 px-3 py-2 shadow-md md:flex-row md:items-center md:justify-between md:p-4">
+                <header className="z-10 flex flex-col gap-2 border-b border-slate-800 theme-border bg-slate-950 theme-surface px-3 py-2 shadow-md md:flex-row md:items-center md:justify-between md:p-4">
                     <div className="flex w-full min-w-0 items-center gap-2 md:w-auto md:gap-4">
                         <button onClick={leaveRoom} className="shrink-0 text-slate-500 hover:text-slate-300"><ArrowLeft size={20}/></button>
                         <h1 className="min-w-0 flex-1 text-base font-bold text-blue-400 md:max-w-xs md:text-xl">
                             <PackTitle pack={room.pack} />
-                            {room.roundCount > 1 && <span className="ml-2 text-xs text-slate-400">{t('packRound', { round: (room.currentRoundIndex || 0) + 1 })} / {room.roundCount}</span>}
+                            {room.roundCount > 1 && <span className="ml-2 text-xs text-slate-400 theme-muted">{t('packRound', { round: (room.currentRoundIndex || 0) + 1 })} / {room.roundCount}</span>}
                         </h1>
                         <button
                             onClick={() => setIsLeaderboardOpen(true)}
-                            className="inline-flex shrink-0 items-center justify-center rounded-lg border border-slate-700 p-2 text-slate-300 hover:bg-slate-800 md:hidden"
+                            className="inline-flex shrink-0 items-center justify-center rounded-lg border border-slate-700 theme-border p-2 text-slate-300 theme-muted hover:bg-slate-800 md:hidden"
                             title={t('leaderboard')}
                             aria-label={t('leaderboard')}
                         >
                             <Trophy size={18} />
                         </button>
                     </div>
-                    <div className="flex w-full min-w-0 items-center justify-between gap-2 text-xs font-medium text-slate-300 md:w-auto md:justify-end md:text-sm">
+                    <div className="flex w-full min-w-0 items-center justify-between gap-2 text-xs font-medium text-slate-300 theme-muted md:w-auto md:justify-end md:text-sm">
                         {room.currentTurn && room.players[room.currentTurn] && (
                             <span className="min-w-0 flex-1 truncate text-right md:flex-none">
-                                {t('currentPick')} <span className="font-bold text-yellow-400">{room.players[room.currentTurn].name}</span>
+                                {t('currentPick')} <span className="font-bold text-yellow-400 theme-accent">{room.players[room.currentTurn].name}</span>
                             </span>
                         )}
                         {isHost && (
@@ -982,7 +983,7 @@ function GameRoomContent({ room, roomCode, user, onPrepareRoomExit, onLeaveRoom,
                                 {canOpenHostRps && (
                                     <button
                                         onClick={() => setIsHostRpsSetupOpen(true)}
-                                        className="rounded-lg border border-slate-700 p-2 text-slate-300 hover:bg-slate-800"
+                                        className="rounded-lg border border-slate-700 theme-border p-2 text-slate-300 theme-muted hover:bg-slate-800"
                                         title={t('hostRpsTitle')}
                                         aria-label={t('hostRpsTitle')}
                                     >
@@ -991,14 +992,14 @@ function GameRoomContent({ room, roomCode, user, onPrepareRoomExit, onLeaveRoom,
                                 )}
                                 <button
                                     onClick={() => setIsScoreEditorOpen(true)}
-                                    className="rounded-lg border border-slate-700 p-2 text-slate-300 hover:bg-slate-800"
+                                    className="rounded-lg border border-slate-700 theme-border p-2 text-slate-300 theme-muted hover:bg-slate-800"
                                     title={t('advancedScoreEditor')}
                                 >
                                     <SlidersHorizontal size={18} />
                                 </button>
                                 <button
                                     onClick={() => setIsHistoryOpen(true)}
-                                    className="rounded-lg border border-slate-700 p-2 text-slate-300 hover:bg-slate-800"
+                                    className="rounded-lg border border-slate-700 theme-border p-2 text-slate-300 theme-muted hover:bg-slate-800"
                                     title={t('gameHistory')}
                                 >
                                     <ScrollText size={18} />
@@ -1010,8 +1011,8 @@ function GameRoomContent({ room, roomCode, user, onPrepareRoomExit, onLeaveRoom,
 
                 <div className="flex min-h-0 flex-1 overflow-hidden">
                     {/* Sidebar - Players & Scores */}
-                    <aside className="hidden w-64 flex-col overflow-y-auto border-r border-slate-800 bg-slate-900 md:flex">
-                        <div className="p-4 bg-slate-950/50 sticky top-0 border-b border-slate-800">
+                    <aside className="hidden w-64 flex-col overflow-y-auto border-r border-slate-800 theme-border bg-slate-900 theme-room-background md:flex">
+                        <div className="p-4 bg-slate-950/50 sticky top-0 border-b border-slate-800 theme-border">
                             <h2 className="text-xs font-black uppercase tracking-widest text-slate-500">{t('leaderboard')}</h2>
                         </div>
                         <LeaderboardContent
@@ -1026,7 +1027,7 @@ function GameRoomContent({ room, roomCode, user, onPrepareRoomExit, onLeaveRoom,
                     </aside>
 
                     {/* Main Play Area */}
-                    <main className="relative flex min-w-0 flex-1 flex-col overflow-x-hidden overflow-y-auto bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-blue-950 to-slate-900 p-3 md:overflow-hidden md:p-6">
+                    <main className="theme-room-background relative flex min-w-0 flex-1 flex-col overflow-x-hidden overflow-y-auto bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-blue-950 to-slate-900 p-3 md:overflow-hidden md:p-6">
                         {room.status === 'round_break' ? (
                             <RoundBreakView room={room} roomRef={roomRef} isHost={isHost} actor={host} />
                         ) : room.status === 'category_preview' ? (
@@ -1045,15 +1046,19 @@ function GameRoomContent({ room, roomCode, user, onPrepareRoomExit, onLeaveRoom,
     return null;
 }
 
-export default function GameRoom(props) {
+function LoadedGameRoom(props) {
     const { t } = useLanguage();
     const { pack, loading, error, retry } = useGamePack(props.room, props.roomCode);
     if (loading || error) {
-        return <div className="p-8 text-center text-slate-300">
+        return <div className="p-8 text-center text-slate-300 theme-muted">
             <p>{t(error ? 'gamePackLoadFailed' : 'gameDataLoading')}</p>
-            {error && <button onClick={retry} className="mt-4 rounded-lg bg-blue-600 px-4 py-2 text-white">{t('gameDataRetry')}</button>}
-            <button onClick={() => props.onLeaveRoom()} className="ml-4 mt-4 text-slate-400">{t('leave')}</button>
+            {error && <button onClick={retry} className="mt-4 rounded-lg bg-blue-600 theme-primary px-4 py-2 text-white theme-text">{t('gameDataRetry')}</button>}
+            <button onClick={() => props.onLeaveRoom()} className="ml-4 mt-4 text-slate-400 theme-muted">{t('leave')}</button>
         </div>;
     }
     return <GameRoomContent key={`${props.roomCode}/${props.user.uid}`} {...props} room={{ ...props.room, pack }} />;
+}
+
+export default function GameRoom(props) {
+ return <PackThemeScope themeId={props.room.themeId}><LoadedGameRoom {...props} /></PackThemeScope>;
 }

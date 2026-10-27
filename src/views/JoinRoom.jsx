@@ -1,8 +1,9 @@
+import { choosePlayerAvatar } from '../utils/packTheme';
 import { useEffect, useState } from 'react';
 import { runTransaction } from 'firebase/firestore';
 import { ArrowLeft } from 'lucide-react';
 import PackTitle from '../components/PackTitle';
-import { ANIMAL_AVATARS, HOST_AVATAR } from '../constants';
+import { HOST_AVATAR } from '../constants';
 import { db } from '../firebase';
 import { getRoomByCode } from '../actions/roomActions';
 import { trackEvent } from '../services/analytics';
@@ -86,21 +87,7 @@ export default function JoinRoom({ initialCode = '', setView, user, username, se
                     return { error: t('roomFull') };
                 }
 
-                const usedAvatars = new Set(Object.entries(players)
-                    .filter(([playerId, player]) => playerId !== user.uid && !player.isHost)
-                    .map(([, player]) => player.avatar)
-                    .filter(Boolean));
-                const availableAvatars = ANIMAL_AVATARS.filter((avatar) => !usedAvatars.has(avatar));
-                const canReuseExistingAvatar = existingPlayer?.avatar && ANIMAL_AVATARS.includes(existingPlayer.avatar);
-                if (!existingPlayer?.isHost && !canReuseExistingAvatar && availableAvatars.length === 0) {
-                    return { error: t('roomFull') };
-                }
-
-                const playerAvatar = existingPlayer?.isHost
-                    ? HOST_AVATAR
-                    : canReuseExistingAvatar
-                        ? existingPlayer.avatar
-                        : availableAvatars[Math.floor(Math.random() * availableAvatars.length)];
+                const playerAvatar = existingPlayer?.isHost ? HOST_AVATAR : choosePlayerAvatar(players, user.uid, roomData.themeId);
 
                 transaction.update(roomRef, {
                     [`players.${user.uid}`]: {

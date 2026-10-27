@@ -1,3 +1,4 @@
+import { normalizeThemeId } from '../utils/packTheme';
 import { getAllCategories, getPackRounds, validatePackRounds } from '../utils/packRounds';
 import { BUZZER_POLICY_VERSION } from '../utils/buzzerPolicy';
 import { createRecapSummary } from '../utils/achievements';
@@ -21,6 +22,8 @@ export async function createRoom(roomData) {
         const created = await runTransaction(db, async (transaction) => {
             const room = await transaction.get(roomRef);
             if (room.exists()) throw new Error('Game ID already exists');
+            const sourcePack = await transaction.get(doc(dataCollection('packs'), liveData.packId));
+            if (!sourcePack.exists()) throw new Error('Pack no longer exists');
             const legacy = await transaction.get(doc(dataCollection('rooms'), roomCode));
             const reservation = await transaction.get(codeRef);
             if (legacy.exists()) return false;
@@ -29,7 +32,7 @@ export async function createRoom(roomData) {
                 if (!previous.exists() || previous.data().status !== 'finished') return false;
             }
             transaction.set(roomRef, {
-                ...liveData, roomCode, dataVersion: 2, recapVersion: 1, buzzerPolicyVersion: BUZZER_POLICY_VERSION, buzzerRoundId: null,
+                ...liveData, themeId: normalizeThemeId(sourcePack.data().themeId), roomCode, dataVersion: 2, recapVersion: 1, buzzerPolicyVersion: BUZZER_POLICY_VERSION, buzzerRoundId: null,
                 packSummary: getPackSummary(pack), packVersionId: null, questionStates: {}
             });
             transaction.set(codeRef, { gameId: roomRef.id });

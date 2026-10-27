@@ -223,3 +223,13 @@ If implementation and this baseline disagree, call out the discrepancy and deter
 | Game behavior | [Gameplay reference source map](gameplay-reference.md#source-map) |
 | Language support | [i18n.jsx](../src/i18n.jsx), [LanguageProvider.jsx](../src/LanguageProvider.jsx) |
 | Access rules and media services | [firestore.rules](../firestore.rules), [imageStorage.js](../src/services/imageStorage.js), [Worker guide](../imagekit-auth-worker/README.md) |
+
+## Predefined pack themes
+
+Pack authors choose Default or Halloween after Prize in the editor. The section describes the selected theme, shows its palette, full contestant avatar pool, question-background emoji, and localized Buzz/leaderboard wording. It links to the selected round preview and explains saving, creation-time room locking, avatar assignment, and the presentation-only scope. Board and question previews use the draft theme; the editor and pack listings retain their normal appearance. Halloween customizes room colors, decorative text, question backgrounds, and contestant avatars. It does not change gameplay rules.
+
+Room creation snapshots the saved pack theme in an immutable room themeId. Starting still freezes the latest question content, but source theme edits never change an existing room. Shared results retain the room theme after snapshot deletion. Existing packs and rooms default to the original appearance without migration. The Halloween pool uses all 15 avatars before balanced reuse; rejoining players retain their avatars and rooms still support 20 contestants plus the crowned host.
+
+Validate with npm run lint, npm run build, and the single scripts/verify-game-storage.mjs entry point against a dedicated local Firestore Emulator. Publish the updated Firestore rules and frontend together only when deployment is explicitly authorized. No Worker release, indexes, or migration is needed.
+
+Pending browser checklist: English/Ukrainian; desktop/mobile; host, contestant, spectator; Default/Halloween previews, lobby, category introductions, board, ordinary/surprise questions, answer reveal, wheel/table, prize, dialogs, RPS, round breaks, and shared results. Check reduced motion, keyboard focus, long headings, and returning to unthemed screens.

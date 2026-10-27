@@ -35,14 +35,14 @@ const getResultPanelClassName = (result) => {
     if (result === 'winner') return 'border-green-500/45 bg-green-500/15 ring-1 ring-green-400/20';
     if (result === 'loser') return 'border-red-500/45 bg-red-500/15 ring-1 ring-red-400/20';
     if (result === 'tie') return 'border-yellow-500/45 bg-yellow-500/15 ring-1 ring-yellow-400/20';
-    return 'border-slate-800 bg-slate-950';
+    return 'border-slate-800 theme-border bg-slate-950 theme-surface';
 };
 
 const getResultTextClassName = (result, hasChoice) => {
-    if (result === 'winner') return 'text-green-300';
+    if (result === 'winner') return 'text-green-300 theme-positive';
     if (result === 'loser') return 'text-red-300';
     if (result === 'tie') return 'text-yellow-300';
-    return hasChoice ? 'text-green-300' : 'text-slate-500';
+    return hasChoice ? 'text-green-300 theme-positive' : 'text-slate-500';
 };
 
 function PlayerSelectButton({ player, isSelected, disabled, onClick, t }) {
@@ -53,8 +53,8 @@ function PlayerSelectButton({ player, isSelected, disabled, onClick, t }) {
             disabled={disabled}
             className={`flex min-w-0 items-center gap-3 rounded-lg border p-3 text-left transition-colors ${
                 isSelected
-                    ? 'border-yellow-400 bg-yellow-400/10 text-yellow-100'
-                    : 'border-slate-800 bg-slate-950 text-slate-100 hover:border-slate-600 hover:bg-slate-800'
+                    ? 'border-yellow-400 theme-accent-border bg-yellow-400/10 text-yellow-100'
+                    : 'border-slate-800 theme-border bg-slate-950 theme-surface text-slate-100 hover:border-slate-600 hover:bg-slate-800'
             } disabled:cursor-not-allowed disabled:opacity-60`}
         >
             <span className="text-2xl">{player.isHost ? HOST_AVATAR : player.avatar}</span>
@@ -80,14 +80,14 @@ function SetupView({ players, onStart, onClose, t }) {
 
     return (
         <>
-            <div className="border-b border-slate-800 p-5">
+            <div className="border-b border-slate-800 theme-border p-5">
                 <div className="flex items-center justify-between gap-4">
-                    <h2 className="text-xl font-black text-white">{t('hostRpsSetupTitle')}</h2>
+                    <h2 className="text-xl font-black text-white theme-text">{t('hostRpsSetupTitle')}</h2>
                     <button onClick={onClose} className="text-slate-500 hover:text-white" aria-label={t('hostRpsCloseSetup')}>
                         <X size={22} />
                     </button>
                 </div>
-                <p className="mt-2 text-sm font-medium text-slate-400">{t('hostRpsSetupDescription')}</p>
+                <p className="mt-2 text-sm font-medium text-slate-400 theme-muted">{t('hostRpsSetupDescription')}</p>
             </div>
             <div className="space-y-5 p-5">
                 <div>
@@ -119,8 +119,8 @@ function SetupView({ players, onStart, onClose, t }) {
                                 onClick={() => setMode(value)}
                                 className={`rounded-lg border p-4 text-left font-black transition-colors ${
                                     mode === value
-                                        ? 'border-yellow-400 bg-yellow-400/10 text-yellow-100'
-                                        : 'border-slate-800 bg-slate-950 text-slate-200 hover:border-slate-600'
+                                        ? 'border-yellow-400 theme-accent-border bg-yellow-400/10 text-yellow-100'
+                                        : 'border-slate-800 theme-border bg-slate-950 theme-surface text-slate-200 hover:border-slate-600'
                                 }`}
                             >
                                 {label}
@@ -132,7 +132,7 @@ function SetupView({ players, onStart, onClose, t }) {
                     type="button"
                     onClick={() => onStart(selectedPair, mode)}
                     disabled={selectedPair.length !== 2}
-                    className="w-full rounded-xl bg-yellow-500 px-5 py-3 font-black text-slate-950 hover:bg-yellow-400 disabled:bg-slate-700 disabled:text-slate-500"
+                    className="w-full rounded-xl bg-yellow-500 theme-primary px-5 py-3 font-black text-slate-950 hover:bg-yellow-400 disabled:bg-slate-700 disabled:text-slate-500"
                 >
                     {t('hostRpsStart')}
                 </button>
@@ -164,11 +164,11 @@ function ChoiceStatus({ players, hostRps, playerId, latestThrow, winnerId, troph
         <div className={`relative flex min-w-0 flex-1 flex-col items-center overflow-hidden rounded-xl border p-4 text-center ${getResultPanelClassName(isWinner ? 'winner' : result)}`}>
             {isWinner && <FloatingEmojiBackground items={trophyItems} className="inset-0" />}
             <div className="relative mb-2 text-4xl">{getPlayerAvatar(players, playerId)}</div>
-            <div className="relative max-w-full truncate text-lg font-black text-white">{getPlayerName(players, playerId, t)}</div>
-            <div className="relative mt-4 flex h-20 w-20 items-center justify-center rounded-full border border-slate-700 bg-slate-900 text-5xl">
+            <div className="relative max-w-full truncate text-lg font-black text-white theme-text">{getPlayerName(players, playerId, t)}</div>
+            <div className="relative mt-4 flex h-20 w-20 items-center justify-center rounded-full border border-slate-700 theme-border bg-slate-900 theme-room-background text-5xl">
                 {latestChoice ? RPS_CHOICES[latestChoice].emoji : '?'}
             </div>
-            <div className={`relative mt-3 text-sm font-black ${isWinner ? 'text-green-300' : getResultTextClassName(result, Boolean(choice || latestChoice))}`}>
+            <div className={`relative mt-3 text-sm font-black ${isWinner ? 'text-green-300 theme-positive' : getResultTextClassName(result, Boolean(choice || latestChoice))}`}>
                 {statusLabel}
             </div>
         </div>
@@ -186,27 +186,27 @@ function ActiveView({ players, hostRps, userId, isHost, isSpectator, onSubmitCho
 
     return (
         <>
-            <div className="flex items-center justify-between border-b border-slate-800 p-5">
-                <h2 className="text-xl font-black text-white">{t('hostRpsTitle')}</h2>
-                <span className="rounded-full bg-slate-950 px-3 py-1 text-xs font-black uppercase tracking-widest text-yellow-300">
+            <div className="flex items-center justify-between border-b border-slate-800 theme-border p-5">
+                <h2 className="text-xl font-black text-white theme-text">{t('hostRpsTitle')}</h2>
+                <span className="rounded-full bg-slate-950 theme-surface px-3 py-1 text-xs font-black uppercase tracking-widest text-yellow-300">
                     {hostRps.targetWins === 3 ? t('rpsModeThree') : t('rpsModeOne')}
                 </span>
             </div>
             <div className="space-y-5 p-5">
-                <div className="rounded-lg border border-slate-800 bg-slate-950 p-4 text-center">
-                    <div className="mt-1 text-lg font-black text-white">
+                <div className="rounded-lg border border-slate-800 theme-border bg-slate-950 theme-surface p-4 text-center">
+                    <div className="mt-1 text-lg font-black text-white theme-text">
                         {getPlayerName(players, playerAId, t)} <span className="text-slate-500">vs</span> {getPlayerName(players, playerBId, t)}
                     </div>
                     <div className="mt-2 font-mono text-xl font-black text-yellow-300">
                         {(hostRps.wins?.[playerAId] || 0)} : {(hostRps.wins?.[playerBId] || 0)}
                     </div>
-                    <div className="mt-1 text-sm font-bold text-slate-400">{t('rpsTargetWins', { count: hostRps.targetWins })}</div>
+                    <div className="mt-1 text-sm font-bold text-slate-400 theme-muted">{t('rpsTargetWins', { count: hostRps.targetWins })}</div>
                 </div>
                 {winnerId && (
                     <div className="rounded-xl border border-yellow-400/40 bg-yellow-400/10 p-5 text-center">
                         <Trophy className="mx-auto mb-2 text-yellow-300" size={40} />
                         <div className="text-xs font-black uppercase tracking-widest text-yellow-200">{t('hostRpsWinnerTitle')}</div>
-                        <div className="mt-1 text-2xl font-black text-white">{getPlayerName(players, winnerId, t)}</div>
+                        <div className="mt-1 text-2xl font-black text-white theme-text">{getPlayerName(players, winnerId, t)}</div>
                     </div>
                 )}
                 <div className="flex flex-col gap-3 sm:flex-row">
@@ -221,12 +221,12 @@ function ActiveView({ players, hostRps, userId, isHost, isSpectator, onSubmitCho
                     <button
                         type="button"
                         onClick={onCloseResult}
-                        className="w-full rounded-xl bg-purple-600 px-5 py-3 font-black text-white hover:bg-purple-500"
+                        className="w-full rounded-xl bg-purple-600 theme-primary px-5 py-3 font-black text-white theme-text hover:bg-purple-500"
                     >
                         {t('hostRpsCloseForEveryone')}
                     </button>
                 ) : winnerId ? (
-                    <div className="rounded-lg border border-slate-800 bg-slate-950 p-4 text-center font-bold text-slate-400">
+                    <div className="rounded-lg border border-slate-800 theme-border bg-slate-950 theme-surface p-4 text-center font-bold text-slate-400 theme-muted">
                         {t('hostRpsWaitingForHostClose')}
                     </div>
                 ) : isCurrentPlayer && !hasPicked && !bothPicked ? (
@@ -238,7 +238,7 @@ function ActiveView({ players, hostRps, userId, isHost, isSpectator, onSubmitCho
                                     key={choice}
                                     type="button"
                                     onClick={() => onSubmitChoice(choice)}
-                                    className="flex flex-col items-center justify-center rounded-xl border border-slate-700 bg-slate-950 p-4 font-black text-slate-100 hover:border-yellow-400 hover:bg-yellow-400/10"
+                                    className="flex flex-col items-center justify-center rounded-xl border border-slate-700 theme-border bg-slate-950 theme-surface p-4 font-black text-slate-100 hover:border-yellow-400 hover:bg-yellow-400/10"
                                 >
                                     <span className="text-4xl">{RPS_CHOICES[choice].emoji}</span>
                                     <span className="mt-2 text-xs uppercase tracking-widest">{t(`rpsChoice${choice[0].toUpperCase()}${choice.slice(1)}`)}</span>
@@ -247,7 +247,7 @@ function ActiveView({ players, hostRps, userId, isHost, isSpectator, onSubmitCho
                         </div>
                     </div>
                 ) : (
-                    <div className="rounded-lg border border-slate-800 bg-slate-950 p-4 text-center font-bold text-slate-400">
+                    <div className="rounded-lg border border-slate-800 theme-border bg-slate-950 theme-surface p-4 text-center font-bold text-slate-400 theme-muted">
                         {isCurrentPlayer && hasPicked ? t('rpsWaitingForOpponent') : t('rpsWatchingMatch')}
                     </div>
                 )}
@@ -298,7 +298,7 @@ export default function HostRpsModal({
 
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
-            <div className="max-h-[92vh] w-full max-w-3xl overflow-y-auto rounded-xl border border-slate-700 bg-slate-900 shadow-2xl">
+            <div className="max-h-[92vh] w-full max-w-3xl overflow-y-auto rounded-xl border border-slate-700 theme-border bg-slate-900 theme-room-background shadow-2xl">
                 {isSetupOpen && !hostRps ? (
                     <SetupView players={players} onStart={onStart} onClose={onCloseSetup} t={t} />
                 ) : (

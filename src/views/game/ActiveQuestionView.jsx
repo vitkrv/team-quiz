@@ -1,3 +1,4 @@
+import { getPackTheme } from '../../utils/packTheme';
 import { getRoundCategories } from '../../utils/packRounds';
 import { pruneSurprisePointValues } from '../../utils/surprisePoints';
 import useBuzzer from '../../hooks/useBuzzer';
@@ -21,8 +22,6 @@ import { createFloatingBackgroundItems } from '../../utils/floatingBackground';
 import { generateId } from '../../utils/ids';
 
 const ACTIVE_QUESTION_ENTRANCE_MS = 750;
-const SURPRISE_BACKGROUND_EMOJIS = ['\u{1F37F}', '\u{1F389}', '\u{1F973}', '\u{1F381}', '\u{1F37E}', '\u{1F382}', '\u{2728}', '\u{1FA84}'];
-const NORMAL_BACKGROUND_EMOJIS = ['\u{2754}'];
 const QUESTION_BACKGROUND_EMOJI_COUNT = 80;
 
 const getStoredEarlyBuzzUnlockAt = (storageKey) => {
@@ -94,7 +93,7 @@ const describeSlice = (center, radius, startAngle, endAngle) => {
     return `M ${center} ${center} L ${start.x} ${start.y} A ${radius} ${radius} 0 ${largeArcFlag} 1 ${end.x} ${end.y} Z`;
 };
 
-function PointsWheel({ values, result, rolledAt, scoreAppliedAt, serverNow, clockReady, t }) {
+function PointsWheel({ themeId, values, result, rolledAt, scoreAppliedAt, serverNow, clockReady, t }) {
     const [now, setNow] = useState(() => serverNow());
     const size = 320;
     const center = size / 2;
@@ -144,14 +143,14 @@ function PointsWheel({ values, result, rolledAt, scoreAppliedAt, serverNow, cloc
                             <g key={`${value}:${index}`}>
                                 <path
                                     d={describeSlice(center, radius, startAngle, endAngle)}
-                                    fill={isPositive ? (index % 2 ? '#115e59' : '#134e4a') : (index % 2 ? '#881337' : '#701a35')}
+                                    fill={themeId === 'halloween' ? ['#F97316', '#69447E', '#342044'][index % 3] : isPositive ? (index % 2 ? '#115e59' : '#134e4a') : (index % 2 ? '#881337' : '#701a35')}
                                     stroke="#0f172a"
                                     strokeWidth="2"
                                 />
                                 <text
                                     x={labelPoint.x}
                                     y={labelPoint.y}
-                                    fill={isPositive ? '#ccfbf1' : '#ffe4e6'}
+                                    fill={themeId === 'halloween' ? '#FFF7ED' : isPositive ? '#ccfbf1' : '#ffe4e6'}
                                     fontSize="20"
                                     fontWeight="900"
                                     textAnchor="middle"
@@ -174,7 +173,7 @@ function PointsWheel({ values, result, rolledAt, scoreAppliedAt, serverNow, cloc
                             aria-hidden="true"
                         />
                     )}
-                    <circle cx={center} cy={center} r="29" fill="#0f172a" stroke="#475569" strokeWidth="2" />
+                    <circle className="theme-wheel-hub" cx={center} cy={center} r="29" fill="#0f172a" stroke="#475569" strokeWidth="2" />
                 </svg>
                 <span className="surprise-wheel__hub" aria-hidden="true"><Sparkles size={24} /></span>
             </div>
@@ -194,7 +193,7 @@ function SurprisePointsTable({ cells, rows, columns, pickedCellId, canPick, onPi
 
     return (
         <div className="flex w-full flex-col items-center gap-5">
-            {canPick && !isRevealed && <p className="text-sm text-slate-300">{t('pickTableCell')}</p>}
+            {canPick && !isRevealed && <p className="text-sm text-slate-300 theme-muted">{t('pickTableCell')}</p>}
             <div className="w-full overflow-x-auto p-1">
                 <div
                     className="surprise-table"
@@ -230,7 +229,7 @@ function SurprisePointsTable({ cells, rows, columns, pickedCellId, canPick, onPi
                             >
                                 {isPicked && <Check size={14} className="absolute right-2 top-2 text-yellow-300" aria-hidden="true" />}
                                 <span aria-hidden="true" className={`text-4xl leading-none transition-all duration-300 motion-reduce:transition-none md:text-[2.625rem] ${isRevealed ? '-translate-y-4 scale-75 opacity-0' : 'scale-100 opacity-100'}`}>
-                                    {cell.icon}
+                                    <span className="theme-table-default-icon">{cell.icon}</span><span className="theme-table-candy">🍬</span>
                                 </span>
                                 <span aria-hidden="true" className={`absolute inset-0 flex items-center justify-center px-1 text-lg font-black tabular-nums transition-all duration-300 motion-reduce:transition-none sm:text-2xl ${valueClassName} ${isRevealed ? 'scale-100 opacity-100' : 'scale-75 opacity-0'}`}>
                                     {isRevealed ? (cell.value > 0 ? `+${cell.value}` : cell.value) : null}
@@ -309,13 +308,13 @@ export default function ActiveQuestionView({ room, roomCode, roomRef, user, isHo
         () => createFloatingBackgroundItems({
             seed: room.activeQuestionId || 'question',
             count: QUESTION_BACKGROUND_EMOJI_COUNT,
-            emojis: isSurpriseQuestion ? SURPRISE_BACKGROUND_EMOJIS : NORMAL_BACKGROUND_EMOJIS,
+            emojis: isSurpriseQuestion ? getPackTheme(room.themeId).surprise : getPackTheme(room.themeId).normal,
             sizeMin: 1,
             sizeRange: 2,
             opacityRange: 0.14,
             rotationRange: 80
         }),
-        [room.activeQuestionId, isSurpriseQuestion]
+        [room.activeQuestionId, isSurpriseQuestion, room.themeId]
     );
 
     // Timer logic
@@ -862,8 +861,8 @@ export default function ActiveQuestionView({ room, roomCode, roomRef, user, isHo
     const buzzerStatus = (
         <>
             {buzzer.enabled && !isSurpriseQuestion && !isAnswerRevealed && (
-                <div className="mt-3 shrink-0 text-center text-sm text-slate-400" role="status" aria-live="polite">
-                    {buzzer.status ? <p className={buzzer.error ? 'text-red-300' : isHost && buzzer.status === 'buzzCollecting' ? 'font-bold text-yellow-400' : 'font-bold'}>{t(buzzer.status)}</p> : null}
+                <div className="mt-3 shrink-0 text-center text-sm text-slate-400 theme-muted" role="status" aria-live="polite">
+                    {buzzer.status ? <p className={buzzer.error ? 'text-red-300' : isHost && buzzer.status === 'buzzCollecting' ? 'font-bold text-yellow-400 theme-accent' : 'font-bold'}>{t(buzzer.status)}</p> : null}
                     {buzzer.error === 'buzzNotAccepted' && canIBuzz && !buzzer.waitingForHost ? <p>{t('buzzRetryAvailable')}</p> : null}
                     {!buzzer.online ? <p>{t('buzzOffline')}</p> : !clockQuality.ready ? <p>{t('buzzClockSyncing')}</p>
                         : Date.now() - clockQuality.lastSyncedAt > 6 * 60 * 1000 ? <p>{t('buzzClockStale')}</p>
@@ -895,7 +894,7 @@ export default function ActiveQuestionView({ room, roomCode, roomRef, user, isHo
             <SpaceBuzzHandler enabled={buzzer.enabled ? canClickBuzzButton : canIBuzz} onBuzz={handleBuzzIn} />
             <FloatingEmojiBackground
                 items={questionBackgroundItems}
-                className={`left-1/2 top-1/2 -z-10 h-screen w-screen -translate-x-1/2 -translate-y-1/2 ${isSurpriseQuestion ? '' : 'grayscale brightness-50'}`}
+                className={`left-1/2 top-1/2 -z-10 h-screen w-screen -translate-x-1/2 -translate-y-1/2 ${isSurpriseQuestion || room.themeId === 'halloween' ? '' : 'grayscale brightness-50'}`}
             />
 
             <div className={`active-question-enter-content ${isHost ? 'host-question-layout' : ''} relative z-10 flex min-h-0 w-full flex-1 flex-col items-center ${isAnswerFocused ? 'justify-center' : 'justify-start'} ${isEntranceContentVisible ? 'active-question-enter-content--visible' : ''}`}>
@@ -951,6 +950,7 @@ export default function ActiveQuestionView({ room, roomCode, roomRef, user, isHo
                             <div className="surprise-scoring__body">
                                 {isSurpriseQuestion && isSurpriseJudged && isSurpriseWheelMechanic && surpriseWheelValues.length > 0 && (
                                     <PointsWheel
+                                        themeId={room.themeId}
                                         key={surpriseRound.spinId || activeQ.id}
                                         values={surpriseWheelValues}
                                         result={surpriseRound.rollResult}
@@ -975,14 +975,14 @@ export default function ActiveQuestionView({ room, roomCode, roomRef, user, isHo
                                 {!isHost && canRollSurpriseWheel && (
                                     <button
                                         onClick={handleRollSurpriseWheel}
-                                        className="inline-flex w-full max-w-sm items-center justify-center gap-2 rounded-xl bg-yellow-400 px-5 py-3 text-base font-bold text-slate-950 transition-colors hover:bg-yellow-300 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-yellow-300 disabled:opacity-60"
+                                        className="inline-flex w-full max-w-sm items-center justify-center gap-2 rounded-xl bg-yellow-400 theme-primary px-5 py-3 text-base font-bold text-slate-950 transition-colors hover:bg-yellow-300 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-yellow-300 disabled:opacity-60"
                                         disabled={isRolling}
                                     >
                                         <RotateCw size={24} /> {isHost && user.uid !== surpriseAnswererId ? t('forceRollWheel') : t('rollTheWheel')}
                                     </button>
                                 )}
                                 {isSurpriseWheelMechanic && isSurpriseRolled && !isSurpriseScoreApplied && (
-                                    <div role="status" className="rounded-xl border border-slate-700/60 bg-slate-950/40 px-4 py-3 text-center text-sm text-slate-300">
+                                    <div role="status" className="rounded-xl border border-slate-700/60 bg-slate-950/40 px-4 py-3 text-center text-sm text-slate-300 theme-muted">
                                         {t(wheelRecovery.error ? 'wheelScoreFailed' : 'wheelScorePending')}
                                         {wheelRecovery.error && (
                                             <button onClick={wheelRecovery.retry} className="ml-2 underline">{t('wheelRetry')}</button>
@@ -991,12 +991,12 @@ export default function ActiveQuestionView({ room, roomCode, roomRef, user, isHo
                                 )}
                                 {wheelStartError && !isSurpriseRolled && <p role="alert" className="text-red-300">{t('wheelStartFailed')}</p>}
                                 {!canRollSurpriseWheel && isSurpriseQuestion && isSurpriseWheelMechanic && isSurpriseJudged && !isSurpriseRolled && (
-                                    <div role="status" className="text-center text-sm text-slate-400">
+                                    <div role="status" className="text-center text-sm text-slate-400 theme-muted">
                                         {t('waitingForWheelRoll', { playerName: surpriseAnswerer?.name || t('playerFallback') })}
                                     </div>
                                 )}
                                 {!canPickSurpriseTableCell && isSurpriseQuestion && isSurpriseTableMechanic && isSurpriseJudged && !isSurpriseTablePicked && (
-                                    <div role="status" className="text-center text-sm text-slate-400">
+                                    <div role="status" className="text-center text-sm text-slate-400 theme-muted">
                                         {t('waitingForTablePick', { playerName: surpriseAnswerer?.name || t('playerFallback') })}
                                     </div>
                                 )}
@@ -1004,7 +1004,7 @@ export default function ActiveQuestionView({ room, roomCode, roomRef, user, isHo
                         </section>
                     )}
                     {!isHost && canContinueQuestion && (
-                        <div className="text-base font-bold text-slate-400 md:text-lg">
+                        <div className="text-base font-bold text-slate-400 theme-muted md:text-lg">
                             {t('waitingForHostContinue')}
                         </div>
                     )}
@@ -1014,9 +1014,9 @@ export default function ActiveQuestionView({ room, roomCode, roomRef, user, isHo
             {/* State: Someone buzzed */}
             {!isHost && isSurpriseQuestion && !isAnswerRevealed && (
                 <div className="mt-4 flex w-full flex-col items-center animate-in zoom-in duration-200 md:mt-6">
-                    <div className="mb-4 flex flex-wrap items-center justify-center gap-2 text-base text-slate-300 md:mb-5 md:gap-3 md:text-xl">
+                    <div className="mb-4 flex flex-wrap items-center justify-center gap-2 text-base text-slate-300 theme-muted md:mb-5 md:gap-3 md:text-xl">
                         <span className="text-2xl md:text-3xl">{surpriseAnswerer?.avatar}</span>
-                        <span className="font-black text-xl text-yellow-400 md:text-2xl">{surpriseAnswerer?.name || t('playerFallback')}</span>
+                        <span className="font-black text-xl text-yellow-400 theme-accent md:text-2xl">{surpriseAnswerer?.name || t('playerFallback')}</span>
                         <span>{t('playerIsAnswering', { playerName: '' }).trim()}</span>
                     </div>
 
@@ -1027,11 +1027,11 @@ export default function ActiveQuestionView({ room, roomCode, roomRef, user, isHo
                     )}
 
                     {isSpectator ? (
-                        <div className="rounded-xl border-2 border-dashed border-slate-700 p-5 text-base font-bold text-slate-500 md:p-8 md:text-xl">
+                        <div className="rounded-xl border-2 border-dashed border-slate-700 theme-border p-5 text-base font-bold text-slate-500 md:p-8 md:text-xl">
                             {t('spectatorWatching')}
                         </div>
                     ) : user.uid !== surpriseAnswererId && !isHost && (
-                        <div className="rounded-xl border-2 border-dashed border-slate-700 p-5 text-base font-bold text-slate-500 md:p-8 md:text-xl">
+                        <div className="rounded-xl border-2 border-dashed border-slate-700 theme-border p-5 text-base font-bold text-slate-500 md:p-8 md:text-xl">
                             {t('surpriseOnlySelectedPlayer')}
                         </div>
                     )}
@@ -1040,9 +1040,9 @@ export default function ActiveQuestionView({ room, roomCode, roomRef, user, isHo
 
             {!isHost && hasBuzzed && !isAnswerRevealed && !isSurpriseQuestion && (
                 <div className="mt-4 flex w-full flex-col items-center animate-in zoom-in duration-200 md:mt-6">
-                    <div className="mb-4 flex flex-wrap items-center justify-center gap-2 text-base text-slate-300 md:text-xl">
+                    <div className="mb-4 flex flex-wrap items-center justify-center gap-2 text-base text-slate-300 theme-muted md:text-xl">
                         <span className="text-2xl md:text-3xl">{buzzedPlayerAvatar}</span>
-                        <span className="font-black text-xl text-yellow-400 md:text-2xl">{buzzedPlayerName}</span> {t('playerIsAnswering', { playerName: '' }).trim()}
+                        <span className="font-black text-xl text-yellow-400 theme-accent md:text-2xl">{buzzedPlayerName}</span> {t('playerIsAnswering', { playerName: '' }).trim()}
                     </div>
 
                     {answerTimer}
@@ -1059,7 +1059,7 @@ export default function ActiveQuestionView({ room, roomCode, roomRef, user, isHo
             {!isHost && !hasBuzzed && !isAnswerRevealed && !isSurpriseQuestion && (
                 <div className="mt-4 flex w-full max-w-md shrink-0 flex-col items-center md:mt-6">
                     {isSpectator ? (
-                        <div className="w-full rounded-xl border-2 border-dashed border-slate-700 p-5 text-lg font-bold text-slate-500 md:p-8 md:text-xl">
+                        <div className="w-full rounded-xl border-2 border-dashed border-slate-700 theme-border p-5 text-lg font-bold text-slate-500 md:p-8 md:text-xl">
                             {t('spectatorWatching')}
                         </div>
                     ) : (
@@ -1068,16 +1068,16 @@ export default function ActiveQuestionView({ room, roomCode, roomRef, user, isHo
                                 type="button"
                                 onClick={handleBuzzIn}
                                 disabled={!canClickBuzzButton}
-                                className={`h-36 w-36 touch-none select-none rounded-full border-[6px] text-2xl font-black transition-all md:h-48 md:w-48 md:border-8 md:text-4xl ${
+                                className={`theme-buzz h-36 w-36 touch-none select-none rounded-full border-[6px] text-2xl font-black transition-all md:h-48 md:w-48 md:border-8 md:text-4xl ${
                                     canIBuzz
-                                        ? 'border-red-800 bg-red-600 text-white shadow-[0_8px_0_0_#7f1d1d,inset_0_10px_20px_rgba(255,255,255,0.3)] hover:bg-red-500 active:translate-y-[8px] active:shadow-[0_0px_0_0_#7f1d1d,inset_0_10px_20px_rgba(255,255,255,0.3)] md:shadow-[0_10px_0_0_#7f1d1d,inset_0_10px_20px_rgba(255,255,255,0.3)] md:active:translate-y-[10px]'
-                                        : `${canClickBuzzButton ? '' : 'cursor-not-allowed '}border-slate-700 bg-slate-600 text-slate-300 shadow-[0_8px_0_0_#334155,inset_0_10px_20px_rgba(255,255,255,0.08)] md:shadow-[0_10px_0_0_#334155,inset_0_10px_20px_rgba(255,255,255,0.08)]`
+                                        ? 'border-red-800 bg-red-600 text-white theme-text shadow-[0_8px_0_0_#7f1d1d,inset_0_10px_20px_rgba(255,255,255,0.3)] hover:bg-red-500 active:translate-y-[8px] active:shadow-[0_0px_0_0_#7f1d1d,inset_0_10px_20px_rgba(255,255,255,0.3)] md:shadow-[0_10px_0_0_#7f1d1d,inset_0_10px_20px_rgba(255,255,255,0.3)] md:active:translate-y-[10px]'
+                                        : `${canClickBuzzButton ? '' : 'cursor-not-allowed '}border-slate-700 bg-slate-600 text-slate-300 theme-muted shadow-[0_8px_0_0_#334155,inset_0_10px_20px_rgba(255,255,255,0.08)] md:shadow-[0_10px_0_0_#334155,inset_0_10px_20px_rgba(255,255,255,0.08)]`
                                 }`}
                             >
-                                {t('buzz')}
+                                <span className="theme-buzz-label">{t('buzz')}</span>
                             </button>
                         ) : (
-                            <div className="w-full rounded-xl border-2 border-dashed border-slate-700 p-5 text-lg font-bold text-slate-500 md:p-8 md:text-xl">
+                            <div className="w-full rounded-xl border-2 border-dashed border-slate-700 theme-border p-5 text-lg font-bold text-slate-500 md:p-8 md:text-xl">
                                 {t('answeredIncorrectly')}
                             </div>
                         )
@@ -1089,14 +1089,14 @@ export default function ActiveQuestionView({ room, roomCode, roomRef, user, isHo
             </div>
             {isHost && (
                 <aside className="host-question-controls" aria-label={t('hostQuestionControls')}>
-                    <h2 className="text-xs font-bold uppercase tracking-widest text-slate-400">{t('hostQuestionControls')}</h2>
+                    <h2 className="text-xs font-bold uppercase tracking-widest text-slate-400 theme-muted">{t('hostQuestionControls')}</h2>
                     {!isAnswerRevealed && (isSurpriseQuestion || hasBuzzed) && (
                         <div className="flex min-w-0 flex-col items-center gap-2">
-                            <div className="flex max-w-full items-center gap-2 text-lg font-bold text-yellow-400">
+                            <div className="flex max-w-full items-center gap-2 text-lg font-bold text-yellow-400 theme-accent">
                                 <span>{isSurpriseQuestion ? surpriseAnswerer?.avatar : buzzedPlayerAvatar}</span>
                                 <span className="min-w-0 break-words">{isSurpriseQuestion ? surpriseAnswerer?.name || t('playerFallback') : buzzedPlayerName}</span>
                             </div>
-                            <p className="text-sm text-slate-300">{t('playerIsAnswering', { playerName: '' }).trim()}</p>
+                            <p className="text-sm text-slate-300 theme-muted">{t('playerIsAnswering', { playerName: '' }).trim()}</p>
                             {!isSurpriseQuestion && answerTimer}
                         </div>
                     )}
@@ -1111,7 +1111,7 @@ export default function ActiveQuestionView({ room, roomCode, roomRef, user, isHo
                                             : questionStops.length && !hostMediaCompleted ? handleContinueQuestionMedia : handleStartQuestionMedia}
                                     disabled={mediaActionBusy || (isQuestionMediaStarted && questionStops.length > 0
                                         && !hostNeedsMediaResume && !hostMediaCompleted && !canContinueQuestionMedia)}
-                                    className="inline-flex items-center justify-center gap-2 rounded-xl bg-blue-600 px-5 py-3 text-base font-bold text-white shadow-lg shadow-blue-900 transition-colors enabled:hover:bg-blue-500 disabled:cursor-not-allowed disabled:bg-slate-700 disabled:text-slate-400 disabled:opacity-60 disabled:shadow-none md:px-6 md:text-lg"
+                                    className="inline-flex items-center justify-center gap-2 rounded-xl bg-blue-600 theme-primary px-5 py-3 text-base font-bold text-white theme-text shadow-lg shadow-blue-900 transition-colors enabled:hover:bg-blue-500 disabled:cursor-not-allowed disabled:bg-slate-700 disabled:text-slate-400 disabled:opacity-60 disabled:shadow-none md:px-6 md:text-lg"
                                 >
                                     <Play size={22} />
                                     {!isQuestionMediaStarted ? t('startMediaForEveryone')
@@ -1127,10 +1127,10 @@ export default function ActiveQuestionView({ room, roomCode, roomRef, user, isHo
                     {mediaActionError && <p role="alert" className="text-sm text-red-300">{mediaActionError}</p>}
                     {!isAnswerRevealed && (isSurpriseQuestion || hasBuzzed) && (
                         <div className="flex w-full flex-col gap-3">
-                            <button onClick={() => handleJudge(true)} className="flex items-center justify-center gap-2 rounded-xl bg-green-600 px-5 py-3 text-base font-bold text-white shadow-lg shadow-green-900 hover:bg-green-500">
+                            <button onClick={() => handleJudge(true)} className="flex items-center justify-center gap-2 rounded-xl bg-green-600 px-5 py-3 text-base font-bold text-white theme-text shadow-lg shadow-green-900 hover:bg-green-500">
                                 <Check size={28}/> {t('correct')}
                             </button>
-                            <button onClick={() => handleJudge(false)} className="flex items-center justify-center gap-2 rounded-xl bg-red-600 px-5 py-3 text-base font-bold text-white shadow-lg shadow-red-900 hover:bg-red-500">
+                            <button onClick={() => handleJudge(false)} className="flex items-center justify-center gap-2 rounded-xl bg-red-600 px-5 py-3 text-base font-bold text-white theme-text shadow-lg shadow-red-900 hover:bg-red-500">
                                 <X size={28}/> {t('incorrect')}
                             </button>
                         </div>
@@ -1139,9 +1139,9 @@ export default function ActiveQuestionView({ room, roomCode, roomRef, user, isHo
                         <HoldToConfirmButton
                             onConfirm={handleSkip}
                             durationMs={2000}
-                            fillClassName="bg-slate-700"
+                            fillClassName="bg-slate-700 theme-raised"
                             title={t('holdToConfirmAction', { action: t('skipRevealAnswer') })}
-                            className="rounded-lg border border-slate-600 bg-transparent px-6 py-2 font-bold text-slate-400 transition-colors hover:text-white"
+                            className="rounded-lg border border-slate-600 bg-transparent px-6 py-2 font-bold text-slate-400 theme-muted transition-colors hover:text-white"
                         >
                             {t('skipRevealAnswer')}
                         </HoldToConfirmButton>
@@ -1149,7 +1149,7 @@ export default function ActiveQuestionView({ room, roomCode, roomRef, user, isHo
                     {canRollSurpriseWheel && (
                         <button
                             onClick={handleRollSurpriseWheel}
-                            className="inline-flex w-full max-w-sm items-center justify-center gap-2 rounded-xl bg-yellow-400 px-5 py-3 text-base font-bold text-slate-950 transition-colors hover:bg-yellow-300 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-yellow-300 disabled:opacity-60"
+                            className="inline-flex w-full max-w-sm items-center justify-center gap-2 rounded-xl bg-yellow-400 theme-primary px-5 py-3 text-base font-bold text-slate-950 transition-colors hover:bg-yellow-300 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-yellow-300 disabled:opacity-60"
                             disabled={isRolling}
                         >
                             <RotateCw size={24} /> {isHost && user.uid !== surpriseAnswererId ? t('forceRollWheel') : t('rollTheWheel')}
@@ -1158,13 +1158,13 @@ export default function ActiveQuestionView({ room, roomCode, roomRef, user, isHo
                     {isAnswerRevealed && canContinueQuestion && (
                         <button
                             onClick={handleContinue}
-                            className="rounded-xl bg-blue-600 px-6 py-3 text-lg font-bold text-white shadow-lg shadow-blue-900 transition-colors hover:bg-blue-500 md:px-8 md:py-4 md:text-xl"
+                            className="rounded-xl bg-blue-600 theme-primary px-6 py-3 text-lg font-bold text-white theme-text shadow-lg shadow-blue-900 transition-colors hover:bg-blue-500 md:px-8 md:py-4 md:text-xl"
                         >
                             {t('continue')}
                         </button>
                     )}
                     {!isAnswerRevealed && !isSurpriseQuestion && !hasBuzzed && !buzzer.collecting && (
-                        <p className="text-sm text-slate-400">{t('waitingForBuzz')}</p>
+                        <p className="text-sm text-slate-400 theme-muted">{t('waitingForBuzz')}</p>
                     )}
                     {buzzerStatus}
                 </aside>

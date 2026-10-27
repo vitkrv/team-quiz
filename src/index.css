@@ -703,3 +703,64 @@ input {
         transition: none;
     }
 }
+
+/* Themes opt in through semantic presentation classes; Default keeps existing utilities. */
+.pack-theme-scope { display: contents; }
+.theme-table-candy { display: none; }
+[data-pack-theme="halloween"] .theme-table-candy { display: inline; }
+[data-pack-theme="halloween"] .theme-table-default-icon { display: none; }
+[data-pack-theme="halloween"] .theme-room-background,
+[data-pack-theme="halloween"] .theme-preview-content { background: radial-gradient(ellipse at center, var(--theme-glow), var(--theme-background)); color: var(--theme-text); }
+[data-pack-theme="halloween"] .theme-surface,
+[data-pack-theme="halloween"] .theme-question-surface { background-color: var(--theme-surface); }
+[data-pack-theme="halloween"] .theme-raised { background-color: var(--theme-raised); }
+[data-pack-theme="halloween"] .theme-border { border-color: var(--theme-border); }
+[data-pack-theme="halloween"] .theme-secondary-border { border-color: var(--theme-secondary); }
+[data-pack-theme="halloween"] .theme-accent-border { border-color: var(--theme-accent); }
+[data-pack-theme="halloween"] .theme-text { color: var(--theme-text); }
+[data-pack-theme="halloween"] .theme-muted { color: var(--theme-muted); }
+[data-pack-theme="halloween"] .theme-accent { color: var(--theme-accent); }
+[data-pack-theme="halloween"] .theme-secondary { color: var(--theme-secondary); }
+[data-pack-theme="halloween"] .theme-positive { color: var(--theme-positive); }
+[data-pack-theme="halloween"] .theme-primary:enabled { background: var(--theme-accent); color: var(--theme-background); border-color: var(--theme-accent); box-shadow: 0 4px 16px #f9731633; }
+[data-pack-theme="halloween"] .theme-primary:enabled:hover { background: var(--theme-hover); }
+[data-pack-theme="halloween"] button:focus-visible { outline: 2px solid var(--theme-hover); outline-offset: 3px; }
+[data-pack-theme="halloween"] .theme-tile { background: var(--theme-raised); color: var(--theme-accent); border: 1px solid var(--theme-border); }
+[data-pack-theme="halloween"] .theme-tile:hover { background: var(--theme-glow); border-color: var(--theme-accent); box-shadow: 0 0 18px #c084fc55; }
+[data-pack-theme="halloween"] .question-tile-pulse { outline: 3px solid var(--theme-accent); outline-offset: -3px; }
+[data-pack-theme="halloween"] .category-preview-name { color: var(--theme-accent); text-shadow: var(--theme-category-shadow); }
+[data-pack-theme="halloween"] .theme-buzz-label { text-transform: none; }
+[data-pack-theme="halloween"] .theme-buzz:enabled { background: var(--theme-accent); color: var(--theme-background); border-color: #9a3412; box-shadow: 0 8px 0 #9a3412, inset 0 10px 20px #ffffff4d; }
+[data-pack-theme="halloween"] .theme-buzz:enabled:hover { background: var(--theme-hover); }
+[data-pack-theme="halloween"] .theme-buzz:enabled:active { box-shadow: inset 0 10px 20px #ffffff4d; }
+[data-pack-theme="halloween"] .theme-buzz:disabled { background: var(--theme-raised); }
+[data-pack-theme="halloween"] .active-question-enter-shell--surprise::before {
+    background: radial-gradient(circle at center, rgba(249, 115, 22, 0.22), transparent 51%);
+}
+[data-pack-theme="halloween"] .surprise-scoring,
+[data-pack-theme="halloween"] .surprise-reel { background: var(--theme-surface); border-color: var(--theme-accent); }
+[data-pack-theme="halloween"] .surprise-reel__ball { background: var(--theme-raised); border-color: var(--theme-secondary); }
+[data-pack-theme="halloween"] .surprise-reel__ball--selected { border-color: var(--theme-accent); box-shadow: 0 0 24px #f9731655; }
+[data-pack-theme="halloween"] .surprise-table__cell { background: var(--theme-surface); border-color: var(--theme-border); }
+[data-pack-theme="halloween"] .surprise-table__cell:enabled:hover { border-color: var(--theme-secondary); }
+[data-pack-theme="halloween"] .surprise-table__cell--picked { border-color: var(--theme-accent); outline: 2px solid var(--theme-accent); }
+[data-pack-theme="halloween"] .surprise-wheel__pointer { border-top-color: var(--theme-accent); }
+[data-pack-theme="halloween"] .theme-wheel-hub { fill: var(--theme-surface); stroke: var(--theme-border); }
+
+[data-pack-theme="halloween"] .theme-results-title { color: var(--theme-accent); background: none; text-shadow: 0 0 20px #c084fc44; }
+[data-pack-theme="halloween"] .theme-surprise-card { background: var(--theme-surface); box-shadow: 0 0 24px #f9731633; }
+[data-pack-theme="halloween"] .theme-secondary-border { box-shadow: 0 8px 24px #160f2080; }
+
+[data-pack-theme="halloween"] .theme-tile:disabled { background: var(--theme-surface); color: #887594; border-color: var(--theme-border); box-shadow: none; }
+[data-pack-theme="halloween"] .theme-tile:disabled:hover { background: var(--theme-surface); }
+[data-pack-theme="halloween"] .host-question-controls { background-color: var(--theme-surface); border-color: var(--theme-border); }
+
+.theme-halloween-only { display: none; }
+[data-pack-theme="halloween"] .theme-halloween-only { display: block; }
+[data-pack-theme="halloween"] .theme-room-code { color: var(--theme-accent); background-image: none; background-clip: border-box; }
+[data-pack-theme="halloween"] .surprise-wheel__pointer { background: var(--theme-accent); }
+[data-pack-theme="halloween"] .surprise-reel__ball span { background: var(--theme-surface); }
+[data-pack-theme="halloween"] .surprise-reel--result .surprise-reel__ball--selected { box-shadow: 0 0 0 3px var(--theme-background), 0 0 0 5px var(--theme-accent), 0 0 32px #f9731644; }
+
+[data-pack-theme="halloween"] .theme-current-player { background: var(--theme-raised); border-color: var(--theme-secondary); box-shadow: inset 2px 0 0 var(--theme-secondary); }
+[data-pack-theme="halloween"] .theme-prize-frame { background: var(--theme-surface); border: 2px solid var(--theme-accent); border-radius: 1rem; padding: 1rem; }

@@ -1,6 +1,6 @@
 export default function FloatingEmojiBackground({ items, className = '' }) {
     return (
-        <div className={`pointer-events-none absolute overflow-hidden ${className}`}>
+        <div aria-hidden="true" className={`pointer-events-none absolute overflow-hidden ${className}`}>
             {items.map((item) => (
                 <span
                     key={item.id}

@@ -1,3 +1,8 @@
+import PackThemePicker from '../components/PackThemePicker';
+import PackThemeScope from '../components/PackThemeScope';
+import { normalizeThemeId, getPackTheme, themeTranslator } from '../utils/packTheme';
+import FloatingEmojiBackground from '../components/FloatingEmojiBackground';
+import { createFloatingBackgroundItems } from '../utils/floatingBackground';
 import { getPackRounds, getRoundPointStep, validatePackRounds, MAX_PACK_ROUNDS } from '../utils/packRounds';
 import { useEffect, useRef, useState } from 'react';
 import { addDoc, collection, doc, deleteField, setDoc, updateDoc } from 'firebase/firestore';
@@ -248,7 +253,7 @@ function PreviewBoardGrid({ categories, onCategorySelect, onQuestionSelect, t })
                         onClick={() => onCategorySelect(cat.id)}
                         aria-label={t('jumpToCategory', { name: cat.name })}
                         title={t('jumpToCategory', { name: cat.name })}
-                        className="flex min-h-[4rem] items-center justify-center rounded-lg border-2 border-blue-500 bg-blue-900 p-3 text-center shadow-md shadow-black/50 transition-colors hover:border-blue-300 hover:bg-blue-800 focus:outline-none focus:ring-2 focus:ring-blue-300 focus:ring-offset-2 focus:ring-offset-slate-900"
+                        className="flex min-h-[4rem] items-center justify-center rounded-lg border-2 border-blue-500 theme-secondary-border bg-blue-900 theme-question-surface p-3 text-center shadow-md shadow-black/50 transition-colors hover:border-blue-300 hover:bg-blue-800 focus:outline-none focus:ring-2 focus:ring-blue-300 focus:ring-offset-2 focus:ring-offset-slate-900"
                     >
                         <span className="break-words text-sm font-bold uppercase leading-tight tracking-wide text-blue-100 drop-shadow-md md:text-base">
                             {cat.name}
@@ -264,7 +269,7 @@ function PreviewBoardGrid({ categories, onCategorySelect, onQuestionSelect, t })
                                 aria-label={t('previewQuestion', { category: cat.name, points: q.points })}
                                 title={isPreviewReadyQuestion(q) ? undefined : t('previewQuestionBlocked')}
                                 key={q.id}
-                                className="flex min-h-20 flex-1 transition-colors enabled:hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-300 disabled:cursor-not-allowed disabled:bg-slate-800 disabled:text-slate-500 items-center justify-center gap-2 rounded-lg bg-blue-800 font-mono text-2xl font-black text-yellow-400 shadow-[inset_0_-4px_0_0_rgba(0,0,0,0.3)] shadow-black md:text-4xl"
+                                className="flex min-h-20 flex-1 transition-colors enabled:hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-300 disabled:cursor-not-allowed disabled:bg-slate-800 disabled:text-slate-500 items-center justify-center gap-2 rounded-lg bg-blue-800 theme-tile font-mono text-2xl font-black text-yellow-400 theme-accent shadow-[inset_0_-4px_0_0_rgba(0,0,0,0.3)] shadow-black md:text-4xl"
                             >
                                 {!isPreviewReadyQuestion(q) && <Lock size={18} aria-hidden="true" className="shrink-0" />}
                                 {q.points}
@@ -277,7 +282,11 @@ function PreviewBoardGrid({ categories, onCategorySelect, onQuestionSelect, t })
     );
 }
 
-function QuestionPackPreviewModal({ categories, roundNumber, onCategorySelect, onClose, t }) {
+function QuestionPackPreviewModal(props) {
+ const { t } = useLanguage();
+ return <QuestionPackPreviewContent {...props} t={themeTranslator(t, props.themeId)} />;
+}
+function QuestionPackPreviewContent({ categories, roundNumber, onCategorySelect, onClose, themeId, t }) {
     const [selection, setSelection] = useState(null);
     const [answerRevealed, setAnswerRevealed] = useState(false);
     const selectedCategory = categories.find(category => category.id === selection?.categoryId);
@@ -298,9 +307,9 @@ function QuestionPackPreviewModal({ categories, roundNumber, onCategorySelect, o
 
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4 sm:p-6">
-            <div className="flex max-h-[90vh] w-full max-w-6xl flex-col rounded-xl border border-slate-700 bg-slate-900 shadow-2xl">
-                <div className="flex items-center justify-between border-b border-slate-800 p-5">
-                    <h2 className="min-w-0 pr-4 text-xl font-bold text-white">{t('questionPackPreview')} · {t('packRound', { round: roundNumber })}</h2>
+            <div className="flex max-h-[90vh] w-full max-w-6xl flex-col rounded-xl border border-slate-700 theme-border bg-slate-900 theme-room-background shadow-2xl">
+                <div className="flex items-center justify-between border-b border-slate-800 theme-border p-5">
+                    <h2 className="min-w-0 pr-4 text-xl font-bold text-white theme-text">{t('questionPackPreview')} · {t('packRound', { round: roundNumber })}</h2>
                     <button
                         type="button"
                         onClick={onClose}
@@ -311,13 +320,14 @@ function QuestionPackPreviewModal({ categories, roundNumber, onCategorySelect, o
                         <X size={22} />
                     </button>
                 </div>
-                <div className="min-h-0 flex-1 overflow-auto bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-blue-950 to-slate-900 p-5">
+                <PackThemeScope themeId={themeId}><div className="theme-preview-content relative isolate min-h-0 flex-1 overflow-auto bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-blue-950 to-slate-900 p-5">
                     {activeQuestion ? (
                         <div
                             key={activeQuestion.id}
                             className={`active-question-enter-shell ${activeQuestion.isSurpriseQuestion ? 'active-question-enter-shell--surprise' : ''} relative mx-auto flex min-h-[28rem] w-full max-w-4xl flex-col items-center text-center`}
                         >
                             <div className={`relative flex w-full flex-1 flex-col items-center ${answerRevealed ? 'justify-center' : 'justify-start'}`}>
+                                {normalizeThemeId(themeId) === 'halloween' && <FloatingEmojiBackground items={createFloatingBackgroundItems({ seed: activeQuestion.id, count: 80, emojis: activeQuestion.isSurpriseQuestion ? getPackTheme(themeId).surprise : getPackTheme(themeId).normal })} className="inset-0 -z-10" />}
                                 <QuestionPresenter
                                     question={activeQuestion}
                                     categoryName={selectedCategory.name}
@@ -327,21 +337,22 @@ function QuestionPackPreviewModal({ categories, roundNumber, onCategorySelect, o
                             </div>
                         </div>
                     ) : categories.length === 0 ? (
-                        <div className="flex min-h-[18rem] items-center justify-center rounded-lg border border-dashed border-slate-700 p-8 text-center text-slate-400">
+                        <div className="flex min-h-[18rem] items-center justify-center rounded-lg border border-dashed border-slate-700 theme-border p-8 text-center text-slate-400 theme-muted">
                             {t('noPreviewQuestions')}
                         </div>
                     ) : (
                         <PreviewBoardGrid categories={categories} onCategorySelect={onCategorySelect} onQuestionSelect={handleQuestionSelect} t={t} />
                     )}
                 </div>
+                </PackThemeScope>
                 {activeQuestion && (
-                    <div className="flex shrink-0 flex-wrap justify-center gap-3 border-t border-slate-800 p-4">
+                    <div className="flex shrink-0 flex-wrap justify-center gap-3 border-t border-slate-800 theme-border p-4">
                         {!answerRevealed && (
-                            <button type="button" onClick={() => setAnswerRevealed(true)} className="inline-flex items-center justify-center gap-2 rounded-lg bg-green-600 px-5 py-3 font-bold text-white hover:bg-green-500">
+                            <button type="button" onClick={() => setAnswerRevealed(true)} className="inline-flex items-center justify-center gap-2 rounded-lg bg-green-600 px-5 py-3 font-bold text-white theme-text hover:bg-green-500">
                                 <Eye size={18} /> {t('previewRevealAnswer')}
                             </button>
                         )}
-                        <button type="button" onClick={handleBackToTable} className="inline-flex items-center justify-center gap-2 rounded-lg bg-slate-700 px-5 py-3 font-bold text-white hover:bg-slate-600">
+                        <button type="button" onClick={handleBackToTable} className="inline-flex items-center justify-center gap-2 rounded-lg bg-slate-700 theme-raised px-5 py-3 font-bold text-white theme-text hover:bg-slate-600">
                             <ArrowLeft size={18} /> {t('previewBackToTable')}
                         </button>
                     </div>
@@ -371,6 +382,7 @@ export default function PackCreator({ pack, setView, user, setError }) {
     const [surpriseScoringMechanic, setSurpriseScoringMechanic] = useState(() => (
         normalizeSurpriseScoringMechanic(pack?.surpriseScoringMechanic)
     ));
+    const [themeId, setThemeId] = useState(() => normalizeThemeId(pack?.themeId));
     const [prize, setPrize] = useState(() => pack?.prize || {});
     const [roundIds, setRoundIds] = useState(() => pack ? getPackRounds(pack).map((round) => round.id || generateId()) : [generateId()]);
     const [activeRoundId, setActiveRoundId] = useState(roundIds[0]);
@@ -531,6 +543,7 @@ export default function PackCreator({ pack, setView, user, setError }) {
         ownerId: user.uid,
         ownerEmail: user.email || null,
         surpriseScoringMechanic,
+        themeId,
         prize: cleanPrizeForSave(sourcePrize),
         updatedAt: timestamp,
         rounds: serializeRounds(sourceCategories)
@@ -1140,6 +1153,7 @@ export default function PackCreator({ pack, setView, user, setError }) {
                 ownerId: user.uid,
                 ownerEmail: user.email || null,
                 surpriseScoringMechanic,
+        themeId,
                 prize: cleanPrizeForSave(prize),
                 updatedAt: Date.now(),
                 rounds: serializeRounds(finalCategories)
@@ -1210,6 +1224,7 @@ export default function PackCreator({ pack, setView, user, setError }) {
             )}
             {isPreviewOpen && (
                 <QuestionPackPreviewModal
+                    themeId={themeId}
                     categories={previewCategories}
                     roundNumber={roundIds.indexOf(activeRoundId) + 1}
                     t={t}
@@ -1229,7 +1244,7 @@ export default function PackCreator({ pack, setView, user, setError }) {
                     disabled={editorLocked}
                     aria-label={saveLabel}
                     aria-busy={isSaving}
-                    className="flex w-full items-center justify-center gap-2 rounded-lg bg-green-600 px-6 py-2 font-bold text-white shadow-lg hover:bg-green-500 disabled:opacity-50 sm:w-auto"
+                    className="flex w-full items-center justify-center gap-2 rounded-lg bg-green-600 px-6 py-2 font-bold text-white theme-text shadow-lg hover:bg-green-500 disabled:opacity-50 sm:w-auto"
                 >
                     <Check size={20} aria-hidden="true" />
                     <span aria-hidden="true" className="grid">
@@ -1245,16 +1260,16 @@ export default function PackCreator({ pack, setView, user, setError }) {
 
             <div className="col-span-full min-w-0">
             <fieldset disabled={editorLocked} className="mb-6 flex flex-wrap items-center gap-3">
-                <legend className="mb-2 text-sm font-bold text-slate-300">{t('editorMode')}</legend>
+                <legend className="mb-2 text-sm font-bold text-slate-300 theme-muted">{t('editorMode')}</legend>
                 {['form', 'table'].map((mode) => <button key={mode} type="button" aria-pressed={activeEditorMode === mode}
                     disabled={mode === 'table' && !wide} aria-describedby={!wide ? 'editor-desktop-hint' : undefined}
-                    onClick={() => changeEditorMode(mode)} className={`inline-flex min-h-11 items-center justify-center gap-2 rounded-lg border px-5 font-bold focus-visible:ring-2 focus-visible:ring-blue-400 disabled:opacity-50 ${activeEditorMode === mode ? 'border-blue-400 bg-blue-600/20 text-blue-100' : 'border-slate-600 bg-slate-900 text-slate-300'}`}>
+                    onClick={() => changeEditorMode(mode)} className={`inline-flex min-h-11 items-center justify-center gap-2 rounded-lg border px-5 font-bold focus-visible:ring-2 focus-visible:ring-blue-400 disabled:opacity-50 ${activeEditorMode === mode ? 'border-blue-400 bg-blue-600/20 text-blue-100' : 'border-slate-600 bg-slate-900 theme-room-background text-slate-300 theme-muted'}`}>
                     {mode === 'form' ? <ListChecks size={18} aria-hidden="true" className="shrink-0" /> : <Table2 size={18} aria-hidden="true" className="shrink-0" />}
                     {t(mode === 'form' ? 'editorFormMode' : 'editorTableMode')}
                 </button>)}
-                {!wide && <p id="editor-desktop-hint" className="basis-full text-sm text-slate-400">{t('editorTableDesktopOnly')}</p>}
+                {!wide && <p id="editor-desktop-hint" className="basis-full text-sm text-slate-400 theme-muted">{t('editorTableDesktopOnly')}</p>}
             </fieldset>
-            <div className="bg-slate-800 p-6 rounded-xl border border-slate-700 mb-8">
+            <div className="bg-slate-800 theme-surface p-6 rounded-xl border border-slate-700 theme-border mb-8">
                 <div className="grid gap-4 sm:grid-cols-[auto,minmax(0,1fr)]">
                     <EmojiPicker
                         value={packIconEmoji}
@@ -1267,55 +1282,55 @@ export default function PackCreator({ pack, setView, user, setError }) {
                         noResultsLabel={t('emojiNoResults')}
                     />
                     <label className="block min-w-0">
-                        <span className="mb-2 block text-sm font-medium text-slate-400">{t('packName')}</span>
+                        <span className="mb-2 block text-sm font-medium text-slate-400 theme-muted">{t('packName')}</span>
                         <input
                             type="text"
                             value={packName}
                             onChange={(e) => setPackName(e.target.value)}
                             placeholder={t('packNamePlaceholder')}
-                            className="w-full bg-slate-900 border border-slate-600 rounded-lg p-3 text-white focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none"
+                            className="w-full bg-slate-900 theme-room-background border border-slate-600 rounded-lg p-3 text-white theme-text focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none"
                         />
                     </label>
                 </div>
             </div>
 
-            <div className="mb-8 rounded-xl border border-slate-700 bg-slate-800/50 p-5">
-                <h3 className="mb-4 text-sm font-black uppercase tracking-widest text-slate-400">{t('packSummary')}</h3>
+            <div className="mb-8 rounded-xl border border-slate-700 theme-border bg-slate-800/50 theme-surface p-5">
+                <h3 className="mb-4 text-sm font-black uppercase tracking-widest text-slate-400 theme-muted">{t('packSummary')}</h3>
                 <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-6">
-                    <div className="flex min-h-28 flex-col justify-between rounded-lg border border-slate-700 bg-slate-900 p-3">
+                    <div className="flex min-h-28 flex-col justify-between rounded-lg border border-slate-700 theme-border bg-slate-900 theme-room-background p-3">
                         <div className="text-xs font-bold uppercase tracking-wide text-slate-500">{t('summaryQuestions')}</div>
-                        <div className="pt-3 text-2xl font-black text-white">{packSummary.questionCount}</div>
+                        <div className="pt-3 text-2xl font-black text-white theme-text">{packSummary.questionCount}</div>
                     </div>
-                    <div className="flex min-h-28 flex-col justify-between rounded-lg border border-slate-700 bg-slate-900 p-3">
+                    <div className="flex min-h-28 flex-col justify-between rounded-lg border border-slate-700 theme-border bg-slate-900 theme-room-background p-3">
                         <div className="text-xs font-bold uppercase tracking-wide text-slate-500">{t('summarySurpriseQuestions')}</div>
                         <div className="pt-3 text-2xl font-black text-yellow-300">{packSummary.surpriseQuestionCount}</div>
                     </div>
-                    <div className="flex min-h-28 flex-col justify-between rounded-lg border border-slate-700 bg-slate-900 p-3">
+                    <div className="flex min-h-28 flex-col justify-between rounded-lg border border-slate-700 theme-border bg-slate-900 theme-room-background p-3">
                         <div className="text-xs font-bold uppercase tracking-wide text-slate-500">{t('summaryCategories')}</div>
-                        <div className="pt-3 text-2xl font-black text-white">{packSummary.sectionCount}</div>
+                        <div className="pt-3 text-2xl font-black text-white theme-text">{packSummary.sectionCount}</div>
                     </div>
-                    <div className="flex min-h-28 flex-col justify-between rounded-lg border border-slate-700 bg-slate-900 p-3">
+                    <div className="flex min-h-28 flex-col justify-between rounded-lg border border-slate-700 theme-border bg-slate-900 theme-room-background p-3">
                         <div className="text-xs font-bold uppercase tracking-wide text-slate-500">{t('summaryMedia')}</div>
-                        <div className="pt-3 text-2xl font-black text-white">{packSummary.mediaCount}</div>
+                        <div className="pt-3 text-2xl font-black text-white theme-text">{packSummary.mediaCount}</div>
                     </div>
-                    <div className="flex min-h-28 flex-col justify-between rounded-lg border border-slate-700 bg-slate-900 p-3">
+                    <div className="flex min-h-28 flex-col justify-between rounded-lg border border-slate-700 theme-border bg-slate-900 theme-room-background p-3">
                         <div className="text-xs font-bold uppercase tracking-wide text-slate-500">{t('summaryTotalPoints')}</div>
-                        <div className="pt-3 text-2xl font-black text-yellow-400">{packSummary.totalPoints}</div>
+                        <div className="pt-3 text-2xl font-black text-yellow-400 theme-accent">{packSummary.totalPoints}</div>
                     </div>
-                    <div className="flex min-h-28 flex-col justify-between rounded-lg border border-slate-700 bg-slate-900 p-3">
+                    <div className="flex min-h-28 flex-col justify-between rounded-lg border border-slate-700 theme-border bg-slate-900 theme-room-background p-3">
                         <div className="text-xs font-bold uppercase tracking-wide text-slate-500">{t('summaryAvgQuestions')}</div>
-                        <div className="pt-3 text-2xl font-black text-white">{packSummary.averageQuestionsPerCategory.toFixed(1)}</div>
+                        <div className="pt-3 text-2xl font-black text-white theme-text">{packSummary.averageQuestionsPerCategory.toFixed(1)}</div>
                     </div>
                 </div>
             </div>
 
-            <div className="mb-8 rounded-xl border border-slate-700 bg-slate-800/50 p-5">
-                <h3 className="mb-4 text-sm font-black uppercase tracking-widest text-slate-400">{t('additionalSettings')}</h3>
+            <div className="mb-8 rounded-xl border border-slate-700 theme-border bg-slate-800/50 theme-surface p-5">
+                <h3 className="mb-4 text-sm font-black uppercase tracking-widest text-slate-400 theme-muted">{t('additionalSettings')}</h3>
                 <div className="flex flex-col gap-4">
-                    <label className="flex cursor-pointer flex-col gap-3 rounded-lg border border-slate-700 bg-slate-900 p-4 transition-colors hover:border-slate-600 sm:flex-row sm:items-center">
+                    <label className="flex cursor-pointer flex-col gap-3 rounded-lg border border-slate-700 theme-border bg-slate-900 theme-room-background p-4 transition-colors hover:border-slate-600 sm:flex-row sm:items-center">
                         <span className="min-w-0 flex-1">
-                            <span className="block font-bold text-white">{t('availableToEveryone')}</span>
-                            <span className="mt-1 block text-sm text-slate-400">{t('availableToEveryoneHelp')}</span>
+                            <span className="block font-bold text-white theme-text">{t('availableToEveryone')}</span>
+                            <span className="mt-1 block text-sm text-slate-400 theme-muted">{t('availableToEveryoneHelp')}</span>
                         </span>
                         <span className="relative inline-flex h-7 w-12 shrink-0 items-center">
                             <input
@@ -1325,12 +1340,12 @@ export default function PackCreator({ pack, setView, user, setError }) {
                                 disabled={isSaving || hasActiveMediaAction}
                                 className="peer sr-only"
                             />
-                            <span className="absolute inset-0 rounded-full bg-slate-700 transition-colors peer-checked:bg-green-600 peer-disabled:opacity-50" />
+                            <span className="absolute inset-0 rounded-full bg-slate-700 theme-raised transition-colors peer-checked:bg-green-600 peer-disabled:opacity-50" />
                             <span className="absolute left-1 h-5 w-5 rounded-full bg-white transition-transform peer-checked:translate-x-5 peer-disabled:opacity-80" />
                         </span>
                     </label>
-                    <div className="rounded-lg border border-slate-700 bg-slate-900 p-4">
-                        <div className="mb-3 font-bold text-white">{t('surpriseScoringMechanic')}</div>
+                    <div className="rounded-lg border border-slate-700 theme-border bg-slate-900 theme-room-background p-4">
+                        <div className="mb-3 font-bold text-white theme-text">{t('surpriseScoringMechanic')}</div>
                         <div className="grid gap-3 md:grid-cols-2">
                             {[
                                 {
@@ -1349,7 +1364,7 @@ export default function PackCreator({ pack, setView, user, setError }) {
                                 return (
                                     <label
                                         key={option.value}
-                                        className={`flex cursor-pointer gap-3 rounded-lg border p-4 transition-colors ${isSelected ? 'border-yellow-400 bg-yellow-950/30' : 'border-slate-700 bg-slate-950 hover:border-slate-600'}`}
+                                        className={`flex cursor-pointer gap-3 rounded-lg border p-4 transition-colors ${isSelected ? 'border-yellow-400 theme-accent-border bg-yellow-950/30' : 'border-slate-700 theme-border bg-slate-950 theme-surface hover:border-slate-600'}`}
                                     >
                                         <input
                                             type="radio"
@@ -1362,7 +1377,7 @@ export default function PackCreator({ pack, setView, user, setError }) {
                                         />
                                         <span className="min-w-0">
                                             <span className="block font-black text-slate-100">{option.label}</span>
-                                            <span className="mt-1 block text-sm leading-relaxed text-slate-400">{option.hint}</span>
+                                            <span className="mt-1 block text-sm leading-relaxed text-slate-400 theme-muted">{option.hint}</span>
                                         </span>
                                     </label>
                                 );
@@ -1372,13 +1387,13 @@ export default function PackCreator({ pack, setView, user, setError }) {
                 </div>
             </div>
 
-            <div className="mb-8 rounded-xl border border-slate-700 bg-slate-800/50 p-5">
-                <h3 className="mb-4 text-sm font-black uppercase tracking-widest text-slate-400">{t('prize')}</h3>
+            <div className="mb-8 rounded-xl border border-slate-700 theme-border bg-slate-800/50 theme-surface p-5">
+                <h3 className="mb-4 text-sm font-black uppercase tracking-widest text-slate-400 theme-muted">{t('prize')}</h3>
                 <div className="space-y-4">
-                    <p className="text-sm text-slate-400">{t('prizeHelp')}</p>
+                    <p className="text-sm text-slate-400 theme-muted">{t('prizeHelp')}</p>
                     <div className="grid gap-4 md:grid-cols-2">
                         <div>
-                            <div className="mb-2 text-sm font-bold text-white">{t('prizeHiddenMedia')}</div>
+                            <div className="mb-2 text-sm font-bold text-white theme-text">{t('prizeHiddenMedia')}</div>
                             <PackMediaAttachment
                                 media={prize?.hiddenMedia}
                                 label={t('prizeHiddenMedia')}
@@ -1395,7 +1410,7 @@ export default function PackCreator({ pack, setView, user, setError }) {
                             />
                         </div>
                         <div>
-                            <div className="mb-2 text-sm font-bold text-white">{t('prizeRevealedMedia')}</div>
+                            <div className="mb-2 text-sm font-bold text-white theme-text">{t('prizeRevealedMedia')}</div>
                             <PackMediaAttachment
                                 media={prize?.revealedMedia}
                                 label={t('prizeRevealedMedia')}
@@ -1414,6 +1429,8 @@ export default function PackCreator({ pack, setView, user, setError }) {
                     </div>
                 </div>
             </div>
+            <PackThemePicker themeId={themeId} onChange={setThemeId} onPreview={() => setIsPreviewOpen(true)} disabled={editorLocked} t={t} />
+
 
             <div className="min-w-0 flex-1 space-y-8 pb-12">
                 <div className="mb-6 space-y-3">
@@ -1432,20 +1449,20 @@ export default function PackCreator({ pack, setView, user, setError }) {
                                     event.preventDefault(); setActiveRoundId(roundIds[target]);
                                     document.getElementById(roundIds[target] + '-tab')?.focus();
                                 }}
-                                onClick={() => setActiveRoundId(id)} className={`rounded-xl border px-4 py-3 text-left ${activeRoundId === id ? 'border-yellow-400 bg-yellow-400/10 text-yellow-300' : 'border-slate-600 text-slate-300'}`}>
+                                onClick={() => setActiveRoundId(id)} className={`rounded-xl border px-4 py-3 text-left ${activeRoundId === id ? 'border-yellow-400 theme-accent-border bg-yellow-400/10 text-yellow-300' : 'border-slate-600 text-slate-300 theme-muted'}`}>
                                 <span className="block font-bold">{t('packRound', { round: index + 1 })}</span>
                                 <span className="text-xs">{t('roundCounts', { categories: items.length, categoryUnit: roundCountUnit('Category', items.length), questions: questionCount, questionUnit: roundCountUnit('Question', questionCount) })}</span>
                             </button>;
                         })}
                         <button onClick={addRound} disabled={roundIds.length >= MAX_PACK_ROUNDS || editorLocked}
-                            className="flex items-center gap-2 rounded-xl border border-slate-600 px-4 py-3 text-white disabled:opacity-40"><Plus size={18} />{t('addRound')}</button>
+                            className="flex items-center gap-2 rounded-xl border border-slate-600 px-4 py-3 text-white theme-text disabled:opacity-40"><Plus size={18} />{t('addRound')}</button>
                     </div>
-                    <div className={`grid gap-3 rounded-xl border border-slate-700 bg-slate-800/50 p-4 ${activeEditorMode === 'table' ? (roundIds.length > 1 ? 'sm:grid-cols-2' : '') : (roundIds.length > 1 ? 'sm:grid-cols-2 lg:grid-cols-3' : 'sm:grid-cols-2')}`}>
+                    <div className={`grid gap-3 rounded-xl border border-slate-700 theme-border bg-slate-800/50 theme-surface p-4 ${activeEditorMode === 'table' ? (roundIds.length > 1 ? 'sm:grid-cols-2' : '') : (roundIds.length > 1 ? 'sm:grid-cols-2 lg:grid-cols-3' : 'sm:grid-cols-2')}`}>
                         {activeEditorMode === 'form' && <button
                             type="button"
                             onClick={collapseAllCategories}
                             disabled={editorLocked}
-                            className="flex min-w-0 items-center justify-center gap-2 rounded-lg border border-slate-600 bg-slate-900 px-4 py-2 text-sm font-bold text-slate-200 transition-colors hover:border-slate-500 hover:bg-slate-800"
+                            className="flex min-w-0 items-center justify-center gap-2 rounded-lg border border-slate-600 bg-slate-900 theme-room-background px-4 py-2 text-sm font-bold text-slate-200 transition-colors hover:border-slate-500 hover:bg-slate-800"
                         >
                             <ChevronRight size={18} className="shrink-0" />
                             <span>{t('collapseAllCategories')}</span>
@@ -1486,7 +1503,7 @@ export default function PackCreator({ pack, setView, user, setError }) {
                     const questionCount = cat.questions?.length || 0;
 
                     return (
-                    <div key={cat.id} ref={setCategoryElement(cat.id)} className="min-w-0 scroll-mt-6 rounded-xl border border-slate-700/50 bg-slate-800/50 p-4 sm:p-6">
+                    <div key={cat.id} ref={setCategoryElement(cat.id)} className="min-w-0 scroll-mt-6 rounded-xl border border-slate-700/50 bg-slate-800/50 theme-surface p-4 sm:p-6">
                         <div className="mb-6 flex flex-wrap items-center gap-3 sm:gap-4">
                             <button
                                 type="button"
@@ -1495,16 +1512,16 @@ export default function PackCreator({ pack, setView, user, setError }) {
                                 aria-expanded={!isCategoryCollapsed}
                                 aria-label={collapseLabel}
                                 title={collapseLabel}
-                                className="mt-5 flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-slate-700 bg-slate-900 text-slate-300 transition-colors hover:border-slate-500 hover:bg-slate-800 hover:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                className="mt-5 flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-slate-700 theme-border bg-slate-900 theme-room-background text-slate-300 theme-muted transition-colors hover:border-slate-500 hover:bg-slate-800 hover:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
                             >
                                 {isCategoryCollapsed ? <ChevronRight size={20} /> : <ChevronDown size={20} />}
                             </button>
-                            <span aria-disabled="true" className="mt-5 inline-flex min-h-10 min-w-10 shrink-0 select-none items-center justify-center rounded-lg border border-slate-700/70 bg-slate-800/70 px-3 text-sm font-bold uppercase tracking-wide text-white shadow-sm shadow-black/20">
+                            <span aria-disabled="true" className="mt-5 inline-flex min-h-10 min-w-10 shrink-0 select-none items-center justify-center rounded-lg border border-slate-700/70 bg-slate-800/70 px-3 text-sm font-bold uppercase tracking-wide text-white theme-text shadow-sm shadow-black/20">
                                 {questionCount}
                             </span>
                             <div
                                 onMouseDown={preventTextSelection}
-                                className="mt-5 flex shrink-0 select-none overflow-hidden rounded-lg border border-slate-700 bg-slate-900"
+                                className="mt-5 flex shrink-0 select-none overflow-hidden rounded-lg border border-slate-700 theme-border bg-slate-900 theme-room-background"
                             >
                                 <button
                                     type="button"
@@ -1512,7 +1529,7 @@ export default function PackCreator({ pack, setView, user, setError }) {
                                     disabled={editorLocked || catIdx === 0}
                                     aria-label={t('moveCategoryUp')}
                                     title={t('moveCategoryUp')}
-                                    className="flex h-10 w-10 select-none items-center justify-center text-slate-300 transition-colors hover:bg-slate-800 hover:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:cursor-not-allowed disabled:text-slate-700 disabled:hover:bg-transparent"
+                                    className="flex h-10 w-10 select-none items-center justify-center text-slate-300 theme-muted transition-colors hover:bg-slate-800 hover:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:cursor-not-allowed disabled:text-slate-700 disabled:hover:bg-transparent"
                                 >
                                     <ArrowUp size={18} />
                                 </button>
@@ -1522,7 +1539,7 @@ export default function PackCreator({ pack, setView, user, setError }) {
                                     disabled={editorLocked || catIdx === visibleCategories.length - 1}
                                     aria-label={t('moveCategoryDown')}
                                     title={t('moveCategoryDown')}
-                                    className="flex h-10 w-10 select-none items-center justify-center border-l border-slate-700 text-slate-300 transition-colors hover:bg-slate-800 hover:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:cursor-not-allowed disabled:text-slate-700 disabled:hover:bg-transparent"
+                                    className="flex h-10 w-10 select-none items-center justify-center border-l border-slate-700 theme-border text-slate-300 theme-muted transition-colors hover:bg-slate-800 hover:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:cursor-not-allowed disabled:text-slate-700 disabled:hover:bg-transparent"
                                 >
                                     <ArrowDown size={18} />
                                 </button>
@@ -1536,7 +1553,7 @@ export default function PackCreator({ pack, setView, user, setError }) {
                                     aria-label={t('categoryNumber', { number: catIdx + 1 })}
                                     data-category-id={cat.id}
                                     onChange={(e) => updateCategoryName(cat.id, e.target.value)}
-                                    className="w-full bg-slate-900 border border-slate-600 rounded-lg p-2 text-white font-bold outline-none"
+                                    className="w-full bg-slate-900 theme-room-background border border-slate-600 rounded-lg p-2 text-white theme-text font-bold outline-none"
                                 />
                             </div>
                             {visibleCategories.length > 1 && !editorLocked && <HoldToConfirmButton
@@ -1550,7 +1567,7 @@ export default function PackCreator({ pack, setView, user, setError }) {
                         </div>
 
                         {!isCategoryCollapsed && (
-                        <div className="space-y-4 border-l-2 border-slate-700 pl-3 sm:pl-4">
+                        <div className="space-y-4 border-l-2 border-slate-700 theme-border pl-3 sm:pl-4">
                             {cat.questions.map((q, questionIdx) => renderQuestion(cat, q, questionIdx))}
                             <button
                                 onClick={() => addQuestion(cat.id)}
@@ -1569,7 +1586,7 @@ export default function PackCreator({ pack, setView, user, setError }) {
                 <button
                     onClick={addCategory}
                     disabled={editorLocked}
-                    className="w-full border-2 border-dashed border-slate-700 hover:border-slate-500 text-slate-400 hover:text-slate-300 p-6 rounded-xl flex items-center justify-center gap-2 font-bold transition-colors"
+                    className="w-full border-2 border-dashed border-slate-700 theme-border hover:border-slate-500 text-slate-400 theme-muted hover:text-slate-300 p-6 rounded-xl flex items-center justify-center gap-2 font-bold transition-colors"
                 >
                     <Plus size={24} /> {t('addCategory')}
                 </button>
