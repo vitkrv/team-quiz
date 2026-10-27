@@ -725,8 +725,26 @@ input {
 [data-pack-theme="halloween"] .theme-primary:enabled { background: var(--theme-accent); color: var(--theme-background); border-color: var(--theme-accent); box-shadow: 0 4px 16px #f9731633; }
 [data-pack-theme="halloween"] .theme-primary:enabled:hover { background: var(--theme-hover); }
 [data-pack-theme="halloween"] button:focus-visible { outline: 2px solid var(--theme-hover); outline-offset: 3px; }
-[data-pack-theme="halloween"] .theme-tile { background: var(--theme-raised); color: var(--theme-accent); border: 1px solid var(--theme-border); }
-[data-pack-theme="halloween"] .theme-tile:hover { background: var(--theme-glow); border-color: var(--theme-accent); box-shadow: 0 0 18px #c084fc55; }
+[data-pack-theme="halloween"] .theme-tile {
+    background: var(--theme-raised);
+    color: var(--theme-accent);
+    border: 1px solid transparent;
+    box-shadow: none;
+}
+/* Include :enabled so preview utilities cannot override the theme on hover. */
+[data-pack-theme="halloween"] .theme-tile:enabled:is(:hover, :focus-visible) {
+    background: var(--theme-glow);
+    border-color: var(--theme-accent);
+    box-shadow: 0 0 18px #c084fc55;
+}
+[data-pack-theme="halloween"] button.theme-question-surface:enabled:is(:hover, :focus-visible) {
+    background: var(--theme-raised);
+    border-color: var(--theme-accent);
+}
+[data-pack-theme="halloween"] :is(.theme-tile, button.theme-question-surface):focus-visible {
+    --tw-ring-color: var(--theme-secondary);
+    --tw-ring-offset-color: var(--theme-background);
+}
 [data-pack-theme="halloween"] .question-tile-pulse { outline: 3px solid var(--theme-accent); outline-offset: -3px; }
 [data-pack-theme="halloween"] .category-preview-name { color: var(--theme-accent); text-shadow: var(--theme-category-shadow); }
 [data-pack-theme="halloween"] .theme-buzz-label { text-transform: none; }
