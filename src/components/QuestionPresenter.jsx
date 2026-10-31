@@ -29,7 +29,7 @@ export default function QuestionPresenter({
 
             {shouldShowQuestionContext && (
                 <div className={`mt-8 flex w-full min-h-0 flex-col items-center md:mt-10 ${isHost ? 'gap-4 md:gap-5' : 'gap-4 md:gap-6'}`}>
-                    {isSurpriseQuestion && <p className="theme-halloween-only font-black text-orange-300">{t('surpriseQuestion')}</p>}
+                    {isSurpriseQuestion && <p className="theme-custom-only font-black text-orange-300">{t('surpriseQuestion')}</p>}
                     {hasQuestionText && (
                         <div className={questionContainerClassName}>
                             <h2

@@ -95,6 +95,7 @@ const describeSlice = (center, radius, startAngle, endAngle) => {
 
 function PointsWheel({ themeId, values, result, rolledAt, scoreAppliedAt, serverNow, clockReady, t }) {
     const [now, setNow] = useState(() => serverNow());
+    const theme = getPackTheme(themeId);
     const size = 320;
     const center = size / 2;
     const radius = 150;
@@ -143,14 +144,14 @@ function PointsWheel({ themeId, values, result, rolledAt, scoreAppliedAt, server
                             <g key={`${value}:${index}`}>
                                 <path
                                     d={describeSlice(center, radius, startAngle, endAngle)}
-                                    fill={themeId === 'halloween' ? ['#F97316', '#69447E', '#342044'][index % 3] : isPositive ? (index % 2 ? '#115e59' : '#134e4a') : (index % 2 ? '#881337' : '#701a35')}
-                                    stroke="#0f172a"
+                                    fill={theme.wheelColors ? theme.wheelColors[index % theme.wheelColors.length] : isPositive ? (index % 2 ? '#115e59' : '#134e4a') : (index % 2 ? '#881337' : '#701a35')}
+                                    stroke={themeId === 'music' ? theme.palette.background : '#0f172a'}
                                     strokeWidth="2"
                                 />
                                 <text
                                     x={labelPoint.x}
                                     y={labelPoint.y}
-                                    fill={themeId === 'halloween' ? '#FFF7ED' : isPositive ? '#ccfbf1' : '#ffe4e6'}
+                                    fill={theme.palette ? theme.palette.text : isPositive ? '#ccfbf1' : '#ffe4e6'}
                                     fontSize="20"
                                     fontWeight="900"
                                     textAnchor="middle"
@@ -186,7 +187,8 @@ function PointsWheel({ themeId, values, result, rolledAt, scoreAppliedAt, server
     );
 }
 
-function SurprisePointsTable({ cells, rows, columns, pickedCellId, canPick, onPick, t }) {
+function SurprisePointsTable({ themeId, cells, rows, columns, pickedCellId, canPick, onPick, t }) {
+    const icons = getPackTheme(themeId).tableIcons;
     const isRevealed = Boolean(pickedCellId);
     const pickedCell = cells.find((cell) => cell.id === pickedCellId);
     const slots = Array.from({ length: rows * columns }, (_, index) => cells[index] || null);
@@ -210,6 +212,7 @@ function SurprisePointsTable({ cells, rows, columns, pickedCellId, canPick, onPi
                             );
                         }
 
+                        const icon = icons ? icons[index % icons.length] : cell.icon;
                         const isPicked = pickedCellId === cell.id;
                         const valueClassName = cell.value >= 0 ? 'text-emerald-300' : 'text-rose-300';
                         const cellClassName = isPicked
@@ -223,13 +226,13 @@ function SurprisePointsTable({ cells, rows, columns, pickedCellId, canPick, onPi
                                 onClick={() => onPick(cell.id)}
                                 disabled={!canPick || isRevealed}
                                 className={`surprise-table__cell ${cellClassName}`}
-                                aria-label={isRevealed ? `${cell.icon}: ${cell.value > 0 ? '+' : ''}${cell.value}` : `${t('pickTableCell')} ${cell.icon}`}
+                                aria-label={isRevealed ? `${icon}: ${cell.value > 0 ? '+' : ''}${cell.value}` : `${t('pickTableCell')} ${icon}`}
                                 aria-pressed={isPicked}
                                 title={!isRevealed && canPick ? t('pickTableCell') : undefined}
                             >
                                 {isPicked && <Check size={14} className="absolute right-2 top-2 text-yellow-300" aria-hidden="true" />}
                                 <span aria-hidden="true" className={`text-4xl leading-none transition-all duration-300 motion-reduce:transition-none md:text-[2.625rem] ${isRevealed ? '-translate-y-4 scale-75 opacity-0' : 'scale-100 opacity-100'}`}>
-                                    <span className="theme-table-default-icon">{cell.icon}</span><span className="theme-table-candy">🍬</span>
+                                    {icon}
                                 </span>
                                 <span aria-hidden="true" className={`absolute inset-0 flex items-center justify-center px-1 text-lg font-black tabular-nums transition-all duration-300 motion-reduce:transition-none sm:text-2xl ${valueClassName} ${isRevealed ? 'scale-100 opacity-100' : 'scale-75 opacity-0'}`}>
                                     {isRevealed ? (cell.value > 0 ? `+${cell.value}` : cell.value) : null}
@@ -894,7 +897,7 @@ export default function ActiveQuestionView({ room, roomCode, roomRef, user, isHo
             <SpaceBuzzHandler enabled={buzzer.enabled ? canClickBuzzButton : canIBuzz} onBuzz={handleBuzzIn} />
             <FloatingEmojiBackground
                 items={questionBackgroundItems}
-                className={`left-1/2 top-1/2 -z-10 h-screen w-screen -translate-x-1/2 -translate-y-1/2 ${isSurpriseQuestion || room.themeId === 'halloween' ? '' : 'grayscale brightness-50'}`}
+                className={`left-1/2 top-1/2 -z-10 h-screen w-screen -translate-x-1/2 -translate-y-1/2 ${isSurpriseQuestion || Boolean(getPackTheme(room.themeId).palette) ? '' : 'grayscale brightness-50'}`}
             />
 
             <div className={`active-question-enter-content ${isHost ? 'host-question-layout' : ''} relative z-10 flex min-h-0 w-full flex-1 flex-col items-center ${isAnswerFocused ? 'justify-center' : 'justify-start'} ${isEntranceContentVisible ? 'active-question-enter-content--visible' : ''}`}>
@@ -963,6 +966,7 @@ export default function ActiveQuestionView({ room, roomCode, roomRef, user, isHo
                                 )}
                                 {isSurpriseQuestion && isSurpriseJudged && isSurpriseTableMechanic && surpriseTableCells.length > 0 && (
                                     <SurprisePointsTable
+                                        themeId={room.themeId}
                                         cells={surpriseTableCells}
                                         rows={surpriseTableRows}
                                         columns={surpriseTableColumns}

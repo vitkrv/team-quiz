@@ -17,9 +17,10 @@ export default function PackThemePicker({ themeId, onChange, onPreview, disabled
                     <select id="pack-theme" value={id} disabled={disabled} onChange={event => onChange(event.target.value)} aria-describedby="pack-theme-help" className="mt-3 w-full rounded-lg border border-slate-600 bg-slate-900 p-3 text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-purple-400 disabled:opacity-50">
                         <option value="default">{t('themeDefault')}</option>
                         <option value="halloween">{t('themeHalloween')}</option>
+                        <option value="music">{t('themeMusic')}</option>
                     </select>
                     <p id="pack-theme-help" className="mt-2 text-sm text-slate-400">{t('packThemeHelp')}</p>
-                    <p className="mt-4 text-sm leading-relaxed text-slate-300">{t(id === 'halloween' ? 'themeHalloweenDescription' : 'themeDefaultDescription')}</p>
+                    <p className="mt-4 text-sm leading-relaxed text-slate-300">{t(({ halloween: 'themeHalloweenDescription', music: 'themeMusicDescription', default: 'themeDefaultDescription' })[id])}</p>
                     <button type="button" onClick={onPreview} disabled={disabled} className="mt-4 inline-flex items-center justify-center gap-2 rounded-lg border border-blue-500/40 bg-blue-600/20 px-4 py-2 text-sm font-bold text-blue-100 hover:bg-blue-600/30 focus-visible:outline focus-visible:outline-2 focus-visible:outline-blue-300 disabled:cursor-not-allowed disabled:opacity-50">
                         <Eye size={18} aria-hidden="true" /> {t('showQuestionPackPreview')}
                     </button>

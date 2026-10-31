@@ -89,6 +89,8 @@ Product and gameplay references for reviewing manual or AI-generated changes:
 
 - [App overview and change baseline](docs/app-overview.md)
 - [Game modes and gameplay reference](docs/gameplay-reference.md)
+- [New Question Pack theme — fill-in brief](docs/pack-theme-brief.md)
+- Completed theme briefs: [Default](docs/pack-theme-default.md), [Halloween](docs/pack-theme-halloween.md), [Music](docs/pack-theme-music.md)
 
 ## Room identity and invitation codes
 

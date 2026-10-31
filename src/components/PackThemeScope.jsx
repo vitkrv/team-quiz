@@ -8,6 +8,7 @@ export default function PackThemeScope({ themeId, children }) {
  const value = useMemo(() => ({ ...language, t: themeTranslator(language.t,id) }), [language,id]);
  const theme = getPackTheme(id);
  const style = Object.fromEntries(Object.entries(theme.palette || {}).map(([key,color]) => ['--theme-' + key,color]));
+ Object.entries(theme.effects || {}).forEach(([key, value]) => { style['--theme-' + key] = value; });
  style['--theme-category-shadow'] = theme.categoryShadow;
  return <LanguageContext.Provider value={value}><div data-pack-theme={id} style={style} className="pack-theme-scope">{children}</div></LanguageContext.Provider>;
 }

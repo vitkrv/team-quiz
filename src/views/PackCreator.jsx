@@ -327,7 +327,7 @@ function QuestionPackPreviewContent({ categories, roundNumber, onCategorySelect,
                             className={`active-question-enter-shell ${activeQuestion.isSurpriseQuestion ? 'active-question-enter-shell--surprise' : ''} relative mx-auto flex min-h-[28rem] w-full max-w-4xl flex-col items-center text-center`}
                         >
                             <div className={`relative flex w-full flex-1 flex-col items-center ${answerRevealed ? 'justify-center' : 'justify-start'}`}>
-                                {normalizeThemeId(themeId) === 'halloween' && <FloatingEmojiBackground items={createFloatingBackgroundItems({ seed: activeQuestion.id, count: 80, emojis: activeQuestion.isSurpriseQuestion ? getPackTheme(themeId).surprise : getPackTheme(themeId).normal })} className="inset-0 -z-10" />}
+                                {normalizeThemeId(themeId) !== 'default' && <FloatingEmojiBackground items={createFloatingBackgroundItems({ seed: activeQuestion.id, count: 80, emojis: activeQuestion.isSurpriseQuestion ? getPackTheme(themeId).surprise : getPackTheme(themeId).normal })} className="inset-0 -z-10" />}
                                 <QuestionPresenter
                                     question={activeQuestion}
                                     categoryName={selectedCategory.name}

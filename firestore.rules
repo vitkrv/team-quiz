@@ -3,7 +3,7 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
     function validTheme(data) {
-      return !('themeId' in data) || data.themeId in ['default', 'halloween'];
+      return !('themeId' in data) || data.themeId in ['default', 'halloween', 'music'];
     }
     match /artifacts/{appId}/public/data/packs/{packId} {
       allow read: if isAdmin(appId)
