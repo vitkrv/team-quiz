@@ -7,7 +7,7 @@ export const LANGUAGES = [
 
 const translations = {
     en: {
-        themeMusic: "Music",
+        themeMusic: "Musical Matcha",
         themeMusicDescription: "A gentle music quiz atmosphere with dark green, soft rose and matcha colors, playful creatures, and musical surprises.",
         music_leaderboard: "The Hit Parade",
         music_buzz: "Tap!",
@@ -596,7 +596,7 @@ const translations = {
         historyViewHostRpsVs: 'and'
     },
     uk: {
-        themeMusic: "Музикальна",
+        themeMusic: "Musical Matcha",
         themeMusicDescription: "Легка атмосфера музичної вікторини: темно-зелене тло, ніжні рожеві й матча-відтінки, кумедні створіння та музичні сюрпризи.",
         music_leaderboard: "Хіт-парад",
         music_buzz: "Тиць",

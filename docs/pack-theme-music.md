@@ -1,6 +1,6 @@
-# Music / Музикальна — completed theme brief
+# Musical Matcha — completed theme brief
 
-Based on [the theme brief](pack-theme-brief.md). Internal ID: `music`.
+Based on [the theme brief](pack-theme-brief.md). Internal ID: `music` (retained after the display-name change for saved-pack and room compatibility). The display name is Musical Matcha in both interface languages.
 This theme is for music quizzes, with a light, playful mood, dark green surfaces,
 soft rose accents, and matcha highlights. Colors are muted while text stays readable.
 
@@ -8,8 +8,8 @@ soft rose accents, and matcha highlights. Colors are muted while text stays read
 
 | Language | Title | Editor description |
 | --- | --- | --- |
-| English | Music | A gentle music quiz atmosphere with dark green, soft rose and matcha colors, playful creatures, and musical surprises. |
-| Ukrainian | Музикальна | Легка атмосфера музичної вікторини: темно-зелене тло, ніжні рожеві й матча-відтінки, кумедні створіння та музичні сюрпризи. |
+| English | Musical Matcha | A gentle music quiz atmosphere with dark green, soft rose and matcha colors, playful creatures, and musical surprises. |
+| Ukrainian | Musical Matcha | Легка атмосфера музичної вікторини: темно-зелене тло, ніжні рожеві й матча-відтінки, кумедні створіння та музичні сюрпризи. |
 
 ## Palette
 

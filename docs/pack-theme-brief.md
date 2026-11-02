@@ -28,8 +28,8 @@ The Halloween values are examples, not required defaults for your new theme.
 | --- | --- | --- | --- |
 | `background` | Room background; dark text on bright buttons | `#160F20` | _____ |
 | `glow` | Center of the room background gradient; hovered board cells | `#2B163D` | _____ |
-| `surface` | Panels, dialogs, question cards, wheel hub | `#24162F` | _____ |
-| `raised` | Raised panels, available board cells, disabled buzzer | `#342044` | _____ |
+| `surface` | Panels, dialogs, question cards, wheel hub, picked-pack lobby card, leaderboard heading, round-break panel | `#24162F` | _____ |
+| `raised` | Raised panels, available board cells, disabled buzzer, round-break score rows | `#342044` | _____ |
 | `border` | Panel outlines, table cells, wheel hub outline | `#69447E` | _____ |
 | `accent` | Main buttons, points, category titles, room code, wheel pointer | `#F97316` | _____ |
 | `hover` | Main-button hover and keyboard-focus outline | `#FB923C` | _____ |

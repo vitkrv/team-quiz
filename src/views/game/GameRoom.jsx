@@ -462,8 +462,8 @@ function MobileLeaderboardDrawer({ room, roomRef, isHost, viewerId, now, createS
                 aria-label={t('closeLeaderboard', { title: t('leaderboard') })}
             />
             <aside className="absolute right-0 top-0 flex h-full w-[min(20rem,calc(100vw-2rem))] flex-col border-l border-slate-700 theme-border bg-slate-900 theme-room-background shadow-2xl">
-                <div className="flex items-center justify-between border-b border-slate-800 theme-border bg-slate-950/80 p-4">
-                    <h2 id="mobile-leaderboard-title" className="theme-secondary break-words text-xs font-black uppercase tracking-widest text-slate-500">{t('leaderboard')}</h2>
+                <div className="flex items-center justify-between border-b border-slate-800 theme-border bg-slate-950/80 theme-surface p-4">
+                    <h2 id="mobile-leaderboard-title" className="theme-secondary break-words text-xs font-black uppercase tracking-widest text-slate-300">{t('leaderboard')}</h2>
                     <button onClick={onClose} className="rounded-lg border border-slate-700 theme-border p-2 text-slate-300 theme-muted hover:bg-slate-800" aria-label={t('closeLeaderboard', { title: t('leaderboard') })}>
                         <X size={18} />
                     </button>
@@ -817,7 +817,7 @@ function GameRoomContent({ room, roomCode, user, onPrepareRoomExit, onLeaveRoom,
                     </div>
                 </div>
 
-                <div className="mb-6 w-full max-w-2xl rounded-xl border border-slate-700 theme-border bg-slate-900/70 p-4 text-center">
+                <div className="mb-6 w-full max-w-2xl rounded-xl border border-slate-700 theme-border bg-slate-900/70 theme-surface p-4 text-center">
                     <div className="mb-1 text-xs font-black uppercase tracking-widest text-slate-500">
                         {t('pickedQuestionPack')}
                     </div>
@@ -1012,8 +1012,8 @@ function GameRoomContent({ room, roomCode, user, onPrepareRoomExit, onLeaveRoom,
                 <div className="flex min-h-0 flex-1 overflow-hidden">
                     {/* Sidebar - Players & Scores */}
                     <aside className="hidden w-64 flex-col overflow-y-auto border-r border-slate-800 theme-border bg-slate-900 theme-room-background md:flex">
-                        <div className="p-4 bg-slate-950/50 sticky top-0 border-b border-slate-800 theme-border">
-                            <h2 className="text-xs font-black uppercase tracking-widest text-slate-500">{t('leaderboard')}</h2>
+                        <div className="p-4 bg-slate-950/50 theme-surface sticky top-0 border-b border-slate-800 theme-border">
+                            <h2 className="theme-secondary text-xs font-black uppercase tracking-widest text-slate-300">{t('leaderboard')}</h2>
                         </div>
                         <LeaderboardContent
                             room={room}
