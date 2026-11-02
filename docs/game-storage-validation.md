@@ -332,3 +332,5 @@ Validate with npm run lint, npm run build, and the single scripts/verify-game-st
 Pending browser checklist: English/Ukrainian; desktop/mobile; host, contestant, spectator; Default/Halloween/Musical Matcha previews, lobby, category introductions, board, ordinary/surprise questions, answer reveal, wheel/table, prize, dialogs, RPS, round breaks, and shared results. Check reduced motion, keyboard focus, long headings, and returning to unthemed screens.
 
 Musical Matcha uses dark green surfaces, soft rose accents, matcha highlights, musical-note ordinary backgrounds, musical surprise emoji, and a cycling pool of 13 creatures on the hidden table. Its Ukrainian Buzz label is “Тиць” and table title is “Приховані створіння”. This is presentation-only; scoring, turn behavior, timers, and room theme locking are unchanged. See the [completed Musical Matcha theme brief](pack-theme-music.md).
+
+Theme validation covers Halloween, Musical Matcha, Cosmic Voyage, Movie Premiere, Winter Lodge, and Neon Arcade: balanced/rejoining avatars, concurrent joins, pack persistence, immutable room themes, source edits, retained results after finish, and legacy fallback.

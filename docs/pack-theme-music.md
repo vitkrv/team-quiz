@@ -1,6 +1,6 @@
-# Musical Matcha — completed theme brief
+# Musical Matcha / Музикальна матча — completed theme brief
 
-Based on [the theme brief](pack-theme-brief.md). Internal ID: `music` (retained after the display-name change for saved-pack and room compatibility). The display name is Musical Matcha in both interface languages.
+Based on [the theme brief](pack-theme-brief.md). Internal ID: `music` (retained after the display-name change for saved-pack and room compatibility). The display name is Musical Matcha in English and Музикальна матча in Ukrainian.
 This theme is for music quizzes, with a light, playful mood, dark green surfaces,
 soft rose accents, and matcha highlights. Colors are muted while text stays readable.
 
@@ -9,7 +9,7 @@ soft rose accents, and matcha highlights. Colors are muted while text stays read
 | Language | Title | Editor description |
 | --- | --- | --- |
 | English | Musical Matcha | A gentle music quiz atmosphere with dark green, soft rose and matcha colors, playful creatures, and musical surprises. |
-| Ukrainian | Musical Matcha | Легка атмосфера музичної вікторини: темно-зелене тло, ніжні рожеві й матча-відтінки, кумедні створіння та музичні сюрпризи. |
+| Ukrainian | Музикальна матча | Легка атмосфера музичної вікторини: темно-зелене тло, ніжні рожеві й матча-відтінки, кумедні створіння та музичні сюрпризи. |
 
 ## Palette
 
@@ -82,3 +82,5 @@ creation. Scoring, timers, turn behavior, layout, and animation timing are uncha
 For verification and pending browser checks, see [storage validation](game-storage-validation.md#predefined-pack-themes).
 Release requires the updated Firestore theme allowlist and frontend together;
 no Worker change, migration, or new dependencies are needed.
+
+The theme object defines `wheelSeparator: #142D27`; shared wheel rendering reads that field without checking theme names. Shared heading styling uses `effects['surprise-heading']` when provided, otherwise the palette’s `accent`. This theme uses its accent for the surprise heading. All shadow/glow/edge colors come from the theme’s `effects` object; theme-specific choices belong in that object rather than CSS selectors or component branches.

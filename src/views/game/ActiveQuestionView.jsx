@@ -145,7 +145,7 @@ function PointsWheel({ themeId, values, result, rolledAt, scoreAppliedAt, server
                                 <path
                                     d={describeSlice(center, radius, startAngle, endAngle)}
                                     fill={theme.wheelColors ? theme.wheelColors[index % theme.wheelColors.length] : isPositive ? (index % 2 ? '#115e59' : '#134e4a') : (index % 2 ? '#881337' : '#701a35')}
-                                    stroke={themeId === 'music' ? theme.palette.background : '#0f172a'}
+                                    stroke={theme.wheelSeparator}
                                     strokeWidth="2"
                                 />
                                 <text

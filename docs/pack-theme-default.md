@@ -102,3 +102,5 @@ This documentation adds no runtime changes or deployment requirement.
 Sources: [theme definitions](../src/utils/packTheme.js), [translations](../src/i18n.jsx),
 [theme styles](../src/index.css), [active question](../src/views/game/ActiveQuestionView.jsx),
 [theme picker](../src/components/PackThemePicker.jsx), and [avatar constants](../src/constants.js).
+
+Default defines `wheelSeparator: #0f172a` in its theme object and keeps its existing appearance; the extra surprise heading remains hidden.

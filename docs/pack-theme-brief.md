@@ -40,7 +40,11 @@ The Halloween values are examples, not required defaults for your new theme.
 
 ## 3. Emoji
 
-Separate emoji with spaces. Use nonempty lists and avoid duplicates within each list.
+Use exactly one emoji type for the ordinary-question background (`normal`): a single
+repeated motif is recommended for a calmer, more coherent question screen. Do not
+include that emoji in the same theme’s contestant avatar pool. Surprise backgrounds
+may contain multiple emoji. Separate list entries with spaces, keep lists nonempty,
+and avoid duplicates within each list.
 Fifteen contestant avatars match Halloween's current pool size; another pool size is possible.
 Unused avatars are assigned first, followed by balanced repeats. Rejoining contestants keep
 their avatar; the host keeps the crown. The room still supports 20 contestants plus the host.
@@ -74,8 +78,9 @@ localized app wording. Preserve `{round}` in the round-complete message; it inse
 
 ## 5. Finishing details
 
-These match existing Halloween presentation details. They currently live in CSS or
-components rather than the theme palette. **Match my palette** is an easy answer for
+These match existing Halloween presentation details. Store theme-specific choices in
+the theme object (`effects`, `wheelColors`, `wheelSeparator`, and `categoryShadow`);
+shared CSS and components consume those values without checking theme names. **Match my palette** is an easy answer for
 color effects; **same as Halloween** keeps the existing effect style.
 
 | Option | Current Halloween treatment | Your choice |
@@ -119,11 +124,11 @@ Implementation checklist for the developer after the brief is filled:
 - Register and normalize the new ID in [packTheme.js](../src/utils/packTheme.js).
 - Add both languages' name, description, and chosen overrides in [i18n.jsx](../src/i18n.jsx).
 - Add the selector option and description handling in [PackThemePicker.jsx](../src/components/PackThemePicker.jsx).
-- Add equivalent scoped styles in [index.css](../src/index.css), including the currently Halloween-specific decorations.
-- Extend theme-specific wheel colors, table symbol, and background treatment in [ActiveQuestionView.jsx](../src/views/game/ActiveQuestionView.jsx), plus preview behavior in [PackCreator.jsx](../src/views/PackCreator.jsx) and the extra heading in [QuestionPresenter.jsx](../src/components/QuestionPresenter.jsx).
+- Supply all shadow/glow/edge colors in the theme’s `effects` object for the shared scoped styles in [index.css](../src/index.css). The optional `surprise-heading` effect defaults to the palette accent; set it explicitly for a different heading color. Avoid theme-ID selectors or exclusions.
+- Define `wheelColors`, `wheelSeparator`, table symbols, and background emoji in the theme object for consumption in [ActiveQuestionView.jsx](../src/views/game/ActiveQuestionView.jsx), plus preview behavior in [PackCreator.jsx](../src/views/PackCreator.jsx) and the extra heading in [QuestionPresenter.jsx](../src/components/QuestionPresenter.jsx).
 - Allow the new ID in [firestore.rules](../firestore.rules); keep room theme immutability.
 - Update theme documentation and relevant cases in the existing [storage validation harness](game-storage-validation.md).
 - Run `npm run lint`, `npm run build`, and `node scripts/verify-game-storage.mjs` against the dedicated Emulator described in that guide. Coordinate rules/frontend releases when deployment is authorized.
 - Browser checks remain pending until explicitly requested: English/Ukrainian, desktop/mobile, host/contestant/spectator, previews through shared results, keyboard focus, reduced motion, long headings, and returning to unthemed screens.
 
-Source reference: [theme scope](../src/components/PackThemeScope.jsx) exposes the palette and category shadow as CSS variables. Additional visual decisions above come from the current Halloween styles and component branches. No new runtime customization controls are implied by this brief.
+Source reference: [theme scope](../src/components/PackThemeScope.jsx) exposes the palette and category shadow as CSS variables. Effect values also become CSS variables. Theme-specific visual choices belong in the theme object, not named-theme branches in shared presentation code. No new runtime customization controls are implied by this brief.

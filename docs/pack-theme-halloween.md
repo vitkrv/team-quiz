@@ -77,7 +77,7 @@ plus the host. Table decoration does not affect hidden point assignment.
 
 The palette controls the room gradient, panel fills, focus outlines, board states,
 room code, current-player highlight, wheel pointer/hub, and surprise table/reel.
-Additional finishing colors above are CSS fallbacks when no effect override is supplied.
+Additional finishing colors above are explicit entries in this theme’s `effects` object, including `surprise-heading: #FDBA74`. Shared CSS contains no Halloween-specific color fallbacks.
 
 The theme applies to game screens and shared results; editor chrome and pack listings
 keep their normal appearance. Each room locks its theme at creation. Scoring,
@@ -90,3 +90,5 @@ This documentation adds no runtime changes or deployment requirement.
 Sources: [theme definitions](../src/utils/packTheme.js), [translations](../src/i18n.jsx),
 [theme styles](../src/index.css), [active question](../src/views/game/ActiveQuestionView.jsx),
 [theme picker](../src/components/PackThemePicker.jsx), and [avatar constants](../src/constants.js).
+
+The theme object defines `wheelSeparator: #0f172a`; shared wheel rendering reads that field without checking theme names. Shared heading styling uses `effects['surprise-heading']` when provided, otherwise the palette’s `accent`. Halloween explicitly retains its lighter orange heading (#FDBA74). All shadow/glow/edge colors come from the theme’s `effects` object; theme-specific choices belong in that object rather than CSS selectors or component branches.

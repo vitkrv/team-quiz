@@ -10,5 +10,5 @@ export default function PackThemeScope({ themeId, children }) {
  const style = Object.fromEntries(Object.entries(theme.palette || {}).map(([key,color]) => ['--theme-' + key,color]));
  Object.entries(theme.effects || {}).forEach(([key, value]) => { style['--theme-' + key] = value; });
  style['--theme-category-shadow'] = theme.categoryShadow;
- return <LanguageContext.Provider value={value}><div data-pack-theme={id} style={style} className="pack-theme-scope">{children}</div></LanguageContext.Provider>;
+ return <LanguageContext.Provider value={value}><div data-pack-theme={id} data-pack-custom={Boolean(theme.palette)} style={style} className="pack-theme-scope">{children}</div></LanguageContext.Provider>;
 }

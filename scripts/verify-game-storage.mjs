@@ -239,8 +239,10 @@ try {
     await check('theme IDs, balanced avatars, and rejoining', async () => {
         assert.equal(actions.normalizeThemeId('unknown'), 'default');
         assert.equal(actions.normalizeThemeId(undefined), 'default');
-        for (const themeId of ['halloween', 'music']) {
+        for (const themeId of ['halloween', 'music', 'cosmic', 'cinema', 'winter', 'arcade']) {
+            assert.equal(actions.normalizeThemeId(themeId), themeId);
             const pool = actions.getPackTheme(themeId).avatars;
+            assert.equal(new Set(pool).size, pool.length);
             const players = { host: { isHost: true, avatar: '👑' } };
             for (let index = 0; index < 20; index++) {
                 const uid = 'theme-player-' + index;
@@ -256,7 +258,7 @@ try {
         }
     });
     await check('theme snapshot, pack persistence, immutable room theme, and legacy compatibility', async () => {
-        for (const themeId of ['halloween', 'music']) {
+        for (const themeId of ['halloween', 'music', 'cosmic', 'cinema', 'winter', 'arcade']) {
             await setDoc(ref(seedDb, 'packs', 'pack'), { ...pack, themeId: themeId });
             const themedId = await newRoom();
             const themedRoom = roomRef(hostDb, themedId);
