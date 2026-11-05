@@ -82,10 +82,10 @@ git -c core.autocrlf=false diff --check
 ```
 
 The script exercises the production clock controller with fake time and transport:
-five-sample estimation, request coalescing, the five-minute freshness boundary,
+three-sample estimation, request coalescing, the five-minute freshness boundary,
 foreground/online recovery, 30-second failure cooldown, clock adjustments, sample
 ownership, and cancellation during pending writes/reads or identity changes.
-Its healthy one-hour simulation asserts 12 calibrations (60 reads and 60 writes)
+Its healthy one-hour simulation asserts 12 calibrations (36 reads and 36 writes)
 per client in `[0, 60 minutes)`, despite frequent question/board requests. These are
 deterministic operation counts, not a production billing measurement. Failures,
 remounts, and clock changes can require additional operations. No production
@@ -111,7 +111,7 @@ language, viewport/device, steps, observed timing, and clock request counts.
    warnings. No new buzzing/loading gate should appear while recalibrating.
 5. Verify lobby, finished, and shared-results pages initiate no clock requests;
    already submitted operations may complete. Compare live-game request counts
-   before/after and confirm each completed calibration still uses five samples.
+   before/after and confirm each completed calibration uses three samples.
 
 ## Covered cases
 

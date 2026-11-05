@@ -9,7 +9,7 @@ function fixture(options = {}) {
     let wall = 1000000, mono = 0, tick = 0, timerId = 0, batch = 0, last;
     const timers = new Map(), changes = [], diagnostics = [], operations = [];
     const context = { userId: 'player', enabled: true, visible: true, online: true };
-    const control = { fail: false, mismatch: false, gate: null, gateKind: 'write', delays: [0, 0, 0, 0, 0], ...options };
+    const control = { fail: false, mismatch: false, gate: null, gateKind: 'write', delays: [0, 0, 0], ...options };
     const shift = (ms) => { wall += ms; mono += ms; tick += ms; };
     const clock = createServerClock({
         wallNow: () => wall, monotonicNow: () => mono, batchId: () => `batch-${++batch}`,
@@ -47,20 +47,20 @@ function fixture(options = {}) {
 let checks = 0;
 async function check(label, run) { await run(); checks++; console.log(`PASS ${label}`); }
 
-await check('initial five samples, estimator and warning metadata', async () => {
-    const f = fixture({ delays: [80, 60, 20, 100, 40] });
+await check('initial three samples, estimator and warning metadata', async () => {
+    const f = fixture({ delays: [80, 60, 20] });
     assert.equal(await f.update(), 250);
-    assert.deepEqual(f.counts(), { writes: 5, reads: 5 });
-    assert.deepEqual(f.clock.snapshot(), { userId: 'player', offsetMs: 250, roundTripMs: 20, ready: true, lastSyncedAt: 1000300 });
+    assert.deepEqual(f.counts(), { writes: 3, reads: 3 });
+    assert.deepEqual(f.clock.snapshot(), { userId: 'player', offsetMs: 250, roundTripMs: 20, ready: true, lastSyncedAt: 1000160 });
     assert.equal(f.changes.filter((s) => s.ready).length, 1);
-    assert.equal(new Set(f.operations.filter((o) => o.kind === 'write').map((o) => o.sampleId)).size, 5);
+    assert.equal(new Set(f.operations.filter((o) => o.kind === 'write').map((o) => o.sampleId)).size, 3);
     f.clock.dispose(); assert.equal(f.timers.size, 0);
 });
 await check('simultaneous initial requests share one promise and batch', async () => {
     const f = fixture(); const first = f.update();
     assert.equal(first, f.clock.request('question'));
     assert.equal(first, f.clock.request('board'));
-    await first; assert.deepEqual(f.counts(), { writes: 5, reads: 5 }); f.clock.dispose();
+    await first; assert.deepEqual(f.counts(), { writes: 3, reads: 3 }); f.clock.dispose();
 });
 await check('fresh question, board, pageshow and foreground requests cost zero operations', async () => {
     const f = fixture(); await f.update();
@@ -69,24 +69,24 @@ await check('fresh question, board, pageshow and foreground requests cost zero o
         await f.update({ visible: false }); await f.update({ visible: true }, 'visibilitychange');
         await f.update({}, 'pageshow');
     }
-    assert.deepEqual(f.counts(), { writes: 5, reads: 5 });
+    assert.deepEqual(f.counts(), { writes: 3, reads: 3 });
     assert.equal(f.timers.size, 1); f.clock.dispose();
 });
 await check('freshness boundary and timer/question collision start exactly one batch', async () => {
     const f = fixture(); await f.update(); await f.advance(CLOCK_FRESHNESS_MS - 1);
-    await f.clock.request('question'); assert.equal(f.counts().writes, 5);
+    await f.clock.request('question'); assert.equal(f.counts().writes, 3);
     // Move to the deadline without firing the timer, then request from the game.
     f.jump(1, 1); const promise = f.clock.request('question');
     await f.advance(1); await promise;
-    assert.deepEqual(f.counts(), { writes: 10, reads: 10 }); f.clock.dispose();
+    assert.deepEqual(f.counts(), { writes: 6, reads: 6 }); f.clock.dispose();
 });
 for (const pause of [{ visible: false }, { online: false }, { enabled: false }]) {
     await check(`stale paused session stays quiet and resumes once: ${JSON.stringify(pause)}`, async () => {
         const f = fixture(); await f.update(); const state = f.clock.snapshot(); await f.update(pause);
         assert.equal(f.timers.size, 0); await f.advance(2 * CLOCK_FRESHNESS_MS); await f.clock.request();
-        assert.deepEqual(f.clock.snapshot(), state); assert.equal(f.counts().writes, 5);
+        assert.deepEqual(f.clock.snapshot(), state); assert.equal(f.counts().writes, 3);
         await f.update({ visible: true, online: true, enabled: true });
-        assert.deepEqual(f.counts(), { writes: 10, reads: 10 }); f.clock.dispose();
+        assert.deepEqual(f.counts(), { writes: 6, reads: 6 }); f.clock.dispose();
     });
 }
 await check('lobby/results disabled sessions never start calibration', async () => {
@@ -97,18 +97,18 @@ await check('lobby/results disabled sessions never start calibration', async () 
 for (const role of ['host', 'contestant', 'spectator']) {
     await check(`${role} gets the same five-minute live-play schedule`, async () => {
         const f = fixture(); await f.update({ userId: role }); await f.advance(CLOCK_FRESHNESS_MS);
-        assert.deepEqual(f.counts(), { writes: 10, reads: 10 }); f.clock.dispose();
+        assert.deepEqual(f.counts(), { writes: 6, reads: 6 }); f.clock.dispose();
     });
 }
 await check('failure keeps successful metadata and all triggers obey retry cooldown', async () => {
     const f = fixture(); await f.update(); const state = f.clock.snapshot(); f.control.fail = true;
-    await f.advance(CLOCK_FRESHNESS_MS); assert.equal(f.counts().writes, 6);
+    await f.advance(CLOCK_FRESHNESS_MS); assert.equal(f.counts().writes, 4);
     assert.deepEqual(f.clock.snapshot(), state);
     for (let i = 0; i < 20; i++) await f.update({}, 'question');
     await f.update({ visible: false }); await f.advance(10000); await f.update({ visible: true });
-    await f.advance(CLOCK_RETRY_MS - 10001); assert.equal(f.counts().writes, 6);
+    await f.advance(CLOCK_RETRY_MS - 10001); assert.equal(f.counts().writes, 4);
     f.control.fail = false; await f.advance(1);
-    assert.deepEqual(f.counts(), { writes: 11, reads: 10 }); assert.equal(f.clock.snapshot().ready, true); f.clock.dispose();
+    assert.deepEqual(f.counts(), { writes: 7, reads: 6 }); assert.equal(f.clock.snapshot().ready, true); f.clock.dispose();
 });
 await check('initial failure retains local fallback and retries after 30 seconds', async () => {
     const f = fixture({ fail: true }); await f.update();
@@ -118,7 +118,7 @@ await check('initial failure retains local fallback and retries after 30 seconds
 });
 await check('another tab cannot supply accepted samples', async () => {
     const f = fixture({ mismatch: true }); await f.update();
-    assert.deepEqual(f.counts(), { writes: 5, reads: 5 }); assert.equal(f.clock.snapshot().ready, false);
+    assert.deepEqual(f.counts(), { writes: 3, reads: 3 }); assert.equal(f.clock.snapshot().ready, false);
     assert.equal(f.diagnostics.at(-1).event, 'failure');
     f.control.mismatch = false; await f.advance(CLOCK_RETRY_MS); assert.equal(f.clock.snapshot().ready, true); f.clock.dispose();
 });
@@ -137,7 +137,7 @@ for (const kind of ['write', 'read']) {
             assert.equal(f.changes.filter((s) => s.ready).length, 0);
             assert.deepEqual(f.counts(), { writes: 1, reads: kind === 'read' ? 1 : 0 });
             if (change === 'user' || change === 'hidden') {
-                await f.advance(0); assert.equal(f.counts().writes, 6);
+                await f.advance(0); assert.equal(f.counts().writes, 4);
                 if (change === 'user') assert.ok(f.operations.slice(kind === 'read' ? 2 : 1).every((o) => o.uid === 'new-user'));
             } else assert.equal(f.timers.size, 0);
             f.clock.dispose();
@@ -154,21 +154,21 @@ await check('successful state resets on user change and paused same-user state i
 for (const [wall, mono] of [[1001, 0], [-1001, 0], [300001, 0], [0, 300001]]) {
     await check(`wall adjustment/sleep ${wall}/${mono} requests a fresh batch`, async () => {
         const f = fixture(); await f.update(); f.jump(wall, mono); await f.clock.request('pageshow');
-        assert.equal(f.counts().writes, 10); f.clock.dispose();
+        assert.equal(f.counts().writes, 6); f.clock.dispose();
     });
 }
 await check('a 1000ms clock difference remains within the discontinuity threshold', async () => {
     const f = fixture(); await f.update(); f.jump(1000); await f.clock.request();
-    assert.equal(f.counts().writes, 5); f.clock.dispose();
+    assert.equal(f.counts().writes, 3); f.clock.dispose();
 });
 await check('60-minute operation budget is independent of frequent game transitions', async () => {
     const f = fixture(); await f.update();
     for (let second = 1; second < 3600; second++) {
         await f.advance(1000); await f.clock.request(second % 2 ? 'question' : 'board');
     }
-    assert.deepEqual(f.counts(), { writes: 60, reads: 60 });
+    assert.deepEqual(f.counts(), { writes: 36, reads: 36 });
     assert.equal(f.diagnostics.filter((e) => e.event === 'complete').length, 12);
-    console.log('BUDGET [0, 60 minutes): 12 calibrations; 60 reads + 60 writes/client; 1200 each/20 contestants');
+    console.log('BUDGET [0, 60 minutes): 12 calibrations; 36 reads + 36 writes/client; 720 each/20 contestants');
     f.clock.dispose();
 });
 
@@ -235,7 +235,7 @@ await check('actual hook: eligibility, browser lifecycle events, StrictMode repl
         // A cancelled batch arms one immediate retry; run its fake timer.
         for (const [id, timer] of [...timers]) if (timer.ms === 0) { timers.delete(id); timer.fn(); }
         await flush(); let value = render();
-        assert.equal(operations.length, 10); assert.equal(value.ready, true); assert.equal(value.offsetMs, 250);
+        assert.equal(operations.length, 6); assert.equal(value.ready, true); assert.equal(value.offsetMs, 250);
         assert.equal(value.roundTripMs, 0); assert.equal(value.lastSyncedAt, environment.wall);
         assert.ok(Math.abs(value.serverNow() - Date.now() - 250) < 20);
         const stableNow = value.serverNow;
@@ -243,12 +243,12 @@ await check('actual hook: eligibility, browser lifecycle events, StrictMode repl
         assert.equal(timers.size, 0);
         document.hidden = false; document.dispatchEvent(new Event('visibilitychange'));
         window.dispatchEvent(new Event('pageshow')); await value.syncClock(); await flush();
-        assert.equal(operations.length, 10); assert.equal(render().serverNow, stableNow);
+        assert.equal(operations.length, 6); assert.equal(render().serverNow, stableNow);
         navigator.onLine = false; window.dispatchEvent(new Event('offline')); environment.wall += CLOCK_FRESHNESS_MS;
-        await value.syncClock(); assert.equal(operations.length, 10); assert.equal(timers.size, 0);
-        navigator.onLine = true; window.dispatchEvent(new Event('online')); await flush(); assert.equal(operations.length, 20);
+        await value.syncClock(); assert.equal(operations.length, 6); assert.equal(timers.size, 0);
+        navigator.onLine = true; window.dispatchEvent(new Event('online')); await flush(); assert.equal(operations.length, 12);
         render('player', false); await flush(); assert.equal(timers.size, 0);
-        window.dispatchEvent(new Event('pageshow')); await flush(); assert.equal(operations.length, 20);
+        window.dispatchEvent(new Event('pageshow')); await flush(); assert.equal(operations.length, 12);
         gate = deferred(); render('another-user'); await flush(); value = render('another-user');
         assert.equal(value.ready, false); assert.equal(value.offsetMs, 0); assert.equal(value.lastSyncedAt, null);
         assert.ok(operations.at(-1).ref.includes('/another-user/clockSync/current'));

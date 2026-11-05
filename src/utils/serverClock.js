@@ -1,4 +1,4 @@
-export const CLOCK_SAMPLE_COUNT = 5;
+export const CLOCK_SAMPLE_COUNT = 3;
 export const CLOCK_FRESHNESS_MS = 300000;
 export const CLOCK_RETRY_MS = 30000;
 const CLOCK_JUMP_MS = 1000;
