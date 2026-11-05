@@ -4,7 +4,7 @@ import { getAchievements } from '../utils/achievements';
 
 export const recapRef = (roomRef) => doc(roomRef, 'recap', 'summary');
 const tracked = new Set(['player_buzzed', 'player_buzzed_late', 'player_buzzed_early', 'answer_correct', 'answer_incorrect',
-    'surprise_answer_correct', 'surprise_answer_incorrect', 'score_set', 'score_adjusted',
+    'surprise_answer_correct', 'surprise_answer_incorrect', 'score_set', 'score_adjusted', 'score_reverted',
     'surprise_table_picked', 'surprise_wheel_scored']);
 
 // Complete every read before the caller starts writing. The projection never reads private history.
@@ -19,6 +19,7 @@ export async function prepareRecap(transaction, roomRef, room, update, readPack)
     const category = getAllCategories(pack).find((c) => c.questions.some((q) => q.id === room.activeQuestionId));
     const question = category?.questions.find((q) => q.id === room.activeQuestionId);
     const scores = [];
+    const runningScores = {};
     for (const event of events) {
         const d = event.details;
         const playerId = d.playerId || (event.type.startsWith('player_buzzed') ? event.actorId
@@ -53,12 +54,13 @@ export async function prepareRecap(transaction, roomRef, room, update, readPack)
             p.streak = correct ? p.streak + 1 : 0;
             p.longestStreak = Math.max(p.longestStreak, p.streak);
         }
-        const manual = event.type === 'score_set' || event.type === 'score_adjusted';
+        const manual = ['score_set', 'score_adjusted', 'score_reverted'].includes(event.type);
         const scoring = manual || ['answer_correct', 'answer_incorrect', 'surprise_table_picked', 'surprise_wheel_scored'].includes(event.type);
         if (scoring) {
-            const before = Number(room.players[playerId].score) || 0;
+            const before = runningScores[playerId] ?? (Number(room.players[playerId].score) || 0);
             const delta = manual ? (event.type === 'score_set' ? Number(d.nextScore) - before : Number(d.delta)) : Number(d.points) || 0;
             const after = before + delta;
+            runningScores[playerId] = after;
             update[`players.${playerId}.score`] = after;
             Object.assign(d, { previousScore: before, nextScore: after, delta });
             if (manual) p.adjustments += delta;

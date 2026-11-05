@@ -1,3 +1,4 @@
+import { verifyScoreEdits } from './verify-score-edits.mjs';
 import { verifyPackRounds } from './verify-pack-rounds.mjs';
 import { verifyMediaStops } from './verify-media-stops.mjs';
 import { verifyBuzzer } from './verify-buzzer.mjs';
@@ -59,7 +60,7 @@ try {
     globalThis.__gameStorageTest = { db: hostDb, appId: namespace };
     await mkdir('.firebase/validation', { recursive: true });
     await build({
-        stdin: { contents: "export * from './src/utils/packTheme.js'; export * from './src/actions/roomActions.js'; export * from './src/actions/gameActions.js'; export * from './src/actions/gameStorage.js'; export * from './src/actions/buzzerActions.js';", resolveDir: process.cwd() },
+        stdin: { contents: "export * from './src/utils/packTheme.js'; export * from './src/actions/roomActions.js'; export * from './src/actions/gameActions.js'; export * from './src/actions/gameStorage.js'; export * from './src/actions/buzzerActions.js'; export * from './src/actions/scoreActions.js';", resolveDir: process.cwd() },
         bundle: true, platform: 'node', format: 'esm', external: ['firebase/firestore'],
         outfile: '.firebase/validation/actions.mjs',
         plugins: [{ name: 'emulator-config', setup(builder) {
@@ -298,6 +299,7 @@ try {
             await denied(updateDoc(roomRef(hostDb, legacyId), { themeId: themeId }));
         }
     });
+    await verifyScoreEdits({ actions, check, denied, hostDb, playerDb, spectatorDb, seedDb, ref, roomRef, event, t });
     await verifyGameRecap({ actions, check, denied, hostDb, playerDb, lateDb, spectatorDb, adminDb, seedDb, namespace, ref, roomRef, event, t });
     await verifyBuzzer({ actions, check, denied, hostDb, playerDb, lateDb, spectatorDb, seedDb, namespace, ref, roomRef, event, t, client });
     await verifyWheel({ actions, check, denied, hostDb, playerDb, spectatorDb, seedDb, ref, roomRef, event, t, client });

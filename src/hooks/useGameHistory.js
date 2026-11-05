@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { collection, doc, documentId, getDocsFromServer, limit, onSnapshot, orderBy, query, startAfter } from 'firebase/firestore';
 import { appId, db } from '../firebase';
+import { compareHistoryEvents } from '../utils/scoreHistory';
 
 const PAGE_SIZE = 50;
 
@@ -24,11 +25,7 @@ export default function useGameHistory(gameId, enabled) {
         state.base = query(history, orderBy('recordedAt', 'desc'), orderBy(documentId(), 'desc'));
         state.merge = (snapshot) => {
             snapshot.docs.forEach((item) => state.events.set(item.id, { ...item.data(), id: item.id }));
-            setItems([...state.events.values()].sort((a, b) => {
-                const time = (b.recordedAt?.seconds || 0) - (a.recordedAt?.seconds || 0)
-                    || (b.recordedAt?.nanoseconds || 0) - (a.recordedAt?.nanoseconds || 0);
-                return time || (a.id < b.id ? 1 : a.id > b.id ? -1 : 0);
-            }));
+            setItems([...state.events.values()].sort(compareHistoryEvents));
         };
         const unsubscribe = onSnapshot(query(state.base, limit(PAGE_SIZE)), { includeMetadataChanges: true }, (snapshot) => {
             if (!state.active || snapshot.metadata.hasPendingWrites || snapshot.metadata.fromCache) return;

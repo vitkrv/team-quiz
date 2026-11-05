@@ -812,6 +812,7 @@ export default function ActiveQuestionView({ room, roomCode, roomRef, user, isHo
                     points: pickedCell.value > 0 ? `+${pickedCell.value}` : pickedCell.value
                 }),
                 details: {
+                    playerId: surpriseAnswererId,
                     playerName: player?.name || t('playerFallback'),
                     points: pickedCell.value,
                     cellIndex: latestRound.tableCells.findIndex((cell) => cell.id === cellId)

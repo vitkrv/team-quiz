@@ -43,6 +43,37 @@ directory when starting Java. This validation used the standalone Firestore Emul
 
 ## Covered cases
 
+The same entry point runs `verify-score-edits.mjs`, covering real score-event
+classification, safe integer validation, no-op drafts, gameplay award reversal,
+unchanged answer statistics and turn, positive/negative corrections, reversal
+chains, stable retry IDs, multiple reversals, sequential recap entries, zero-net
+batches, concurrent edits/reversals, sparse history beyond the newest 50 events,
+legacy embedded history, and unauthorized/finished-game rejection. New-format
+score saves atomically write a `lastScoreEdit` room marker and linked immutable
+history events; recap rules validate each intermediate score against the batch.
+Deploy updated Firestore rules with the frontend only when authorized. No indexes
+or migration are required.
+
+### Host score dialog browser checklist (pending)
+
+Browser checks require an explicit user request for agent execution. Use host,
+contestant, and spectator sessions in English and Ukrainian, at desktop and mobile
+widths:
+
+1. Open Edit points from the host's contestant tile; verify other roles have no
+   editor action. Check integer entry, negative totals, and both 100-point buttons.
+2. Stage several reversals and a manual edit. Cancel using the button, Close,
+   Escape, and the backdrop in separate attempts; verify no score/history writes.
+3. Save and verify one linked history entry per reversal, an optional manual
+   adjustment, correct recap progression, and unchanged answer statistics/turn.
+   Reopen, verify disabled already-reversed actions, then reverse a reversal.
+4. Change scores from another host session during editing; verify the pending
+   net adjustment follows the latest score. Reverse the same entry elsewhere;
+   verify the stale save is rejected without partial writes.
+5. Simulate a save failure and retry; verify edits remain and commit only once.
+   During saving, verify editing and dismissal are disabled. Check focus trapping,
+   initial Cancel focus, restored focus, scrolling, and mobile negative input.
+
 The same entry point runs `verify-media-stops.mjs`, including non-browser
 playback-event checks from `verify-media-playback.mjs`. These cover timestamp parsing,
 ordering/bounds/the five-stop limit, replacement pruning, frozen metadata,

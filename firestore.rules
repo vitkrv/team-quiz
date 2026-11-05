@@ -59,6 +59,8 @@ service cloud.firestore {
         && validGameStorageUpdate(appId, gameId, resource.data, request.resource.data)
         && validPackRoundUpdate(resource.data, request.resource.data)
         && validWheelRoomUpdate(appId, gameId, resource.data, request.resource.data)
+        && (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['lastScoreEdit'])
+          || validScoreEditRoom(appId, gameId, resource.data, request.resource.data))
         && (
           (
             roomParticipantOrHost(resource.data, request.auth.uid)
@@ -377,6 +379,9 @@ service cloud.firestore {
         && event.id == eventId && event.actorId == request.auth.uid
         && event.actorName is string && event.message is string && event.details is map
         && event.timestamp is number && event.recordedAt == request.time
+        && (!(event.type == 'score_reverted' || event.details.keys().hasAny(['saveOperationId']))
+          || (after.hostId == request.auth.uid
+            && validScoreEditEvent(appId, gameId, get(roomPath).data, after, event)))
         && (after.get('recapVersion', 0) != 1 || after.hostId == request.auth.uid
           || !(event.type in ['player_buzzed', 'player_buzzed_late', 'player_buzzed_early', 'surprise_table_picked', 'surprise_wheel_scored'])
           || getAfter(/databases/$(database)/documents/artifacts/$(appId)/public/data/rooms/$(gameId)/recap/summary).data.lastEventId == eventId)
@@ -386,6 +391,55 @@ service cloud.firestore {
             && (after.get('buzzerPolicyVersion', 0) == 1 && event.type == 'player_buzzed_early'
               ? validPolicyEarlyEvent(appId, gameId, event, request.auth.uid)
               : validPlayerEvent(get(roomPath).data, after, event, request.auth.uid))));
+    }
+
+    function validScoreEditRoom(appId, gameId, before, after) {
+      return before.get('dataVersion', 1) != 2
+        ? request.auth.uid == before.hostId && before.status != 'finished'
+        : validStoredScoreEditRoom(appId, gameId, before, after);
+    }
+
+    function validStoredScoreEditRoom(appId, gameId, before, after) {
+      let edit = after.lastScoreEdit;
+      let first = getAfter(/databases/$(database)/documents/artifacts/$(appId)/public/data/rooms/$(gameId)/history/$(edit.eventIds[0])).data;
+      let last = getAfter(/databases/$(database)/documents/artifacts/$(appId)/public/data/rooms/$(gameId)/history/$(edit.eventIds[edit.eventIds.size() - 1])).data;
+      return request.auth.uid == before.hostId && before.status != 'finished'
+        && after.diff(before).affectedKeys().hasOnly(['players', 'lastScoreEdit', 'history'])
+        && edit.keys().hasOnly(['operationId', 'playerId', 'eventIds', 'previousScore', 'nextScore'])
+        && edit.operationId is string && edit.eventIds is list && edit.eventIds.size() > 0 && edit.eventIds.size() <= 4
+        && edit.playerId in before.players && !before.players[edit.playerId].isHost
+        && after.players.diff(before.players).affectedKeys().hasOnly([edit.playerId])
+        && after.players[edit.playerId].diff(before.players[edit.playerId]).affectedKeys().hasOnly(['score'])
+        && edit.previousScore == before.players[edit.playerId].score && edit.nextScore == after.players[edit.playerId].score
+        && (first.recordedAt == request.time && last.recordedAt == request.time
+          && first.details.saveOperationId == edit.operationId && last.details.saveOperationId == edit.operationId
+          && first.details.previousScore == edit.previousScore && last.details.nextScore == edit.nextScore);
+    }
+
+    function validScoreEditEvent(appId, gameId, room, next, event) {
+      let d = event.details;
+      let edit = next.lastScoreEdit;
+      let index = d.batchIndex;
+      let previous = index == 0 ? edit.previousScore
+        : getAfter(/databases/$(database)/documents/artifacts/$(appId)/public/data/rooms/$(gameId)/history/$(edit.eventIds[index - 1])).data.details.nextScore;
+      return room.hostId == request.auth.uid && room.status != 'finished'
+        && event.type in ['score_adjusted', 'score_reverted']
+        && d.saveOperationId == edit.operationId && d.playerId == edit.playerId
+        && index is int && index >= 0 && index < edit.eventIds.size() && edit.eventIds[index] == event.id
+        && d.delta is int && d.delta != 0 && d.previousScore == previous
+        && d.nextScore == d.previousScore + d.delta
+        && (index != edit.eventIds.size() - 1 || d.nextScore == edit.nextScore)
+        && (event.type != 'score_reverted' || validScoreReversal(appId, gameId, event));
+    }
+
+    function validScoreReversal(appId, gameId, event) {
+      let source = get(/databases/$(database)/documents/artifacts/$(appId)/public/data/rooms/$(gameId)/history/$(event.details.revertsEventId)).data;
+      let d = source.details;
+      let manual = source.type in ['score_set', 'score_adjusted', 'score_reverted'];
+      let delta = manual ? d.get('delta', d.get('nextScore', 0) - d.get('previousScore', 0)) : d.get('points', 0);
+      return d.playerId == event.details.playerId && event.details.delta == -delta && delta != 0
+        && (manual || source.type in ['answer_correct', 'answer_incorrect', 'surprise_table_picked', 'surprise_wheel_scored']
+          || (source.type == 'surprise_wheel_rolled' && !d.keys().hasAny(['spinId'])));
     }
 
     function validPlayerEvent(before, after, event, uid) {
@@ -508,7 +562,7 @@ service cloud.firestore {
       let event = getAfter(/databases/$(database)/documents/artifacts/$(appId)/public/data/rooms/$(gameId)/history/$(summary.lastEventId)).data;
       return event.actorId == room.hostId && event.recordedAt == request.time
         && (event.type in ['answer_correct', 'answer_incorrect', 'surprise_answer_correct', 'surprise_answer_incorrect',
-          'score_set', 'score_adjusted', 'surprise_table_picked', 'surprise_wheel_scored']
+          'score_set', 'score_adjusted', 'score_reverted', 'surprise_table_picked', 'surprise_wheel_scored']
           || (room.get('buzzerPolicyVersion', 0) == 1 && event.type in ['player_buzzed', 'player_buzzed_late']
             && event.details.raceId == room.buzzerRoundId))
         && next != room;
@@ -574,7 +628,10 @@ service cloud.firestore {
       return room.get('recapVersion', 0) == 1 && room.status in ['playing', 'category_preview', 'round_break']
         && score.id == eventId && event.recordedAt == request.time
         && score.playerId == event.details.playerId && score.source == event.type
-        && score.before == room.players[score.playerId].score && score.after == next.players[score.playerId].score
+        && (event.details.keys().hasAny(['saveOperationId'])
+          ? (room.hostId == request.auth.uid && event.details.saveOperationId == next.lastScoreEdit.operationId
+            && event.id in next.lastScoreEdit.eventIds && score.before == event.details.previousScore && score.after == event.details.nextScore)
+          : score.before == room.players[score.playerId].score && score.after == next.players[score.playerId].score)
         && score.delta == score.after - score.before && score.sequence is int
         && (room.hostId == request.auth.uid || (score.playerId == request.auth.uid
           && event.type in ['surprise_table_picked', 'surprise_wheel_scored']

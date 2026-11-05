@@ -1,3 +1,6 @@
+import PlayerScoreDialog from '../../components/PlayerScoreDialog';
+import { HistoryMessage } from '../../components/historyMessage';
+import { compareHistoryEvents, validScore } from '../../utils/scoreHistory';
 import PackThemeScope from '../../components/PackThemeScope';
 import { getRoundCategories } from '../../utils/packRounds';
 import { ANSWER_WINDOW_MS, LATE_BUZZ_WINDOW_MS, timestampMillis } from '../../utils/buzzerPolicy';
@@ -7,7 +10,7 @@ import useGameHistory from '../../hooks/useGameHistory';
 import { updateRoom } from '../../actions/gameStorage';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { deleteField, doc } from 'firebase/firestore';
-import { ArrowLeft, ArrowRight, Check, Copy, Gift, Link, Play, PlusCircle, MinusCircle, Users, SlidersHorizontal, ScrollText, Swords, Trophy, X } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Check, Copy, Gift, Link, Minus, Play, Pencil, Plus, Users, SlidersHorizontal, ScrollText, Swords, Trophy, X } from 'lucide-react';
 import { HOST_AVATAR } from '../../constants';
 import { appId, db } from '../../firebase';
 import PackTitle from '../../components/PackTitle';
@@ -16,7 +19,7 @@ import RetryableImage from '../../components/RetryableImage';
 import useServerClock from '../../hooks/useServerClock';
 import { getRoomAnalyticsSummary, trackEvent } from '../../services/analytics';
 import { useLanguage } from '../../useLanguage';
-import { adjustScore, closeHostRps, closePrizeModal, createHistoryItem, openPrizeModal, resolveHostRpsThrow, revealPrizeModal, startHostRps, submitHostRpsChoice } from '../../actions/gameActions';
+import { closeHostRps, closePrizeModal, createHistoryItem, openPrizeModal, resolveHostRpsThrow, revealPrizeModal, startHostRps, submitHostRpsChoice } from '../../actions/gameActions';
 import { getMediaKind, getMediaUrl, MEDIA_KINDS } from '../../services/imageStorage';
 import { hasDefinedFinalResults } from '../../utils/gameResults';
 import ActiveQuestionView from './ActiveQuestionView';
@@ -166,14 +169,19 @@ function ScoreEditorModal({ players, roomRef, host, onClose, t }) {
         playerEntries.map(([playerId, player]) => [playerId, String(player.score || 0)])
     ));
     const [isSaving, setIsSaving] = useState(false);
+    const hasInvalidScore = playerEntries.some(([playerId, player]) => !validScore(scores[playerId] ?? String(player.score || 0)));
+
+    const changeScore = (playerId, value) => {
+        if (/^-?\d*$/.test(value)) setScores((previous) => ({ ...previous, [playerId]: value }));
+    };
 
     const handleSave = async () => {
+        if (isSaving || hasInvalidScore) return;
         const update = {};
         const historyItems = [];
 
         playerEntries.forEach(([playerId, player]) => {
-            const nextScore = Number.parseInt(scores[playerId], 10);
-            const normalizedScore = Number.isNaN(nextScore) ? 0 : nextScore;
+            const normalizedScore = Number(scores[playerId] ?? player.score ?? 0);
             const previousScore = player.score || 0;
 
             if (normalizedScore !== previousScore) {
@@ -215,7 +223,7 @@ function ScoreEditorModal({ players, roomRef, host, onClose, t }) {
     };
 
     return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-6">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4 sm:p-6">
             <div className="w-full max-w-lg rounded-xl border border-slate-700 theme-border bg-slate-900 theme-room-background shadow-2xl">
                 <div className="flex items-center justify-between border-b border-slate-800 theme-border p-5">
                     <h2 className="text-xl font-bold text-white theme-text">{t('advancedScoreEditor')}</h2>
@@ -223,27 +231,42 @@ function ScoreEditorModal({ players, roomRef, host, onClose, t }) {
                         <X size={22} />
                     </button>
                 </div>
-                <div className="max-h-[60vh] space-y-3 overflow-y-auto p-5">
+                <div className="max-h-[60vh] space-y-3 overflow-y-auto p-3 sm:p-5">
                     {playerEntries.length === 0 ? (
                         <div className="rounded-lg border border-dashed border-slate-700 theme-border p-8 text-center text-slate-500">
                             {t('noPlayersForScoreEditor')}
                         </div>
                     ) : (
-                        playerEntries.map(([playerId, player]) => (
-                            <label key={playerId} className="flex items-center justify-between gap-4 rounded-lg border border-slate-800 theme-border bg-slate-950 theme-surface p-4">
-                                <span className="flex min-w-0 items-center gap-3">
-                                    <span className="text-2xl">{player.avatar}</span>
-                                    <span className="truncate font-bold text-slate-100">{player.name}</span>
-                                </span>
-                                <input
-                                    type="number"
-                                    value={scores[playerId] ?? '0'}
-                                    onChange={(event) => setScores({ ...scores, [playerId]: event.target.value })}
-                                    className="w-28 rounded-lg border border-slate-700 theme-border bg-slate-900 theme-room-background p-2 text-right font-mono text-yellow-400 theme-accent outline-none focus:border-blue-500"
-                                />
-                            </label>
-                        ))
+                        playerEntries.map(([playerId, player]) => {
+                            const value = scores[playerId] ?? String(player.score || 0);
+                            const valid = validScore(value);
+                            const score = Number(value);
+                            return (
+                                <div key={playerId} className="flex min-w-0 items-center justify-between gap-2 rounded-lg border border-slate-800 theme-border bg-slate-950 theme-surface p-2 sm:gap-4 sm:p-3">
+                                    <label htmlFor={`all-player-score-${playerId}`} className="flex min-w-0 flex-1 items-center gap-2 sm:gap-3">
+                                        <span className="shrink-0 text-2xl">{player.avatar}</span>
+                                        <span className="truncate font-bold text-slate-100" title={player.name}>{player.name}</span>
+                                    </label>
+                                    <div className="flex w-40 shrink-0 items-center overflow-hidden rounded-xl border border-slate-700 theme-border bg-slate-950 theme-surface focus-within:border-blue-500 sm:w-48">
+                                        <button type="button" onClick={() => changeScore(playerId, String(score - 100))}
+                                            disabled={isSaving || !valid || !Number.isSafeInteger(score - 100)}
+                                            aria-label={`${t('scoreSubtract100')}: ${player.name}`}
+                                            className="flex shrink-0 items-center justify-center self-stretch p-2.5 hover:bg-slate-800 disabled:opacity-50"><Minus size={18} /></button>
+                                        <input id={`all-player-score-${playerId}`} type="number" step="1" value={value}
+                                            onChange={(event) => changeScore(playerId, event.target.value)}
+                                            onKeyDown={(event) => { if (['e', 'E', '.', '+'].includes(event.key)) event.preventDefault(); }}
+                                            disabled={isSaving} aria-invalid={!valid} aria-describedby={hasInvalidScore ? 'all-player-score-validation' : undefined}
+                                            className="min-w-0 w-full bg-transparent py-3 text-center font-mono font-bold text-yellow-400 theme-accent outline-none [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none" />
+                                        <button type="button" onClick={() => changeScore(playerId, String(score + 100))}
+                                            disabled={isSaving || !valid || !Number.isSafeInteger(score + 100)}
+                                            aria-label={`${t('scoreAdd100')}: ${player.name}`}
+                                            className="flex shrink-0 items-center justify-center self-stretch p-2.5 hover:bg-slate-800 disabled:opacity-50"><Plus size={18} /></button>
+                                    </div>
+                                </div>
+                            );
+                        })
                     )}
+                    {hasInvalidScore && <p id="all-player-score-validation" role="alert" className="text-sm text-red-300">{t('scoreEditInvalid')}</p>}
                 </div>
                 <div className="flex justify-end gap-3 border-t border-slate-800 theme-border p-5">
                     <button onClick={onClose} className="rounded-lg border border-slate-700 theme-border px-4 py-2 font-bold text-slate-300 theme-muted hover:bg-slate-800">
@@ -251,7 +274,7 @@ function ScoreEditorModal({ players, roomRef, host, onClose, t }) {
                     </button>
                     <button
                         onClick={handleSave}
-                        disabled={isSaving || playerEntries.length === 0}
+                        disabled={isSaving || hasInvalidScore || playerEntries.length === 0}
                         className="rounded-lg bg-blue-600 theme-primary px-5 py-2 font-bold text-white theme-text hover:bg-blue-500 disabled:bg-slate-700 disabled:text-slate-500"
                     >
                         {isSaving ? t('saving') : t('saveScores')}
@@ -262,74 +285,9 @@ function ScoreEditorModal({ players, roomRef, host, onClose, t }) {
     );
 }
 
-const PlayerName = ({ children }) => (
-    <span className="font-black text-yellow-400 theme-accent">{children}</span>
-);
-
-const PointValue = ({ value, showSign = false }) => {
-    const numericValue = Number(value) || 0;
-    const color = numericValue >= 0 ? 'text-green-400 theme-positive' : 'text-red-400';
-    const displayValue = showSign && numericValue > 0 ? `+${numericValue}` : numericValue;
-
-    return <span className={`font-black ${color}`}>{displayValue}</span>;
-};
-
-const renderHistoryMessage = (item, t) => {
-    const details = item.details || {};
-    const fallbackName = item.actorName || t('hostLabel');
-
-    switch (item.type) {
-        case 'room_created':
-            return <><PlayerName>{details.hostName || fallbackName}</PlayerName> {t('historyViewCreatedRoom')}</>;
-        case 'game_started':
-            return <><PlayerName>{details.actorName || fallbackName}</PlayerName> {t('historyViewStartedGame')} {t('historyViewFirst')} <PlayerName>{details.playerName || t('playerFallback')}</PlayerName></>;
-        case 'round_completed':
-            return t('roundComplete', { round: details.round });
-        case 'round_started':
-            return t('roundStarted', { round: details.round });
-        case 'game_finished':
-            return <><PlayerName>{details.actorName || fallbackName}</PlayerName> {t('historyViewEndedGame')}</>;
-        case 'question_picked':
-            return <><PlayerName>{details.actorName || fallbackName}</PlayerName> {t('historyViewPicked')} &quot;{details.categoryName || t('question')}&quot; {t('historyViewFor')} <PointValue value={details.points} /></>;
-        case 'player_buzzed_early':
-            return <><PlayerName>{details.actorName || fallbackName}</PlayerName> {t('recapEarlyBuzz')}</>;
-        case 'player_buzzed':
-            return <><PlayerName>{details.actorName || fallbackName}</PlayerName> {t('historyViewBuzzed')}</>;
-        case 'player_buzzed_late':
-            return <><PlayerName>{details.actorName || fallbackName}</PlayerName> {t(details.timingPolicy === 1 ? (details.deltaMs === 0 ? 'historyReactionTie' : 'historyReactionLate') : 'historyViewBuzzedLate', {
-                playerName: details.playerName || t('playerFallback'),
-                delta: formatBuzzDelta(Number(details.deltaMs) || 0)
-            })}</>;
-        case 'answer_correct':
-            return <><PlayerName>{details.playerName || t('playerFallback')}</PlayerName> {t('historyViewCorrect')}, <PointValue value={details.points} showSign /></>;
-        case 'answer_incorrect':
-            return <><PlayerName>{details.playerName || t('playerFallback')}</PlayerName> {t('historyViewIncorrect')}{details.points ? <>, <PointValue value={details.points} showSign /></> : null}</>;
-        case 'surprise_answer_correct':
-            return <><PlayerName>{details.playerName || t('playerFallback')}</PlayerName> {t('historyViewSurpriseCorrect')}</>;
-        case 'surprise_answer_incorrect':
-            return <><PlayerName>{details.playerName || t('playerFallback')}</PlayerName> {t('historyViewSurpriseIncorrect')}</>;
-        case 'surprise_wheel_rolled':
-            return <><PlayerName>{details.playerName || t('playerFallback')}</PlayerName> {t('historyViewWheelResult')} <PointValue value={details.points} showSign /></>;
-        case 'surprise_table_picked':
-            return <><PlayerName>{details.playerName || t('playerFallback')}</PlayerName> {t('historyViewTableResult')} <PointValue value={details.points} showSign /></>;
-        case 'question_skipped':
-            return <>{t('historyViewSkipped')} &quot;{details.categoryName || t('question')}&quot; {t('historyViewFor')} <PointValue value={details.points} /></>;
-        case 'board_resumed':
-            return <>{t('historyViewBackToBoard')}</>;
-        case 'score_adjusted':
-            return <><PlayerName>{details.playerName || t('playerFallback')}</PlayerName> {t('historyViewScore')} <PointValue value={details.delta} showSign /> → {details.nextScore}</>;
-        case 'score_set':
-            return <><PlayerName>{details.playerName || t('playerFallback')}</PlayerName> {t('historyViewScore')} {details.previousScore} → {details.nextScore} (<PointValue value={details.delta} showSign />)</>;
-        case 'host_rps_completed':
-            return <><PlayerName>{details.winnerName || t('playerFallback')}</PlayerName> {t('historyViewHostRpsWon')} <PlayerName>{details.playerAName || t('playerFallback')}</PlayerName> {t('historyViewHostRpsVs')} <PlayerName>{details.playerBName || t('playerFallback')}</PlayerName></>;
-        default:
-            return item.message;
-    }
-};
-
 function HistoryModal({ room, gameId, onClose, t }) {
     const { items, loading, error, hasMore, loadMore, retry } = useGameHistory(gameId, room.dataVersion === 2);
-    const sortedHistory = room.dataVersion === 2 ? items : [...(room.history || [])].sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
+    const sortedHistory = room.dataVersion === 2 ? items : [...(room.history || [])].sort(compareHistoryEvents);
 
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-6">
@@ -357,7 +315,7 @@ function HistoryModal({ room, gameId, onClose, t }) {
                                             {new Date(item.timestamp || 0).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false })}
                                         </time>
                                     </div>
-                                    <div className="text-sm font-medium text-slate-200">{renderHistoryMessage(item, t)}</div>
+                                    <div className="text-sm font-medium text-slate-200"><HistoryMessage item={item} t={t} /></div>
                                 </div>
                             ))}
                         </div>
@@ -395,7 +353,7 @@ function LobbyLeaveConfirmModal({ isLeaving, onCancel, onConfirm, t }) {
     );
 }
 
-function LeaderboardContent({ room, roomRef, isHost, viewerId, now, createScoreAdjustmentHistory, t }) {
+function LeaderboardContent({ room, isHost, viewerId, now, onEditScore, t }) {
     return (
         <div className="space-y-1 p-2">
             {Object.entries(room.players)
@@ -428,22 +386,11 @@ function LeaderboardContent({ room, roomRef, isHost, viewerId, now, createScoreA
                                 </div>
                             </div>
                             {isHost && (
-                                <div className="flex flex-col gap-1 opacity-100 transition-opacity md:opacity-0 md:group-hover:opacity-100">
-                                    <button
-                                        onClick={() => adjustScore(roomRef, pid, player.score, 100, createScoreAdjustmentHistory(player, 100, player.score + 100))}
-                                        className="p-1 text-slate-400 theme-muted hover:text-green-400"
-                                        aria-label={`Add points to ${player.name}`}
-                                    >
-                                        <PlusCircle size={14}/>
-                                    </button>
-                                    <button
-                                        onClick={() => adjustScore(roomRef, pid, player.score, -100, createScoreAdjustmentHistory(player, -100, player.score - 100))}
-                                        className="p-1 text-slate-400 theme-muted hover:text-red-400"
-                                        aria-label={`Remove points from ${player.name}`}
-                                    >
-                                        <MinusCircle size={14}/>
-                                    </button>
-                                </div>
+                                <button type="button" onClick={() => onEditScore(pid)}
+                                    className="rounded-lg p-2 text-slate-400 theme-muted hover:bg-slate-700 hover:text-yellow-400 focus-visible:outline focus-visible:outline-2 focus-visible:outline-blue-400"
+                                    aria-label={t('editPlayerScore', { playerName: player.name })} title={t('editPlayerScore', { playerName: player.name })}>
+                                    <Pencil size={16} />
+                                </button>
                             )}
                         </div>
                     );
@@ -452,7 +399,17 @@ function LeaderboardContent({ room, roomRef, isHost, viewerId, now, createScoreA
     );
 }
 
-function MobileLeaderboardDrawer({ room, roomRef, isHost, viewerId, now, createScoreAdjustmentHistory, onClose, t }) {
+function EditAllScoresButton({ onClick, t }) {
+    return (
+        <button type="button" onClick={onClick}
+            className="shrink-0 rounded-lg border border-slate-700 theme-border p-2 text-slate-300 theme-muted hover:bg-slate-800"
+            title={t('advancedScoreEditor')} aria-label={t('advancedScoreEditor')}>
+            <SlidersHorizontal size={18} />
+        </button>
+    );
+}
+
+function MobileLeaderboardDrawer({ room, isHost, viewerId, now, onEditScore, onEditAllScores, onClose, t }) {
     return (
         <div className="fixed inset-0 z-40 md:hidden" role="dialog" aria-modal="true" aria-labelledby="mobile-leaderboard-title">
             <button
@@ -464,18 +421,20 @@ function MobileLeaderboardDrawer({ room, roomRef, isHost, viewerId, now, createS
             <aside className="absolute right-0 top-0 flex h-full w-[min(20rem,calc(100vw-2rem))] flex-col border-l border-slate-700 theme-border bg-slate-900 theme-room-background shadow-2xl">
                 <div className="flex items-center justify-between border-b border-slate-800 theme-border bg-slate-950/80 theme-surface p-4">
                     <h2 id="mobile-leaderboard-title" className="theme-secondary break-words text-xs font-black uppercase tracking-widest text-slate-300">{t('leaderboard')}</h2>
-                    <button onClick={onClose} className="rounded-lg border border-slate-700 theme-border p-2 text-slate-300 theme-muted hover:bg-slate-800" aria-label={t('closeLeaderboard', { title: t('leaderboard') })}>
-                        <X size={18} />
-                    </button>
+                    <div className="flex shrink-0 items-center gap-2">
+                        {isHost && <EditAllScoresButton onClick={onEditAllScores} t={t} />}
+                        <button onClick={onClose} className="rounded-lg border border-slate-700 theme-border p-2 text-slate-300 theme-muted hover:bg-slate-800" aria-label={t('closeLeaderboard', { title: t('leaderboard') })}>
+                            <X size={18} />
+                        </button>
+                    </div>
                 </div>
                 <div className="min-h-0 flex-1 overflow-y-auto">
                     <LeaderboardContent
                         room={room}
-                        roomRef={roomRef}
                         isHost={isHost}
                         viewerId={viewerId}
                         now={now}
-                        createScoreAdjustmentHistory={createScoreAdjustmentHistory}
+                        onEditScore={onEditScore}
                         t={t}
                     />
                 </div>
@@ -613,6 +572,7 @@ function GameRoomContent({ room, roomCode, user, onPrepareRoomExit, onLeaveRoom,
     const [copiedRoomCode, setCopiedRoomCode] = useState(false);
     const [copiedJoinLink, setCopiedJoinLink] = useState(false);
     const [isScoreEditorOpen, setIsScoreEditorOpen] = useState(false);
+    const [scorePlayerId, setScorePlayerId] = useState(null);
     const [isHistoryOpen, setIsHistoryOpen] = useState(false);
     const [isLeaderboardOpen, setIsLeaderboardOpen] = useState(false);
     const [isHostRpsSetupOpen, setIsHostRpsSetupOpen] = useState(false);
@@ -706,24 +666,6 @@ function GameRoomContent({ room, roomCode, user, onPrepareRoomExit, onLeaveRoom,
             setIsStarting(false);
         }
     };
-
-    const createScoreAdjustmentHistory = (player, delta, nextScore) => createHistoryItem({
-        type: 'score_adjusted',
-        actorId: user.uid,
-        actorName: hostName,
-        message: t('historyScoreAdjusted', {
-            actorName: hostName,
-            playerName: player.name,
-            delta: delta > 0 ? `+${delta}` : delta,
-            nextScore
-        }),
-        details: {
-            actorName: hostName,
-            playerName: player.name,
-            delta,
-            nextScore
-        }
-    });
 
     const handleStartHostRps = async (playerIds, mode) => {
         await startHostRps(roomRef, playerIds, mode);
@@ -906,6 +848,9 @@ function GameRoomContent({ room, roomCode, user, onPrepareRoomExit, onLeaveRoom,
     if (room.status === 'round_break' || room.status === 'category_preview' || room.status === 'playing') {
         return (
             <div className="min-h-screen flex flex-col bg-slate-900 theme-room-background overflow-hidden">
+                {isHost && scorePlayerId && <PlayerScoreDialog key={roomCode + ':' + scorePlayerId}
+                    room={room} roomRef={roomRef} playerId={scorePlayerId} host={host}
+                    onClose={() => setScorePlayerId(null)} t={t} />}
                 {isHost && isScoreEditorOpen && (
                     <ScoreEditorModal
                         players={room.players}
@@ -938,7 +883,8 @@ function GameRoomContent({ room, roomCode, user, onPrepareRoomExit, onLeaveRoom,
                         isHost={isHost}
                         viewerId={user.uid}
                         now={now}
-                        createScoreAdjustmentHistory={createScoreAdjustmentHistory}
+                        onEditScore={setScorePlayerId}
+                        onEditAllScores={() => setIsScoreEditorOpen(true)}
                         onClose={() => setIsLeaderboardOpen(false)}
                         t={t}
                     />
@@ -991,13 +937,6 @@ function GameRoomContent({ room, roomCode, user, onPrepareRoomExit, onLeaveRoom,
                                     </button>
                                 )}
                                 <button
-                                    onClick={() => setIsScoreEditorOpen(true)}
-                                    className="rounded-lg border border-slate-700 theme-border p-2 text-slate-300 theme-muted hover:bg-slate-800"
-                                    title={t('advancedScoreEditor')}
-                                >
-                                    <SlidersHorizontal size={18} />
-                                </button>
-                                <button
                                     onClick={() => setIsHistoryOpen(true)}
                                     className="rounded-lg border border-slate-700 theme-border p-2 text-slate-300 theme-muted hover:bg-slate-800"
                                     title={t('gameHistory')}
@@ -1012,8 +951,9 @@ function GameRoomContent({ room, roomCode, user, onPrepareRoomExit, onLeaveRoom,
                 <div className="flex min-h-0 flex-1 overflow-hidden">
                     {/* Sidebar - Players & Scores */}
                     <aside className="hidden w-64 flex-col overflow-y-auto border-r border-slate-800 theme-border bg-slate-900 theme-room-background md:flex">
-                        <div className="p-4 bg-slate-950/50 theme-surface sticky top-0 border-b border-slate-800 theme-border">
+                        <div className="flex items-center justify-between gap-2 p-4 bg-slate-950/50 theme-surface sticky top-0 border-b border-slate-800 theme-border">
                             <h2 className="theme-secondary text-xs font-black uppercase tracking-widest text-slate-300">{t('leaderboard')}</h2>
+                            {isHost && <EditAllScoresButton onClick={() => setIsScoreEditorOpen(true)} t={t} />}
                         </div>
                         <LeaderboardContent
                             room={room}
@@ -1021,7 +961,7 @@ function GameRoomContent({ room, roomCode, user, onPrepareRoomExit, onLeaveRoom,
                             isHost={isHost}
                             viewerId={user.uid}
                             now={now}
-                            createScoreAdjustmentHistory={createScoreAdjustmentHistory}
+                            onEditScore={setScorePlayerId}
                             t={t}
                         />
                     </aside>
