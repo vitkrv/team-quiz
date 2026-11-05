@@ -7,6 +7,35 @@ It is not a general unit or browser test suite.
 
 ## Run
 
+### Player score-history query
+
+New rooms have immutable `scoreHistoryVersion: 1`. The existing history writer
+classifies `details.isScoreChange` after recap/scoring projection and normalizes
+`details.batchIndex`, without extra document writes. The points dialog uses a single
+live player/flag/cutoff query with `limit(3)`, ordered by recorded time, batch index,
+and document ID descending. There is no candidate scan, pagination, or 80-event cap.
+Old games without the marker hide the recent-changes section and start no related
+history or reversal listeners; their ordinary manual score editor remains available.
+
+The single storage harness checks write-time classification, cutoff boundaries,
+server timestamps, live replacement, snapshot cleanup/retry, four-event batch order,
+immutable/required room markers, typed metadata rules, old-room compatibility,
+host-only history access, and retained reversal-conflict tracking. Existing scoring,
+recap, reversal, and idempotency checks remain in the same entry point.
+
+Deploy the updated rules and composite index before the frontend, only when
+explicitly authorized. Use `firebase deploy --only firestore:rules,firestore:indexes`,
+confirm the index is ready, then release the frontend. Older clients must reload
+before creating or writing history in marked games. No migration is performed.
+Emulator checks validate rules but do not verify production index readiness.
+
+Pending browser checklist (agent execution requires an explicit request): host,
+English/Ukrainian, desktop/mobile; new games show at most three recent changes and
+live replacements; old games hide the section but allow manual editing; retry keeps
+the cutoff; selected reversals/conflicts and Cancel/Escape behavior remain correct.
+
+### Emulator commands
+
 Install the repository dependencies. Start a **dedicated** Firestore Emulator with
 Java and the Firebase CLI installed:
 
@@ -40,6 +69,49 @@ unsuitable. Point `jdk.net.unixdomain.tmpdir` and `java.io.tmpdir` at a short, w
 directory when starting Java. This validation used the standalone Firestore Emulator
 1.19.8 with Java 17 and localhost port 8089; the portable tools stayed under ignored
 `.firebase/validation`, without modifying project dependencies or global installations.
+
+## Clock scheduling verification
+
+Run the deterministic, non-browser clock checks independently of the Emulator:
+
+```powershell
+node scripts/verify-server-clock.mjs
+npm run lint
+npm run build
+git -c core.autocrlf=false diff --check
+```
+
+The script exercises the production clock controller with fake time and transport:
+five-sample estimation, request coalescing, the five-minute freshness boundary,
+foreground/online recovery, 30-second failure cooldown, clock adjustments, sample
+ownership, and cancellation during pending writes/reads or identity changes.
+Its healthy one-hour simulation asserts 12 calibrations (60 reads and 60 writes)
+per client in `[0, 60 minutes)`, despite frequent question/board requests. These are
+deterministic operation counts, not a production billing measurement. Failures,
+remounts, and clock changes can require additional operations. No production
+telemetry writes are added; development diagnostics include only lifecycle events,
+trigger reasons, and attempted operation counts.
+
+Also run the single storage entry point above as a gameplay regression check.
+Clock scheduling changes need no Firestore rules, data migration, or Worker release.
+
+### Clock browser checklist (pending)
+
+Agent browser execution requires an explicit browser-testing request. Use a host,
+two contestants, and spectator; English/Ukrainian; desktop/mobile. Record roles,
+language, viewport/device, steps, observed timing, and clock request counts.
+
+1. Compare ordinary/competitive buzzing, wrong-answer reopening, late arrivals,
+   and refresh during collection; ensure reaction origins and grace do not restart.
+2. Compare wheel animation and exactly-once completion after refresh/reconnect.
+3. Exercise long board pauses, round breaks, brief/long tab switches, screen lock,
+   and offline/online recovery, including Safari. Fresh calibrations should be reused;
+   stale sessions should perform one due batch when visible and online again.
+4. Verify host/contestant/spectator timing and informational syncing/stale/slow
+   warnings. No new buzzing/loading gate should appear while recalibrating.
+5. Verify lobby, finished, and shared-results pages initiate no clock requests;
+   already submitted operations may complete. Compare live-game request counts
+   before/after and confirm each completed calibration still uses five samples.
 
 ## Covered cases
 

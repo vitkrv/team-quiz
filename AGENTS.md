@@ -103,7 +103,7 @@ After making changes, report lint/build and testing-script results, and provide 
 
 In every summary of work that changes files under `imagekit-auth-worker/`, explicitly highlight those changes, including `imagekit-auth-worker/worker.js` when it is changed. This is a reporting reminder; it adds no verification or deployment restrictions.
 
-There is currently no automated test script in `package.json`. For changes to game storage/actions/rules, run the isolated Emulator checks in `scripts/verify-game-storage.mjs` when prerequisites are available; otherwise report the blocker and provide the user with the commands. Setup and commands are in `docs/game-storage-validation.md`. This entry point includes storage, recap, buzzer, and wheel checks; do not run those modules separately.
+There is currently no automated test script in `package.json`. Clock scheduling has deterministic non-browser checks: `node scripts/verify-server-clock.mjs` (no Emulator required). For changes to game storage/actions/rules, run the isolated Emulator checks in `scripts/verify-game-storage.mjs` when prerequisites are available; otherwise report the blocker and provide the user with the commands. Setup and commands are in `docs/game-storage-validation.md`. This entry point includes storage, recap, buzzer, and wheel checks; do not run those modules separately.
 
 The harness requires Java, the Firebase CLI, and a dedicated local Firestore Emulator. It targets `demo-game-storage`, requires a loopback `FIRESTORE_EMULATOR_HOST`, and loads this checkout's rules into the emulator project. Do not share that emulator with other active tests. It covers room reservations, concurrent starts/finishes, history permissions/pagination, frozen packs, player events, and legacy compatibility; it does not deploy rules or Hosting.
 
@@ -180,7 +180,7 @@ wrangler deploy
 
 Do not deploy unless the user explicitly asks.
 
-Coordinate storage-related rule and frontend releases. Older clients must reload before creating new-format rooms. No migration, new indexes, or TTL configuration is required for the current storage model.
+Coordinate storage-related rule and frontend releases. Older clients must reload before creating new-format rooms. No migration or TTL configuration is required for the current storage model. New rooms use immutable `scoreHistoryVersion: 1`; their history writes include derived `details.isScoreChange` and normalized `details.batchIndex`. The direct player-history query requires the composite index in `firestore.indexes.json`. Deploy updated rules and this index only when explicitly authorized, confirm the index is ready before releasing the frontend, and reload older clients. Games without the marker hide recent score changes without migration.
 
 ## Repository Map
 

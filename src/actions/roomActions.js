@@ -33,7 +33,7 @@ export async function createRoom(roomData) {
             }
             transaction.set(roomRef, {
                 ...liveData, themeId: normalizeThemeId(sourcePack.data().themeId), roomCode, dataVersion: 2, recapVersion: 1, buzzerPolicyVersion: BUZZER_POLICY_VERSION, buzzerRoundId: null,
-                packSummary: getPackSummary(pack), packVersionId: null, questionStates: {}
+                packSummary: getPackSummary(pack), packVersionId: null, questionStates: {}, scoreHistoryVersion: 1
             });
             transaction.set(codeRef, { gameId: roomRef.id });
             appendHistory(transaction, roomRef, history);

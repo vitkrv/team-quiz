@@ -1,46 +1,48 @@
-import { useEffect, useMemo, useState } from 'react';
-import { doc, onSnapshot } from 'firebase/firestore';
-import useGameHistory from './useGameHistory';
-import { compareHistoryEvents, reversalEventId, selectPlayerScoreHistory } from '../utils/scoreHistory';
+import { useEffect, useRef, useState } from 'react';
+import { createReversalWatcher, subscribePlayerScoreHistory } from '../services/playerScoreHistory';
+import { SCORE_HISTORY_WINDOW_MS, supportsScoreHistory } from '../utils/scoreHistory';
 
-export default function usePlayerScoreHistory(roomRef, room, playerId) {
-    const history = useGameHistory(roomRef.id, room.dataVersion === 2);
+export default function usePlayerScoreHistory(roomRef, room, playerId, selectedIds = []) {
+    const [cutoff] = useState(() => Date.now() - SCORE_HISTORY_WINDOW_MS);
+    const [records, setRecords] = useState([]);
+    const enabled = supportsScoreHistory(room);
+    const [loading, setLoading] = useState(enabled);
+    const [error, setError] = useState(false);
     const [statuses, setStatuses] = useState({});
     const [statusError, setStatusError] = useState(false);
     const [attempt, setAttempt] = useState(0);
-    const items = useMemo(() => {
-        const source = room.dataVersion === 2 ? history.items
-            : [...(room.history || [])].sort(compareHistoryEvents);
-        return selectPlayerScoreHistory(source, playerId);
-    }, [room.dataVersion, room.history, history.items, playerId]);
+    const watchers = useRef(null);
+    const items = enabled ? records : [];
 
     useEffect(() => {
-        if (room.dataVersion === 2 && items.length < 3 && history.hasMore && !history.loading && !history.error) history.loadMore();
-    }, [room.dataVersion, items.length, history]);
+        if (!enabled) return undefined;
+        setRecords([]); setLoading(true); setError(false);
+        return subscribePlayerScoreHistory(roomRef, playerId, cutoff,
+            (entries) => { setRecords(entries); setLoading(false); setError(false); },
+            () => { setError(true); setLoading(false); });
+    }, [roomRef, enabled, playerId, cutoff, attempt]);
 
     useEffect(() => {
-        let active = true;
-        const unsubscribe = [];
-        setStatuses({});
-        setStatusError(false);
-        if (room.dataVersion !== 2) return undefined;
-        Promise.all(items.map(async (item) => {
-            const id = await reversalEventId(item.id);
-            if (!active) return;
-            unsubscribe.push(onSnapshot(doc(roomRef, 'history', id), { includeMetadataChanges: true }, (snapshot) => {
-                if (!active || snapshot.metadata.fromCache || snapshot.metadata.hasPendingWrites) return;
-                setStatuses((previous) => ({ ...previous, [item.id]: snapshot.exists() }));
-            }, () => { if (active) setStatusError(true); }));
-        })).catch(() => { if (active) setStatusError(true); });
-        return () => { active = false; unsubscribe.forEach((stop) => stop()); };
-    }, [roomRef, room.dataVersion, items, attempt]);
+        setStatuses({}); setStatusError(false);
+        if (!enabled) return undefined;
+        const watcher = createReversalWatcher(roomRef,
+            (id, value) => setStatuses((previous) => ({ ...previous, [id]: value })),
+            () => setStatusError(true));
+        watchers.current = watcher;
+        return () => { watcher.stop(); watchers.current = null; };
+    }, [roomRef, enabled, playerId, attempt]);
 
-    const legacyReversed = new Set((room.history || []).filter((e) => e.type === 'score_reverted').map((e) => e.details?.revertsEventId));
+    const watchedIds = JSON.stringify([...new Set([...items.map((item) => item.id), ...selectedIds])].sort());
+    useEffect(() => {
+        watchers.current?.update(JSON.parse(watchedIds));
+    }, [roomRef, enabled, playerId, watchedIds, attempt]);
+
     return {
         items,
-        reversed: (id) => room.dataVersion === 2 ? statuses[id] : legacyReversed.has(id),
-        loading: room.dataVersion === 2 && (history.loading || items.some((item) => statuses[item.id] === undefined)),
-        error: history.error || statusError,
-        retry: () => { history.retry(); setAttempt((value) => value + 1); }
+        enabled,
+        reversed: (id) => statuses[id],
+        loading: enabled && (loading || items.some((item) => statuses[item.id] === undefined)),
+        error: error || statusError,
+        retry: () => setAttempt((value) => value + 1)
     };
 }

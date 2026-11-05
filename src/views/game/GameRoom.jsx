@@ -27,8 +27,6 @@ import BoardView from './BoardView';
 import ResultsView from './ResultsView';
 import RoundBreakView from './RoundBreakView';
 
-const BOARD_CLOCK_RESYNC_INTERVAL_MS = 2 * 60 * 1000;
-
 const getPlayerEntries = (players) => Object.entries(players).filter(([, player]) => !player.isHost);
 
 const hasDefinedPrize = (prize) => (
@@ -566,9 +564,11 @@ function GameRoomContent({ room, roomCode, user, onPrepareRoomExit, onLeaveRoom,
     const isSpectator = !isHost && !room.players?.[user.uid];
     const roomRef = useMemo(() => doc(db, 'artifacts', appId, 'public', 'data', 'rooms', roomCode), [roomCode]);
     const initialQuestion = useRef(room.activeQuestionId);
-    const { offsetMs, lastSyncedAt, serverNow, syncClock, ready, roundTripMs } = useServerClock(user.uid);
+    const showResults = room.status === 'finished'
+        || (isSpectator && showDefinedFinalResults && hasDefinedFinalResults(room));
+    const clockEnabled = !showResults && ['category_preview', 'playing', 'round_break'].includes(room.status);
+    const { offsetMs, lastSyncedAt, serverNow, syncClock, ready, roundTripMs } = useServerClock(user.uid, { enabled: clockEnabled });
     const [now, setNow] = useState(() => serverNow());
-    const wasBoardViewRef = useRef(false);
     const [copiedRoomCode, setCopiedRoomCode] = useState(false);
     const [copiedJoinLink, setCopiedJoinLink] = useState(false);
     const [isScoreEditorOpen, setIsScoreEditorOpen] = useState(false);
@@ -610,20 +610,8 @@ function GameRoomContent({ room, roomCode, user, onPrepareRoomExit, onLeaveRoom,
     }, [room.answerRevealed, room.buzzedPlayerId, room.buzzTimestamp, serverNow]);
 
     useEffect(() => {
-        const isBoardView = room.status === 'playing' && !room.activeQuestionId;
-
-        if (isBoardView && !wasBoardViewRef.current && !isHost && !isSpectator) {
-            syncClock({ minIntervalMs: BOARD_CLOCK_RESYNC_INTERVAL_MS });
-        }
-
-        wasBoardViewRef.current = isBoardView;
-    }, [isHost, isSpectator, room.activeQuestionId, room.status, syncClock]);
-
-    useEffect(() => {
-        if (room.status === 'playing' && room.activeQuestionId && !isHost && !isSpectator) {
-            syncClock();
-        }
-    }, [isHost, isSpectator, room.activeQuestionId, room.status, syncClock]);
+        if (clockEnabled) syncClock();
+    }, [clockEnabled, room.activeQuestionId, room.status, syncClock]);
 
     useEffect(() => {
         if (room.activeQuestionId || room.hostRps || room.tieBreaker?.status) {
@@ -841,7 +829,7 @@ function GameRoomContent({ room, roomCode, user, onPrepareRoomExit, onLeaveRoom,
         );
     }
 
-    if (room.status === 'finished' || (isSpectator && showDefinedFinalResults && hasDefinedFinalResults(room))) {
+    if (showResults) {
         return <ResultsView gameId={roomCode} room={room} leaveRoom={leaveRoom} />;
     }
 

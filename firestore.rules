@@ -41,6 +41,7 @@ service cloud.firestore {
         && request.resource.data.hostId == request.auth.uid
         && request.resource.data.buzzerPolicyVersion == 1 && request.resource.data.buzzerRoundId == null
         && request.resource.data.dataVersion == 2
+        && request.resource.data.scoreHistoryVersion == 1
         && !request.resource.data.keys().hasAny(['pack', 'history'])
         && request.resource.data.packVersionId == null
         && validPackSummary(request.resource.data.packSummary)
@@ -52,7 +53,7 @@ service cloud.firestore {
         && request.resource.data.packId is string
         && canHostPack(appId, request.resource.data.packId, request.auth.uid);
       allow update: if isGoogleUser()
-        && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['roomCode', 'hostId', 'recapVersion', 'buzzerPolicyVersion', 'themeId'])
+        && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['roomCode', 'hostId', 'recapVersion', 'buzzerPolicyVersion', 'themeId', 'scoreHistoryVersion'])
         && (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['mediaPlayback'])
           || resource.data.hostId == request.auth.uid)
         && validBuzzerRoomUpdate(appId, gameId, resource.data, request.resource.data)
@@ -378,6 +379,8 @@ service cloud.firestore {
         && event.keys().hasOnly(['id', 'type', 'actorId', 'actorName', 'message', 'details', 'timestamp', 'recordedAt'])
         && event.id == eventId && event.actorId == request.auth.uid
         && event.actorName is string && event.message is string && event.details is map
+        && (after.get('scoreHistoryVersion', 0) != 1
+          || (event.details.isScoreChange is bool && event.details.batchIndex is int && event.details.batchIndex >= 0))
         && event.timestamp is number && event.recordedAt == request.time
         && (!(event.type == 'score_reverted' || event.details.keys().hasAny(['saveOperationId']))
           || (after.hostId == request.auth.uid

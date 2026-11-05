@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
-import { collection, doc, getDocFromServer, getDocs, limit, orderBy, documentId, query, startAfter, setDoc, updateDoc, writeBatch } from 'firebase/firestore';
-import { compareHistoryEvents, reversalEventId, scoreHistoryChange, selectPlayerScoreHistory, validScore } from '../src/utils/scoreHistory.js';
+import { collection, doc, getDocFromServer, getDocs, orderBy, documentId, query, setDoc, serverTimestamp, deleteField, Timestamp, updateDoc, writeBatch } from 'firebase/firestore';
+import { compareHistoryEvents, reversalEventId, scoreHistoryChange, selectPlayerScoreHistory, supportsScoreHistory, SCORE_HISTORY_WINDOW_MS, validScore } from '../src/utils/scoreHistory.js';
+import { createReversalWatcher, playerScoreHistoryQuery, subscribePlayerScoreHistory } from '../src/services/playerScoreHistory.js';
 
 // Invoked only by the isolated storage entry point; never uses a browser.
 export async function verifyScoreEdits({ actions, check, denied, hostDb, playerDb, spectatorDb, seedDb, ref, roomRef, event, t }) {
@@ -26,6 +27,147 @@ export async function verifyScoreEdits({ actions, check, denied, hostDb, playerD
         actions.savePlayerScore(target, { playerId, manualDelta, sourceEventIds, operationId, actor: who });
     const entries = async (target) => (await getDocs(query(collection(target, 'history'), orderBy('recordedAt', 'asc'), orderBy(documentId(), 'asc')))).docs.map((s) => s.data());
     const game = await make();
+    await check('score history: existing writes derive flags and normalize batch ordering', async () => {
+        const types = [
+            ['answer_correct', { points: 100 }, true], ['answer_incorrect', { points: -100 }, true],
+            ['answer_incorrect', { points: 0 }, false], ['surprise_table_picked', { points: -100 }, true],
+            ['surprise_wheel_scored', { points: 200 }, true], ['surprise_wheel_rolled', { points: 200, spinId: 'start' }, false],
+            ['score_adjusted', { delta: -100 }, true], ['score_set', { previousScore: 0, nextScore: 100 }, true],
+            ['score_reverted', { delta: 100, batchIndex: 2 }, true], ['player_buzzed', {}, false],
+            ['question_picked', {}, false], ['surprise_answer_correct', { points: 100 }, false]
+        ];
+        const written = [];
+        const writer = { set: (ref, value) => written.push(value) };
+        for (const [type, details, expected] of types) {
+            const source = event(type, 'host', { playerId: 'player', ...details, isScoreChange: !expected });
+            actions.appendHistory(writer, game.target, [source]);
+            const saved = written.at(-1);
+            assert.equal(saved.details.isScoreChange, expected, type);
+            assert.equal(saved.details.batchIndex, details.batchIndex || 0);
+            assert.equal(source.details.isScoreChange, !expected, 'classification must not mutate callers');
+        }
+        assert.equal(written.length, types.length, 'one existing history write per event');
+        await save(game.target, -50, [], 'flagged_manual');
+        const saved = await read(doc(game.target, 'history', 'score_edit_flagged_manual'));
+        assert.equal(saved.details.isScoreChange, true); assert.equal(saved.details.batchIndex, 0);
+        await save(game.target, 0, [saved.id], 'flagged_reversal');
+        assert.equal((await read(doc(game.target, 'history', await reversalEventId(saved.id)))).details.isScoreChange, true);
+        assert.equal((await read(game.target)).players.player.score, 0);
+    });
+    await check('score history: direct limit-three query respects player, flag, cutoff, live replacement and cleanup', async () => {
+        const target = (await make()).target;
+        const seeded = roomRef(seedDb, target.id);
+        const cutoff = Date.now() - SCORE_HISTORY_WINDOW_MS;
+        const put = (id, time, playerId = 'player', flag = true) => setDoc(doc(seeded, 'history', id), {
+            id, type: 'score_adjusted', timestamp: cutoff - 99999, recordedAt: Timestamp.fromMillis(time),
+            details: { playerId, delta: 100, isScoreChange: flag, batchIndex: 0 }
+        });
+        await put('before', cutoff - 1); await put('at', cutoff); await put('after', cutoff + 1);
+        await put('other', cutoff + 2, 'other'); await put('not_score', cutoff + 3, 'player', false);
+        await setDoc(doc(seeded, 'history', 'unflagged'), { id: 'unflagged', recordedAt: Timestamp.fromMillis(cutoff + 5),
+            details: { playerId: 'player', delta: 100, batchIndex: 0 } });
+        const base = playerScoreHistoryQuery(target, 'player', cutoff);
+        assert.deepEqual((await getDocs(base)).docs.map((d) => d.id), ['after', 'at']);
+        await denied(getDocs(playerScoreHistoryQuery(roomRef(playerDb, target.id), 'player', cutoff)));
+        await denied(getDocs(playerScoreHistoryQuery(roomRef(spectatorDb, target.id), 'player', cutoff)));
+        const updates = [];
+        let failure;
+        const stop = subscribePlayerScoreHistory(target, 'player', cutoff, (items) => updates.push(items), (e) => { failure = e; });
+        const waitFor = async (test) => {
+            for (let i = 0; i < 500 && !test() && !failure; i++) await new Promise((resolve) => setTimeout(resolve, 10));
+            if (failure) throw failure;
+            assert.ok(test(), 'direct history listener completed');
+        };
+        try {
+            await waitFor(() => updates.length);
+            await put('new_1', cutoff + 10); await put('new_2', cutoff + 11);
+            await waitFor(() => updates.at(-1)?.[0]?.id === 'new_2');
+            assert.deepEqual(updates.at(-1).map((e) => e.id), ['new_2', 'new_1', 'after']);
+            assert.ok(updates.every((items) => items.length <= 3));
+            assert.equal((await getDocs(playerScoreHistoryQuery(target, 'player', cutoff + 12))).size, 0);
+        } finally { stop(); }
+        let deliver, failed, stopped = 0;
+        const mocked = [];
+        const retryStop = subscribePlayerScoreHistory(target, 'player', cutoff, (items) => mocked.push(items), (e) => { failed = e; },
+            (q, metadata, next, error) => { deliver = next; failed = error; return () => { stopped++; }; });
+        const page = await getDocs(base);
+        const snapshot = { docs: page.docs, metadata: { fromCache: false, hasPendingWrites: false } };
+        const onError = failed;
+        onError(Object.assign(new Error('index required'), { code: 'failed-precondition' }));
+        assert.equal(failed.code, 'failed-precondition');
+        deliver({ ...snapshot, metadata: { fromCache: true, hasPendingWrites: false } });
+        deliver({ ...snapshot, metadata: { fromCache: false, hasPendingWrites: true } });
+        assert.equal(mocked.length, 0);
+        deliver(snapshot); assert.deepEqual(mocked[0].map((e) => e.id), ['new_2', 'new_1', 'after']);
+        deliver({ docs: [], metadata: snapshot.metadata }); assert.equal(mocked.at(-1).length, 0, 'snapshots replace rather than accumulate');
+        retryStop(); deliver(snapshot); assert.equal(mocked.length, 2); assert.equal(stopped, 1);
+    });
+    await check('score history: room marker is immutable and old rooms remain editable without recent history', async () => {
+        assert.equal(supportsScoreHistory(await read(game.target)), true);
+        for (const value of [0, 2, null, deleteField()]) await denied(updateDoc(game.target, { scoreHistoryVersion: value }));
+        const old = (await make()).target;
+        await updateDoc(roomRef(seedDb, old.id), { scoreHistoryVersion: deleteField() });
+        assert.equal(supportsScoreHistory(await read(old)), false);
+        assert.equal(supportsScoreHistory({ dataVersion: 1, scoreHistoryVersion: 1 }), false);
+        await denied(updateDoc(old, { scoreHistoryVersion: 1 }));
+        await save(old, 100, [], 'old_manual');
+        assert.equal((await read(old)).players.player.score, 100);
+        assert.equal(supportsScoreHistory(await read(old)), false);
+        const raw = event('question_picked');
+        await setDoc(doc(old, 'history', raw.id), { ...raw, recordedAt: serverTimestamp() });
+        const marked = event('question_picked');
+        const write = (details) => setDoc(doc(game.target, 'history', marked.id), {
+            ...marked, details, recordedAt: serverTimestamp()
+        });
+        await denied(write({})); await denied(write({ isScoreChange: 'true', batchIndex: 0 }));
+        await denied(write({ isScoreChange: false, batchIndex: -1 }));
+        await denied(write({ isScoreChange: false, batchIndex: 0.5 }));
+        await write({ isScoreChange: false, batchIndex: 0 });
+        const stored = await read(game.target);
+        const newId = 'HISTORYMARKERTEST000';
+        const draft = { ...stored, status: 'lobby', roomCode: '835267', packVersionId: null, questionStates: {} };
+        const create = (version) => {
+            const room = { ...draft, scoreHistoryVersion: version };
+            if (version === undefined) delete room.scoreHistoryVersion;
+            const batch = writeBatch(hostDb);
+            batch.set(roomRef(hostDb, newId), room);
+            batch.set(doc(game.target.parent.parent, 'roomCodes', draft.roomCode), { gameId: newId });
+            return batch.commit();
+        };
+        for (const version of [undefined, 0, 2]) await denied(create(version));
+        await create(1);
+    });
+    await check('score history: four-event atomic score edits return their latest three in batch order', async () => {
+        const target = (await make()).target;
+        const sourceIds = [];
+        for (let i = 0; i < 3; i++) {
+            await save(target, 100, [], `batch_source_${i}`); sourceIds.push(`score_edit_batch_source_${i}`);
+        }
+        await save(target, 25, sourceIds, 'four_events');
+        const recent = await getDocs(playerScoreHistoryQuery(target, 'player', Date.now() - SCORE_HISTORY_WINDOW_MS));
+        assert.equal(recent.size, 3);
+        assert.deepEqual(recent.docs.map((d) => d.data().details.batchIndex), [3, 2, 1]);
+        assert.ok(recent.docs.every((d) => d.data().details.isScoreChange && d.data().details.saveOperationId === 'four_events'));
+    });
+    await check('score history: reversal listeners retain selected IDs and clean up late callbacks', async () => {
+        const subscriptions = new Map(), statuses = new Map();
+        let starts = 0, stops = 0;
+        const watcher = createReversalWatcher(game.target, (id, value) => statuses.set(id, value), assert.fail,
+            (ref, metadata, next) => { starts++; subscriptions.set(ref.id, next); return () => { stops++; }; });
+        const settle = () => new Promise((resolve) => setTimeout(resolve, 30));
+        watcher.update(['a', 'b']); await settle(); assert.equal(starts, 2);
+        watcher.update(['b', 'a']); await settle(); assert.equal(starts, 2);
+        // a leaves the visible list but is retained in the selected-ID union.
+        watcher.update(['b', 'c', 'a']); await settle(); assert.equal(stops, 0);
+        const callback = subscriptions.get(await reversalEventId('a'));
+        callback({ metadata: { fromCache: false, hasPendingWrites: false }, exists: () => true });
+        assert.equal(statuses.get('a'), true);
+        watcher.update(['b', 'c']); assert.equal(stops, 1); assert.equal(statuses.get('a'), undefined);
+        callback({ metadata: { fromCache: false, hasPendingWrites: false }, exists: () => false });
+        assert.equal(statuses.get('a'), undefined);
+        watcher.update(['b', 'c', 'pending']); watcher.stop(); await settle();
+        assert.equal(starts, 3); assert.equal(stops, 3);
+    });
     await check('score edits: classify only real score changes and validate integer input', async () => {
         for (const value of ['', '1.5', '1e3', 'Infinity', '9007199254740992', ' 4 ']) assert.equal(validScore(value), false);
         for (const value of ['0', '-300', '9007199254740991']) assert.equal(validScore(value), true);
@@ -129,7 +271,7 @@ export async function verifyScoreEdits({ actions, check, denied, hostDb, playerD
         await Promise.all([save(fresh.target, -100, [], 'duplicate'), save(fresh.target, -100, [], 'duplicate')]);
         assert.equal((await read(fresh.target)).players.player.score, -100);
     });
-    await check('score edits: sparse history finds the latest three beyond the first 50 events', async () => {
+    await check('score edits: sparse player query excludes unrelated events without scanning general history', async () => {
         const fresh = await make();
         for (const delta of [100, -200, 300, 400]) await save(fresh.target, delta);
         const batch = writeBatch(seedDb);
@@ -138,14 +280,25 @@ export async function verifyScoreEdits({ actions, check, denied, hostDb, playerD
             batch.set(doc(roomRef(seedDb, fresh.id), 'history', e.id), { ...e, recordedAt: new Date(Date.now() + i + 1000) });
         }
         await batch.commit();
-        const base = query(collection(fresh.target, 'history'), orderBy('recordedAt', 'desc'), orderBy(documentId(), 'desc'));
-        const first = await getDocs(query(base, limit(50)));
-        assert.equal(selectPlayerScoreHistory(first.docs.map((s) => s.data()), 'player').length, 0);
-        const second = await getDocs(query(base, startAfter(first.docs.at(-1)), limit(50)));
-        const selected = selectPlayerScoreHistory([...first.docs, ...second.docs].map((s) => s.data()).sort(compareHistoryEvents), 'player');
+        const first = await getDocs(playerScoreHistoryQuery(fresh.target, 'player', Date.now() - SCORE_HISTORY_WINDOW_MS));
+        assert.equal(first.size, 3);
+        const selected = selectPlayerScoreHistory(first.docs.map((s) => s.data()).sort(compareHistoryEvents), 'player');
         assert.equal(selected.length, 3);
         assert.deepEqual(new Set(selected.map((e) => e.details.delta)), new Set([-200, 300, 400]));
         assert.equal(selectPlayerScoreHistory(selected, 'other').length, 0);
+    });
+    await check('score edits: selected source remains reversible after aging out and leaving the top three', async () => {
+        const fresh = await make();
+        await save(fresh.target, 100, [], 'aged_source');
+        await updateDoc(doc(roomRef(seedDb, fresh.id), 'history', 'score_edit_aged_source'), {
+            recordedAt: Timestamp.fromMillis(Date.now() - SCORE_HISTORY_WINDOW_MS - 1)
+        });
+        for (let i = 0; i < 4; i++) await save(fresh.target, 10);
+        const recent = await getDocs(playerScoreHistoryQuery(fresh.target, 'player', Date.now() - SCORE_HISTORY_WINDOW_MS));
+        assert.ok(!recent.docs.some((d) => d.id === 'score_edit_aged_source'));
+        await save(fresh.target, 0, ['score_edit_aged_source'], 'aged_reversal');
+        await save(fresh.target, 0, ['score_edit_aged_source'], 'aged_reversal');
+        assert.equal((await read(fresh.target)).players.player.score, 40);
     });
     await check('score edits: non-host writes and forged reversal/recap chains are denied', async () => {
         await assert.rejects(save(roomRef(playerDb, game.id), 100, [], undefined, 'player', { id: 'player', name: 'Same' }));

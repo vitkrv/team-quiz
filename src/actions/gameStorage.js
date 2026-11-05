@@ -2,6 +2,7 @@ import { getAllQuestions, isRoundComplete } from '../utils/packRounds';
 import { prepareBuzzerLifecycle } from './buzzerState';
 import { prepareRecap } from './gameRecap';
 import { hasPendingSurpriseAward, isCurrentGame } from '../utils/wheelPolicy';
+import { scoreHistoryChange } from '../utils/scoreHistory';
 import { arrayUnion, collection, doc, getDocFromServer, runTransaction, serverTimestamp, updateDoc } from 'firebase/firestore';
 
 export const getPackSummary = (pack) => ({ name: pack.name || '', iconEmoji: pack.iconEmoji || '' });
@@ -10,6 +11,8 @@ export const packVersionRef = (roomRef, versionId) => doc(roomRef.parent.parent,
 export function appendHistory(writer, roomRef, events) {
     events.forEach((event) => writer.set(doc(collection(roomRef, 'history'), event.id), {
         ...event,
+        details: { ...event.details, isScoreChange: Boolean(scoreHistoryChange(event)),
+            batchIndex: Number.isSafeInteger(event.details?.batchIndex) && event.details.batchIndex >= 0 ? event.details.batchIndex : 0 },
         recordedAt: serverTimestamp()
     }));
 }

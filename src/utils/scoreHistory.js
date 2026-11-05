@@ -1,5 +1,7 @@
 const pointEvents = new Set(['answer_correct', 'answer_incorrect', 'surprise_table_picked', 'surprise_wheel_scored']);
 const manualEvents = new Set(['score_set', 'score_adjusted', 'score_reverted']);
+export const SCORE_HISTORY_WINDOW_MS = 10 * 60 * 1000;
+export const supportsScoreHistory = (room) => room.dataVersion === 2 && room.scoreHistoryVersion === 1;
 
 // Never identify a contestant by display name: names are not unique.
 export function scoreHistoryChange(event) {

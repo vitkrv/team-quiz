@@ -15,7 +15,7 @@ export default function PlayerScoreDialog({ room, roomRef, playerId, host, onClo
     const [selected, setSelected] = useState({});
     const [saving, setSaving] = useState(false);
     const [error, setError] = useState('');
-    const history = usePlayerScoreHistory(roomRef, room, playerId);
+    const history = usePlayerScoreHistory(roomRef, room, playerId, Object.keys(selected));
     const player = room.players[playerId];
     const baseline = Number(player?.score) || 0;
     const revertDelta = Object.values(selected).reduce((sum, delta) => sum + delta, 0);
@@ -94,7 +94,9 @@ export default function PlayerScoreDialog({ room, roomRef, playerId, host, onClo
             </div>
             <p className="mt-2 text-sm text-slate-400 theme-muted" aria-live="polite">{t('scoreEditCurrent', { score: baseline })}</p>
             <p id="player-score-validation" className="mt-1 text-sm text-red-300">{!valid ? t('scoreEditInvalid') : ''}</p>
+            {history.enabled && <>
             <h3 className="mt-5 font-bold">{t('scoreEditRecent')}</h3>
+            <p className="mt-1 text-sm text-slate-400 theme-muted">{t('scoreEditWindow')}</p>
             {history.loading && <p className="mt-2 text-sm text-slate-400">{t('gameDataLoading')}</p>}
             {history.error && <button type="button" disabled={busy} onClick={history.retry} className="mt-2 text-sm text-red-300">{t('historyLoadFailed')} {t('gameDataRetry')}</button>}
             {!history.loading && !history.error && !history.items.length && <p className="mt-2 text-sm text-slate-400">{t('scoreEditEmpty')}</p>}
@@ -105,7 +107,7 @@ export default function PlayerScoreDialog({ room, roomRef, playerId, host, onClo
                     return <div key={item.id} className="rounded-xl border border-slate-700 theme-border bg-slate-950 theme-surface p-3">
                         <div className="text-sm"><HistoryMessage item={item} t={t} /></div>
                         <div className="mt-2 flex items-center justify-between gap-3 text-xs text-slate-400">
-                            <time>{new Date(item.timestamp || 0).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false })}</time>
+                            <time>{new Date(item.recordedAt.toMillis()).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false })}</time>
                             <button type="button" onClick={() => toggle(item)} disabled={busy || !valid || (!pending && (reversed !== false || Object.keys(selected).length >= 3))} aria-pressed={pending}
                                 className="flex items-center gap-1 rounded-lg border border-slate-600 px-3 py-2 text-slate-200 hover:bg-slate-800 disabled:opacity-50">
                                 <RotateCcw size={14} />{t(pending ? 'scoreEditUndoPending' : reversed ? 'scoreEditReverted' : 'scoreEditRevert')}
@@ -123,6 +125,7 @@ export default function PlayerScoreDialog({ room, roomRef, playerId, host, onClo
                     {t('scoreEditUndoPending')} ({selected[id] > 0 ? '+' : ''}{selected[id]})
                 </button>
             ))}
+            </>}
             <p className="mt-3 text-sm text-slate-400 theme-muted">{t('scoreEditSaveNotice')}</p>
             {(error || conflict) && <p role="alert" className="mt-3 text-sm text-red-300">{t(conflict ? 'scoreEditConflict' : error)}</p>}
             <div className="mt-5 flex justify-end gap-3">
