@@ -46,9 +46,9 @@ export default function StopPointMedia({ media, t, gated = false, playback, allo
     const duration = view.duration || media.durationSeconds;
     const progress = duration > 0 ? view.time / duration * 100 : 0;
     const controls = view.complete && (!gated || allowReplay) && !stopped;
-    return <div className={`${compact ? 'w-64 max-w-full' : 'w-full max-w-4xl'} ${className}`}>
+    return <div className={compact ? 'w-64 max-w-full shrink-0' : 'w-full max-w-4xl shrink-0'}>
         {isVideo ? <video ref={elementRef} src={url} playsInline preload="auto" controls={controls && !hidePlaybackControls} disablePictureInPicture={!controls || hidePlaybackControls} disableRemotePlayback={!controls || hidePlaybackControls}
-            className={compact ? 'h-28 w-full rounded-lg bg-black object-contain' : 'max-h-[42vh] w-full rounded-lg bg-black'} /> : <audio ref={elementRef} src={url} preload="auto" />}
+            className={`${compact ? 'h-28 w-full rounded-lg bg-black object-contain' : 'max-h-[42vh] w-full rounded-lg bg-black'} ${className}`} /> : <audio ref={elementRef} src={url} preload="auto" />}
         <div className="mt-2 rounded-xl border border-slate-700 bg-slate-950/80 p-3">
             <div className="mb-2 flex items-center justify-between gap-2 text-xs font-mono text-slate-300"><span>{formatMediaTime(view.time)}</span><span>{formatMediaTime(duration)}</span></div>
             <div className="relative mb-5">
