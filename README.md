@@ -175,6 +175,16 @@ storage validation command to include the recap/achievement scenarios.
 
 ## Buzzer policy v1
 
+Concurrent submissions update only their own contestant entry. Competing opening
+requests recover against the first accepted server timestamp without replacing
+other attempts or extending the deadline. Gated question videos retry muted when
+sound autoplay is blocked, with a local unmute action; new questions and host
+replays reset stale media state. The active room performs an independent server
+freshness read after 30 seconds without confirmation while visible and online.
+Normal idle probing costs up to two room reads per minute per client and no
+document writes; recovery listeners and rule reads can add cost. See the
+[validation checklist](docs/game-storage-validation.md#playback-buzzer-concurrency-and-room-recovery).
+
 New rooms use `buzzerPolicyVersion: 1` and a bounded `rooms/{gameId}/buzzer/current` document. The first server-committed submission starts a two-second collection window. Eligible players can still press Buzz or Space during collection. A delayed client keeps a one-second local opportunity from its enabled-button render, ending immediately when a winner is announced; refresh restores the existing timing instead of restarting it. This local grace does not extend server acceptance: presses committed after the deadline receive neutral too-late feedback and cannot change the result. Genuine save failures receive connection/error feedback separately. The host resolves accepted submissions by reported local reaction duration, then server acceptance timestamp and player ID. Device measurements and host ranking are trusted; there is no new backend service or latency estimate. Shared penalties apply to button and Space, and the answer countdown begins only when the winner is finalized. Existing rooms keep their previous policy.
 
 Rules and frontend require a coordinated release; older clients must reload before creating new rooms. No migration or new indexes are required. The existing storage verification command also runs `scripts/verify-buzzer.mjs`. See the [gameplay reference](docs/gameplay-reference.md#4-ordinary-question-sequence) for refresh, penalties, deadlines, and host recovery.

@@ -1,5 +1,9 @@
 import { getMediaStops } from './mediaStops.js';
 
+// Only a pre-launch pause belongs to the first launch of the same question.
+export const carryMediaPause = (previous, scope, session) => Boolean(previous?.scope === scope
+    && (previous.session === session || (!previous.session && session)) && previous.localPause);
+
 // Event-driven playback policy, separated from React so it can be checked without a browser.
 export function createMediaStopPlayback({ element, media, gated, session, storageScope, identity, latest, onView, initialPause = false, environment = globalThis }) {
     const points = getMediaStops(media);
@@ -19,6 +23,14 @@ export function createMediaStopPlayback({ element, media, gated, session, storag
     let launchTimer;
     let savedAt = 0;
     let disposed = false;
+    let playGeneration = 0;
+    let playPending = false;
+    let mutedFallback = false;
+    let loading = Number.isFinite(element.readyState) && element.readyState < 3;
+    let error = null;
+    let readinessRetry = false;
+    let retriedReadiness = false;
+    element.muted = false;
     const released = () => Math.min(points.length, Math.max(0, latest.current.playback?.releasedStopCount || 0));
     const limit = () => points[released()] ?? element.duration;
     const authorized = () => !gated || Boolean(session && latest.current.playback?.sessionId === session);
@@ -35,11 +47,14 @@ export function createMediaStopPlayback({ element, media, gated, session, storag
         try { environment.sessionStorage.setItem(key, JSON.stringify({ time: lastTime, complete, localPause })); } catch { /* In-memory playback still works. */ }
     };
     const paint = () => {
-        if (!disposed) onView({ time: lastTime, duration: Number.isFinite(element.duration) ? element.duration : media.durationSeconds,
-            complete, playing, resume, boundary, localPause });
+        if (disposed) return;
+        onView({ time: lastTime, duration: Number.isFinite(element.duration) ? element.duration : media.durationSeconds,
+            complete, playing, resume, boundary, localPause, muted: mutedFallback, error, loading });
         latest.current.onStop?.(boundary);
     };
     const pause = () => {
+        playGeneration += 1;
+        playPending = false;
         if (!element.paused) { internalPause = true; element.pause(); }
         playing = false;
     };
@@ -51,8 +66,38 @@ export function createMediaStopPlayback({ element, media, gated, session, storag
             launchTimer = environment.setTimeout(play, delay);
             return;
         }
+        if (playPending) return;
+        const generation = ++playGeneration;
+        playPending = true;
         resume = false;
-        element.play().catch(() => { if (!disposed) { resume = true; paint(); } });
+        error = null;
+        const failed = (failure) => {
+            if (disposed || generation !== playGeneration) return;
+            playPending = false;
+            const name = failure?.name;
+            console.info('Media playback', { category: name || 'unknown', muted: mutedFallback });
+            if (name === 'NotAllowedError' && media.kind === 'video' && !mutedFallback) {
+                mutedFallback = true;
+                element.muted = true;
+                play();
+                return;
+            }
+            error = name === 'NotAllowedError' ? 'blocked'
+                : name === 'AbortError' ? 'interrupted'
+                    : name === 'NotSupportedError' ? 'unsupported' : 'network';
+            readinessRetry = error === 'interrupted' && !retriedReadiness;
+            loading = false;
+            resume = true;
+            paint();
+        };
+        try {
+            Promise.resolve(element.play()).then(() => {
+                if (disposed || generation !== playGeneration) return;
+                playPending = false;
+                error = null;
+                paint();
+            }, failed);
+        } catch (failure) { failed(failure); }
         paint();
     };
     const check = () => {
@@ -106,6 +151,8 @@ export function createMediaStopPlayback({ element, media, gated, session, storag
         check();
     };
     const paused = () => {
+        playGeneration += 1;
+        playPending = false;
         playing = false;
         if (internalPause) internalPause = false;
         else if (!complete && !element.ended && boundary === null && authorized() && !latest.current.stopped) { localPause = true; resume = true; }
@@ -113,6 +160,8 @@ export function createMediaStopPlayback({ element, media, gated, session, storag
         paint();
     };
     const ended = () => {
+        playGeneration += 1;
+        playPending = false;
         if (authorized() && (!gated || released() === points.length) && !element.seeking) {
             complete = true;
             lastTime = element.duration;
@@ -125,14 +174,44 @@ export function createMediaStopPlayback({ element, media, gated, session, storag
         } else check();
     };
     const visibility = () => { check(); if (environment.document.visibilityState === 'hidden') persist(true); };
+    const ready = () => {
+        loading = false;
+        initialize();
+        paint();
+        if (!readinessRetry || localPause || latest.current.stopped) return;
+        readinessRetry = false;
+        retriedReadiness = true;
+        play();
+    };
+    const mediaError = () => {
+        if (disposed) return;
+        pause();
+        loading = false;
+        error = element.error?.code === 4 || element.error?.code === 3 ? 'unsupported' : 'network';
+        resume = true;
+        console.info('Media playback', { category: error, code: element.error?.code });
+        paint();
+    };
+    const waiting = () => { loading = true; check(); paint(); };
+    const playingEvent = () => { loading = false; check(); };
     const events = { loadedmetadata: initialize, durationchange: initialize, timeupdate: check, seeking, seeked,
-        play: played, pause: paused, ended, ratechange: check, waiting: check, playing: check };
+        play: played, pause: paused, ended, ratechange: check, waiting, playing: playingEvent,
+        canplay: ready, error: mediaError };
     Object.entries(events).forEach(([name, listener]) => element.addEventListener(name, listener));
     environment.document.addEventListener('visibilitychange', visibility);
     environment.window.addEventListener('pagehide', visibility);
     const controls = {
         sync: check,
         buzzPause: () => { localPause = true; resume = true; pause(); persist(true); paint(); },
+        unmute: () => {
+            if (latest.current.stopped || !authorized() || (complete && !freeControls())) return;
+            element.muted = false;
+            mutedFallback = false;
+            localPause = false;
+            // Call play inside the gesture, including when iOS pauses on unmute.
+            if (boundary === null && !complete) play();
+            paint();
+        },
         toggle: () => {
             if (latest.current.stopped || (complete && !freeControls())) return;
             if (complete && !element.paused) pause();
@@ -146,6 +225,7 @@ export function createMediaStopPlayback({ element, media, gated, session, storag
     controls.dispose = () => {
         persist(true);
         disposed = true;
+        playGeneration += 1;
         environment.clearTimeout(timer);
         environment.clearTimeout(launchTimer);
         Object.entries(events).forEach(([name, listener]) => element.removeEventListener(name, listener));

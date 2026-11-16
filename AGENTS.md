@@ -198,6 +198,7 @@ Coordinate storage-related rule and frontend releases. Older clients must reload
 - `src/services/`: analytics and ImageKit/media storage integration.
 - `src/hooks/`: reusable React hooks.
 - `src/hooks/useRoomSubscription.js`: active-room listener metadata, foreground recovery, bounded retries, and connection status.
+- `src/utils/roomSubscription.js`: testable room recovery controller with independent read-only server probes after 30 seconds without confirmation while visible/online; normal idle budget is two room reads per minute, with no document writes.
 - `src/hooks/useGamePack.js`: one-time frozen-pack loading per version/load, retries, and legacy/finished-room fallbacks.
 - `src/hooks/useGameHistory.js`: host dialog history subscription and cursor pagination in pages of 50.
 - `src/utils/`: pure helpers.

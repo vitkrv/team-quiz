@@ -7,6 +7,43 @@ It is not a general unit or browser test suite.
 
 ## Run
 
+### Playback, buzzer concurrency, and room recovery
+
+The single storage entry point also runs deterministic, non-browser media and
+room-recovery checks. Media checks cover short clips, delayed metadata, muted
+autoplay fallback, local unmute, interrupted playback, stale promise cleanup,
+question/replay pause isolation, stop boundaries, and same-session restoration.
+Recovery checks simulate foreground stalls, unchanged rooms, pending writes,
+newer live snapshots, coalesced lifecycle events, hidden/offline pages, timeout,
+cleanup, and the normal two-probes-per-minute idle budget. The production probe
+uses one read-only transaction attempt, independently of the watch listener.
+
+Buzzer checks exercise concurrent opening and collecting submissions, immutable
+duplicates, stale races, deadlines, and unauthorized writes. The 20-player
+acceptance scenario requires every request to be accepted or legitimately
+deadline-closed; it does not seed successful acceptance. A separate seeded
+20-player scenario verifies maximum-size history/recap finalization.
+
+Pending physical-device checklist (browser testing requires an explicit request):
+
+- English and Ukrainian; host, contestant, and spectator; Android Chrome,
+  the affected older iPhone Chrome, and desktop at mobile/desktop widths.
+- Host-start a three-second video with sound, exercise muted fallback and local
+  unmute, then repeat with slow loading and video stop points.
+- Buzz to pause, finish the question, open the next video, and exercise shared
+  replay. New playback starts clean; same-session refresh retains progress.
+- Press Buzz concurrently from two contestants; both timely submissions are
+  retained and one winner is finalized without a contention error.
+- Keep a participant visible while the host advances questions, then test
+  screen lock, tab switching, offline/online, and browser back/forward. A missed
+  stage recovers at the next freshness probe without page refresh; unchanged
+  rooms stay healthy. Capture role, language, viewport, and observed behavior.
+
+These changes require a frontend release only: existing security rules and data
+shapes are preserved. No migration, index, Worker deployment, or heartbeat writes
+are introduced. Recovery retries and rule-dependent reads can exceed the normal
+idle probe budget; it is not a strict billing cap.
+
 ### Player score-history query
 
 New rooms have immutable `scoreHistoryVersion: 1`. The existing history writer

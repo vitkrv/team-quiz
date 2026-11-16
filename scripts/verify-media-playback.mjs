@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { createMediaStopPlayback } from '../src/utils/mediaStopPlayback.js';
+import { carryMediaPause, createMediaStopPlayback } from '../src/utils/mediaStopPlayback.js';
 
 // Plain event targets and a controllable clock; no DOM implementation or browser.
 class MediaElement extends EventTarget {
@@ -42,10 +42,12 @@ class MediaElement extends EventTarget {
     }
 }
 
-function fixture({ released = 0, session = 'session', gated = true, storage = new Map(), blocked = false, initialPause = false, loading = false, stopPoints = [10, 20], allowReplay = true } = {}) {
+function fixture({ released = 0, session = 'session', gated = true, storage = new Map(), blocked = false, initialPause = false, loading = false, stopPoints = [10, 20], allowReplay = true, kind = 'audio', duration = 30, play } = {}) {
     let serial = 0;
     const timers = new Map();
     const element = new MediaElement();
+    element.duration = duration;
+    if (play) element.play = play.bind(element);
     if (loading) element.duration = NaN;
     element.blocked = blocked;
     const document = new EventTarget();
@@ -56,7 +58,7 @@ function fixture({ released = 0, session = 'session', gated = true, storage = ne
     const latest = { current: { playback: session ? { sessionId: session, releasedStopCount: released, startedAt: 0 } : null, stopped: false, allowReplay } };
     let view;
     const runtime = createMediaStopPlayback({ element, gated, session, storageScope: 'user:room:question', identity: 'file', latest,
-        media: { kind: 'audio', durationSeconds: 30, stopPoints }, onView: (next) => { view = next; }, initialPause, environment });
+        media: { kind, durationSeconds: duration, stopPoints }, onView: (next) => { view = next; }, initialPause, environment });
     const flushStart = () => { for (const [id, timer] of [...timers]) if (timer.delay === 0) { timers.delete(id); timer.fn(); } };
     const nextTimer = () => { const first = timers.entries().next().value; if (first) { timers.delete(first[0]); first[1].fn(); } };
     const release = (count) => { latest.current.playback.releasedStopCount = count; runtime.sync(); };
@@ -64,6 +66,87 @@ function fixture({ released = 0, session = 'session', gated = true, storage = ne
 }
 
 export async function verifyMediaPlayback(check) {
+    await check('media playback: pause scope isolates questions and host replays, preserving pre-start buzzing', async () => {
+        const previous = { scope: 'room:q:file', session: 'old', localPause: true };
+        assert.equal(carryMediaPause(previous, 'room:q:file', 'new'), false);
+        assert.equal(carryMediaPause(previous, 'room:next:file', 'old'), false);
+        assert.equal(carryMediaPause(previous, 'room:q:file', 'old'), true);
+        assert.equal(carryMediaPause({ ...previous, session: '' }, 'room:q:file', 'first'), true);
+        const f = fixture({ stopPoints: [], initialPause: true });
+        f.runtime.dispose();
+        const replay = fixture({ stopPoints: [], session: 'new', storage: f.storage,
+            initialPause: carryMediaPause(previous, 'room:q:file', 'new') });
+        try { replay.flushStart(); assert.equal(replay.element.paused, false); assert.equal(replay.element.currentTime, 0); }
+        finally { replay.runtime.dispose(); }
+    });
+    await check('media playback: short video retries muted on autoplay denial and unmutes in the local action', async () => {
+        let calls = 0;
+        let soundAllowed = false;
+        const f = fixture({ kind: 'video', duration: 3, stopPoints: [], loading: true, play() {
+            calls += 1;
+            if (!this.muted && !soundAllowed) return Promise.reject(Object.assign(new Error('blocked'), { name: 'NotAllowedError' }));
+            return MediaElement.prototype.play.call(this);
+        } });
+        try {
+            assert.equal(calls, 0);
+            f.element.duration = 3;
+            f.element.dispatchEvent(new Event('loadedmetadata'));
+            f.flushStart();
+            await Promise.resolve(); await Promise.resolve();
+            assert.equal(calls, 2); assert.equal(f.view().muted, true);
+            assert.equal(f.element.currentTime, 0); assert.equal(f.element.paused, false);
+            soundAllowed = true;
+            f.runtime.unmute(); assert.equal(calls, 3, 'Unmute calls play within the gesture');
+            await Promise.resolve(); assert.equal(f.element.muted, false);
+            f.element.finish(); assert.equal(f.view().complete, true);
+        } finally { f.runtime.dispose(); }
+    });
+    await check('media playback: muted short video still honors stop boundaries and loading feedback', async () => {
+        const f = fixture({ kind: 'video', duration: 3, stopPoints: [1, 2], play() {
+            if (!this.muted) return Promise.reject(Object.assign(new Error('blocked'), { name: 'NotAllowedError' }));
+            return MediaElement.prototype.play.call(this);
+        } });
+        try {
+            f.flushStart(); await Promise.resolve(); await Promise.resolve();
+            f.element.dispatchEvent(new Event('waiting')); assert.equal(f.view().loading, true);
+            f.element.dispatchEvent(new Event('playing')); assert.equal(f.view().loading, false);
+            f.element.advance(1.1); assert.equal(f.element.currentTime, 1); assert.equal(f.element.paused, true);
+            f.release(1); assert.equal(f.element.paused, false);
+            f.element.advance(2.1); assert.equal(f.element.currentTime, 2); assert.equal(f.element.paused, true);
+            f.release(2); f.element.finish(); assert.equal(f.view().complete, true);
+        } finally { f.runtime.dispose(); }
+    });
+    await check('media playback: blocked muted fallback and audio expose local resume without retry loops', async () => {
+        for (const kind of ['video', 'audio']) {
+            let calls = 0;
+            const f = fixture({ kind, play() { calls += 1; return Promise.reject(Object.assign(new Error('blocked'), { name: 'NotAllowedError' })); } });
+            try {
+                f.flushStart(); await Promise.resolve(); await Promise.resolve();
+                assert.equal(calls, kind === 'video' ? 2 : 1);
+                assert.equal(f.view().error, 'blocked'); assert.equal(f.view().resume, true);
+                f.element.dispatchEvent(new Event('canplay'));
+                assert.equal(calls, kind === 'video' ? 2 : 1);
+            } finally { f.runtime.dispose(); }
+        }
+    });
+    await check('media playback: interrupted playback retries readiness once; disposed rejection is ignored', async () => {
+        let calls = 0;
+        const f = fixture({ play() { calls += 1; return Promise.reject(Object.assign(new Error('interrupted'), { name: 'AbortError' })); } });
+        try {
+            f.flushStart(); await Promise.resolve();
+            assert.equal(f.view().error, 'interrupted');
+            f.element.dispatchEvent(new Event('canplay')); await Promise.resolve();
+            f.element.dispatchEvent(new Event('canplay')); await Promise.resolve();
+            assert.equal(calls, 2);
+            f.element.error = { code: 4 }; f.element.dispatchEvent(new Event('error'));
+            assert.equal(f.view().error, 'unsupported');
+        } finally { f.runtime.dispose(); }
+        let reject;
+        const stale = fixture({ kind: 'video', play() { return new Promise((resolve, fail) => { reject = fail; }); } });
+        stale.flushStart(); stale.runtime.dispose();
+        reject(Object.assign(new Error('old'), { name: 'NotAllowedError' })); await Promise.resolve();
+        assert.equal(stale.element.muted, false); assert.equal(stale.view().error, null);
+    });
     await check('media replay: disabled participant controls stay locked before and after completion and refresh', async () => {
         for (const stopPoints of [[], [10, 20]]) {
             const f = fixture({ stopPoints, allowReplay: false });

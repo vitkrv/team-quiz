@@ -8,7 +8,7 @@ These diagrams describe ordinary questions in rooms with `buzzerPolicyVersion: 1
 
 ![Dark-themed flow diagram of buzzer eligibility, local reaction capture, collection, ranking, and host finalization](diagrams/buzzer-winner-flow.svg)
 
-The initial opening delay is **2 seconds**. A reaction starts when the local client renders the button as available. Button and Space presses use the same handler. The client captures the reaction duration once using a monotonic clock; transaction retries preserve that value.
+The initial opening delay is **2 seconds**. A reaction starts when the local client renders the button as available. Button and Space presses use the same handler. The client captures the reaction duration once using a monotonic clock; opening-transition retries preserve that value.
 
 In competitive mode, the first early press adds a fixed **2.5-second personal delay**. Repeated presses during that penalty do not extend it. The penalized contestant's reaction starts at their personal availability; the penalty itself is not added to their ranking duration. Refresh restores the saved reaction origin, using the shared personal unlock timestamp as a fallback.
 
@@ -16,7 +16,7 @@ The first accepted submission commits at time **T**. Other submissions must comm
 
 The first enabled render starts a **one-second local grace period**, using the same monotonic origin as reaction timing. Input remains available while collection is open or that grace remains, but grace cannot extend the server acceptance deadline. Winner announcement immediately ends grace. Acceptance, cancellation, reveal, question change, or lost eligibility also ends input; offline and pending submissions disable it. Refresh, clock synchronization, and repeated snapshots do not restart the origin or grace. Players still personally locked during collection cannot submit or receive new early-buzz penalties.
 
-Submission outcomes distinguish acceptance, an existing submission, a closed collection window, an ended race, and ineligibility. Write failures are reconciled against fresh server state; an existing committed submission is checked before rejecting a resolved race. Confirmed submission contention can retry with the original reaction and operation ID. Deadline rejection receives neutral feedback and changes no attempts, history, recap, or scores. Permission errors alone do not establish a lost race; genuine save or reconciliation failures remain errors.
+Submission outcomes distinguish acceptance, an existing submission, a closed collection window, an ended race, and ineligibility. Write failures are reconciled against fresh server state; an existing committed submission is checked before rejecting a resolved race. Submissions update only the pressing player's field, so concurrent collecting submissions do not replace one another. A competing opener retries against the first server acceptance time with the original reaction and operation ID. Deadline rejection receives neutral feedback and changes no attempts, history, recap, or scores. Permission errors alone do not establish a lost race; genuine save or reconciliation failures remain errors.
 
 Listener failures disable stale input and recover silently with **three retries, 500ms apart**. If the original attempt and all three retries fail, players see a refresh request and only the final error is logged to the console. A server-confirmed snapshot without pending writes resets the failure streak; cached snapshots do not. This recovery is separate from submission retries.
 

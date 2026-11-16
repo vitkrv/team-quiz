@@ -44,6 +44,7 @@ export default function QuestionPresenter({
                     )}
                     {activeQ.questionMedia && (
                         <QuestionMedia
+                            key={activeQ.id}
                             media={activeQ.questionMedia}
                             alt={t('questionMediaAlt')}
                             variant={isHost ? 'host' : 'player'}

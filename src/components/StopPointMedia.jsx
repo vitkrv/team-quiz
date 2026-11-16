@@ -4,32 +4,37 @@ import MediaVolumeControl from './MediaVolumeControl';
 import useLocalMediaVolume from '../hooks/useLocalMediaVolume';
 import { formatMediaTime, getMediaStops, mediaIdentity } from '../utils/mediaStops';
 import { getMediaKind, getMediaUrl } from '../services/imageStorage';
-import { createMediaStopPlayback } from '../utils/mediaStopPlayback';
+import { carryMediaPause, createMediaStopPlayback } from '../utils/mediaStopPlayback';
 
 export default function StopPointMedia({ media, t, gated = false, playback, allowReplay = true, hidePlaybackControls = false, controllerRef, onPlaybackState, storageScope = '', pauseSignal = 0, stopped = false, onStop, compact = false, className = '' }) {
     const elementRef = useRef(null);
     const runtimeRef = useRef(null);
-    const locallyPausedRef = useRef(false);
+    const locallyPausedRef = useRef(null);
     const latest = useRef({ playback, stopped, onStop, onPlaybackState });
     latest.current = { playback, stopped, onStop, onPlaybackState, allowReplay };
-    const [view, setView] = useState({ time: 0, duration: media.durationSeconds, complete: !gated, playing: false, resume: false, boundary: null });
+    const [runtimeView, setView] = useState(null);
     const [volume] = useLocalMediaVolume();
     const stops = getMediaStops(media);
     const pointsKey = JSON.stringify(stops);
-    const policyMedia = useMemo(() => ({ kind: media.kind, durationSeconds: media.durationSeconds, stopPoints: JSON.parse(pointsKey) }),
-        [media.kind, media.durationSeconds, pointsKey]);
+    const kind = getMediaKind(media);
+    const policyMedia = useMemo(() => ({ kind, durationSeconds: media.durationSeconds, stopPoints: JSON.parse(pointsKey) }),
+        [kind, media.durationSeconds, pointsKey]);
     const session = playback?.sessionId || '';
     const identity = mediaIdentity(media);
+    const stateKey = `${storageScope}:${identity}:${session}`;
+    const view = runtimeView?.stateKey === stateKey ? runtimeView
+        : { time: 0, duration: media.durationSeconds, complete: !gated, playing: false, resume: false, boundary: null };
     const url = getMediaUrl(media);
     const isVideo = getMediaKind(media) === 'video';
 
-    useEffect(() => { if (elementRef.current) elementRef.current.volume = volume; }, [volume]);
+    useEffect(() => { if (elementRef.current) elementRef.current.volume = volume; }, [volume, stateKey]);
 
     useEffect(() => {
+        const scope = `${storageScope}:${identity}`;
         const runtime = createMediaStopPlayback({ element: elementRef.current, media: policyMedia, gated, session, storageScope, identity, latest,
-            initialPause: locallyPausedRef.current, onView: (next) => {
-                locallyPausedRef.current = next.localPause;
-                setView(next);
+            initialPause: carryMediaPause(locallyPausedRef.current, scope, session), onView: (next) => {
+                locallyPausedRef.current = { scope, session, localPause: next.localPause };
+                setView({ ...next, stateKey: `${storageScope}:${identity}:${session}` });
                 latest.current.onPlaybackState?.({ session, complete: next.complete, resume: next.resume, boundary: next.boundary });
             } });
         runtimeRef.current = runtime;
@@ -47,8 +52,8 @@ export default function StopPointMedia({ media, t, gated = false, playback, allo
     const progress = duration > 0 ? view.time / duration * 100 : 0;
     const controls = view.complete && (!gated || allowReplay) && !stopped;
     return <div className={compact ? 'w-64 max-w-full shrink-0' : 'w-full max-w-4xl shrink-0'}>
-        {isVideo ? <video ref={elementRef} src={url} playsInline preload="auto" controls={controls && !hidePlaybackControls} disablePictureInPicture={!controls || hidePlaybackControls} disableRemotePlayback={!controls || hidePlaybackControls}
-            className={`${compact ? 'h-28 w-full rounded-lg bg-black object-contain' : 'max-h-[42vh] w-full rounded-lg bg-black'} ${className}`} /> : <audio ref={elementRef} src={url} preload="auto" />}
+        {isVideo ? <video key={stateKey} ref={elementRef} src={url} playsInline preload="auto" controls={controls && !hidePlaybackControls} disablePictureInPicture={!controls || hidePlaybackControls} disableRemotePlayback={!controls || hidePlaybackControls}
+            className={`${compact ? 'h-28 w-full rounded-lg bg-black object-contain' : 'max-h-[42vh] w-full rounded-lg bg-black'} ${className}`} /> : <audio key={stateKey} ref={elementRef} src={url} preload="auto" />}
         <div className="mt-2 rounded-xl border border-slate-700 bg-slate-950/80 p-3">
             <div className="mb-2 flex items-center justify-between gap-2 text-xs font-mono text-slate-300"><span>{formatMediaTime(view.time)}</span><span>{formatMediaTime(duration)}</span></div>
             <div className="relative mb-5">
@@ -65,6 +70,10 @@ export default function StopPointMedia({ media, t, gated = false, playback, allo
                 className="inline-flex min-h-11 items-center gap-2 rounded-lg bg-blue-600 px-4 text-sm font-bold text-white">
                 {view.playing ? <Pause size={18} /> : <Play size={18} />}{t(view.playing ? 'mediaPause' : view.complete ? 'mediaPlay' : 'mediaResume')}
             </button>}
+            {view.muted && !stopped && (!gated || session) && <button type="button" onClick={() => runtimeRef.current?.unmute()}
+                className="ml-2 inline-flex min-h-11 items-center rounded-lg bg-blue-600 px-4 font-bold text-white">{t('mediaTapToUnmute')}</button>}
+            {view.error && <p role="status" className="mt-2 text-sm text-amber-300">{t(`mediaPlayback_${view.error}`)}</p>}
+            {view.loading && !view.error && !stopped && (!gated || session) && <p role="status" className="mt-2 text-sm text-slate-400">{t('mediaPlayback_loading')}</p>}
             {!view.complete && <p role="status" className="mt-2 text-sm text-slate-400">{t(!session ? 'mediaWaitingForHostStart' : view.boundary !== null ? 'mediaWaitingForContinue' : 'mediaTimelineLocked')}</p>}
             {view.complete && gated && !allowReplay && <p role="status" className="mt-2 text-sm text-slate-400">{t('questionMediaReplayDisabled')}</p>}
             <MediaVolumeControl t={t} />

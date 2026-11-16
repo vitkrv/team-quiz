@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { collection, doc, getDocFromServer, getDocs, serverTimestamp, setDoc, Timestamp, updateDoc } from 'firebase/firestore';
+import { collection, doc, FieldPath, getDocFromServer, getDocs, serverTimestamp, setDoc, Timestamp, updateDoc } from 'firebase/firestore';
 import { buzzInputState, createReactionOrigin, rankBuzzAttempts } from '../src/utils/buzzerPolicy.js';
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -151,6 +151,29 @@ export async function verifyBuzzer({ actions, check, denied, hostDb, playerDb, l
         await closeWindow(game); await actions.finalizeBuzz(game.host, id, 'host');
         assert.equal((await read(game.host)).buzzedPlayerId, 'late');
     });
+    await check('buzzer: simultaneous collecting writes and duplicate operations preserve the first acceptance', async () => {
+        const thirdId = 'third.player';
+        const thirdDb = client(thirdId);
+        game = await make({ ...players, [thirdId]: { name: 'Third', score: 0, isHost: false } });
+        const id = await unlock(game);
+        await actions.submitBuzz(game.player, id, 'player', 200, 'opener');
+        const first = (await read(game.raceRef)).firstAcceptedAt;
+        const results = await Promise.all([
+            actions.submitBuzz(game.player, id, 'player', 200, 'opener'),
+            actions.submitBuzz(game.late, id, 'late', 150, 'collecting'),
+            actions.submitBuzz(roomRef(thirdDb, game.id), id, thirdId, 180, 'collecting-third')
+        ]);
+        assert.deepEqual(results, ['accepted', 'accepted', 'accepted']);
+        const race = await read(game.raceRef);
+        assert.deepEqual(race.firstAcceptedAt, first);
+        assert.equal(race.attempts.player.operationId, 'opener');
+        assert.equal(race.attempts.late.operationId, 'collecting');
+        assert.equal(race.attempts[thirdId].operationId, 'collecting-third');
+        await denied(updateDoc(doc(game.late, 'buzzer', 'current'), new FieldPath('attempts', 'late'),
+            { playerId: 'late', reactionMs: 0, operationId: 'overwrite', acceptedAt: serverTimestamp() }));
+        await denied(updateDoc(doc(game.player, 'buzzer', 'current'), new FieldPath('raceId'), 'stale-race',
+            new FieldPath('attempts', 'player'), { playerId: 'player', reactionMs: 1, operationId: 'stale-write', acceptedAt: serverTimestamp() }));
+    });
     await check('buzzer: early penalty persists, concurrent reports count once, cannot be cleared or bypassed', async () => {
         game = await make(); const race = await read(game.raceRef);
         await Promise.all([actions.recordEarlyBuzz(game.player, race.raceId, 'player', 'early-a'), actions.recordEarlyBuzz(game.player, race.raceId, 'player', 'early-b')]);
@@ -206,17 +229,33 @@ export async function verifyBuzzer({ actions, check, denied, hostDb, playerDb, l
         assert.equal((await read(game.raceRef)).questionId, 'q2');
         assert.deepEqual((await read(game.raceRef)).penalties, {});
     });
-    await check('buzzer: 20-player race finalizes history and recap atomically within rules access limits', async () => {
+    let fullRoster, fullConnections;
+    await check('buzzer: 20-player concurrent acceptance has no unexplained contention failures', async () => {
         const roster = { host: players.host }, connections = [];
         for (let i = 0; i < 20; i++) { const uid = `buzz${i}`; roster[uid] = { name: uid, score: 0, isHost: false }; connections.push([uid, client(uid)]); }
         game = await make(roster); const id = await unlock(game);
-        // Start near-concurrent real transactions; contention is included in the deadline.
+        fullRoster = roster; fullConnections = connections;
         const results = await Promise.allSettled(connections.map(([uid, db], i) => actions.submitBuzz(roomRef(db, game.id), id, uid, 500 + i, uid)));
-        // The emulator may exhaust the real 2s window under 20-way contention. Seed
-        // only the acceptance fixture for the separate maximum-size finalization check.
         assert.ok(results.some((r) => r.status === 'fulfilled' && r.value === 'accepted'));
+        for (const [index, result] of results.entries()) {
+            assert.equal(result.status, 'fulfilled', `Submission ${index}: ${result.reason?.stack}`);
+            assert.ok(['accepted', 'collection-closed'].includes(result.value), `Submission ${index}: ${result.value}`);
+        }
+        const race = await read(game.raceRef);
+        results.forEach((result, index) => {
+            const uid = connections[index][0];
+            if (result.value === 'accepted') {
+                assert.equal(race.attempts[uid].operationId, uid);
+                assert.equal(race.attempts[uid].reactionMs, 500 + index);
+            } else assert.equal(race.attempts[uid], undefined);
+        });
+    });
+    await check('buzzer: seeded 20-player finalization writes history and recap within rules access limits', async () => {
+        const connections = fullConnections;
+        game = await make(fullRoster); await unlock(game);
         const acceptedAt = Timestamp.fromMillis(Date.now() - 2100);
-        await updateDoc(doc(roomRef(seedDb, game.id), 'buzzer', 'current'), { firstAcceptedAt: acceptedAt,
+        const id = (await read(game.raceRef)).raceId;
+        await updateDoc(doc(roomRef(seedDb, game.id), 'buzzer', 'current'), { phase: 'collecting', firstAcceptedAt: acceptedAt,
             attempts: Object.fromEntries(connections.map(([uid], i) => [uid, { playerId: uid, reactionMs: 500 + i, operationId: uid, acceptedAt }])) });
         await actions.finalizeBuzz(game.host, id, 'host');
         const summary = await read(doc(game.host, 'recap', 'summary'));

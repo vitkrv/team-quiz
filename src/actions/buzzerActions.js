@@ -1,4 +1,4 @@
-import { getDocFromServer, runTransaction, serverTimestamp } from 'firebase/firestore';
+import { FieldPath, getDocFromServer, runTransaction, serverTimestamp, updateDoc } from 'firebase/firestore';
 import { buzzerRef } from './buzzerState';
 import { updateRoomInTransaction } from './gameStorage';
 import { createHistoryItem } from './gameActions';
@@ -61,23 +61,27 @@ export async function recoverBuzzSubmission(error, readState, submission, server
 export async function submitBuzz(roomRef, raceId, uid, reactionMs, operationId, serverNow = Date.now) {
     if (!Number.isFinite(reactionMs) || reactionMs < 0) throw new Error('Invalid reaction duration');
     const submission = { raceId, uid, operationId };
-    const submit = async (retries = 0) => {
+    const submit = async (retries = 0, recoveredState = null) => {
         let attemptedRace;
         try {
-            return await runTransaction(roomRef.firestore, async (tx) => {
-                const room = (await tx.get(roomRef)).data();
-                const race = (await tx.get(buzzerRef(roomRef))).data();
-                const outcome = submissionOutcome(room, race, submission);
-                if (outcome) return outcome;
-                attemptedRace = race;
-                // Retries always reuse the captured duration and operation ID.
-                tx.update(buzzerRef(roomRef), {
-                    phase: 'collecting',
-                    firstAcceptedAt: race.firstAcceptedAt || serverTimestamp(),
-                    attempts: { ...race.attempts, [uid]: { playerId: uid, reactionMs, operationId, acceptedAt: serverTimestamp() } }
-                });
-                return 'accepted';
-            });
+            let state = recoveredState;
+            if (!state) {
+                const [room, race] = await Promise.all([getDocFromServer(roomRef), getDocFromServer(buzzerRef(roomRef))]);
+                state = { room: room.data(), race: race.data() };
+            }
+            const { room, race } = state;
+            const outcome = submissionOutcome(room, race, submission);
+            if (outcome) return outcome;
+            attemptedRace = race;
+            // Retries always reuse the captured duration and operation ID.
+            // Rules enforce eligibility and the deadline at commit time. A
+            // field-level write never replaces another player's submission.
+            const fields = [new FieldPath('raceId'), raceId, new FieldPath('attempts', uid),
+                { playerId: uid, reactionMs, operationId, acceptedAt: serverTimestamp() }];
+            if (race.phase === 'open') fields.push(new FieldPath('phase'), 'collecting',
+                new FieldPath('firstAcceptedAt'), serverTimestamp());
+            await updateDoc(buzzerRef(roomRef), ...fields);
+            return 'accepted';
         } catch (error) {
             let state;
             try {
@@ -87,14 +91,14 @@ export async function submitBuzz(roomRef, raceId, uid, reactionMs, operationId, 
                     return state;
                 }, submission, serverNow);
             } catch (failure) {
-                // Rules can reject a stale attempts-map write before Firestore
-                // reports a transaction conflict. Retry only confirmed growth
-                // from another contestant in this same, still-open race.
+                // A competing opener has established the immutable timestamp.
+                // Retry only our entry in that same, still-collecting race.
                 if (error.code === 'permission-denied' && retries < 3 && attemptedRace && state
+                    && attemptedRace.phase === 'open'
                     && !submissionOutcome(state.room, state.race, submission)
                     && state.race.phase === 'collecting' && serverNow() < collectionDeadline(state.race)
                     && Object.keys(state.race.attempts).length > Object.keys(attemptedRace.attempts).length) {
-                    return submit(retries + 1);
+                    return submit(retries + 1, state);
                 }
                 throw failure;
             }

@@ -1,4 +1,5 @@
 import { verifyScoreEdits } from './verify-score-edits.mjs';
+import { verifyRoomSubscription } from './verify-room-subscription.mjs';
 import { verifyPackRounds } from './verify-pack-rounds.mjs';
 import { verifyMediaStops } from './verify-media-stops.mjs';
 import { verifyBuzzer } from './verify-buzzer.mjs';
@@ -88,6 +89,14 @@ try {
     };
     const id = await newRoom();
     const hostRoom = roomRef(hostDb, id);
+    await check('room recovery: read-only transaction returns confirmed room state without changing it', async () => {
+        const before = await getDocFromServer(hostRoom);
+        const probe = await runTransaction(hostDb, (tx) => tx.get(hostRoom), { maxAttempts: 1 });
+        assert.equal(probe.metadata.fromCache, false);
+        assert.equal(probe.metadata.hasPendingWrites, false);
+        assert.deepEqual(probe.data(), before.data());
+        assert.deepEqual((await getDocFromServer(hostRoom)).data(), before.data());
+    });
     await check('new room and invitation reservation are compact and atomic', async () => {
         const room = (await getDocFromServer(hostRoom)).data();
         assert.equal(room.dataVersion, 2);
@@ -299,6 +308,7 @@ try {
             await denied(updateDoc(roomRef(hostDb, legacyId), { themeId: themeId }));
         }
     });
+    await verifyRoomSubscription(check);
     await verifyScoreEdits({ actions, check, denied, hostDb, playerDb, spectatorDb, seedDb, ref, roomRef, event, t });
     await verifyGameRecap({ actions, check, denied, hostDb, playerDb, lateDb, spectatorDb, adminDb, seedDb, namespace, ref, roomRef, event, t });
     await verifyBuzzer({ actions, check, denied, hostDb, playerDb, lateDb, spectatorDb, seedDb, namespace, ref, roomRef, event, t, client });
