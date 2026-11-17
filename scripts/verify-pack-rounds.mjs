@@ -188,27 +188,34 @@ export async function verifyPackRounds({ actions, check, denied, hostDb, playerD
         const env = { FIREBASE_PROJECT_ID: 'demo-game-storage', IMAGEKIT_PRIVATE_KEY: 'test-only', IMAGEKIT_PUBLIC_KEY: 'test', IMAGEKIT_URL_ENDPOINT: 'https://example.test' };
         const request = (questionId) => new Request('https://worker.test', { method: 'POST', headers: { authorization: `Bearer ${token}` },
             body: JSON.stringify({ action: 'uploadAuth', appId: 'test', packId: 'pack', questionId, slot: 'questionMedia' }) });
+        const rejected = async (request, pattern) => {
+            const response = await worker.fetch(request, env);
+            assert.equal(response.status, 400);
+            const body = await response.json();
+            assert.equal(body.code, 'media-request-failed');
+            assert.match(body.message, pattern);
+        };
         try {
             for (const source of [pack, { ...pack, rounds: undefined, categories: pack.rounds[0].categories }]) {
                 const cleaned = Object.fromEntries(Object.entries(source).filter(([, v]) => v !== undefined));
                 globalThis.fetch = async () => Response.json({ fields: value(cleaned).mapValue.fields });
                 for (const question of getAllQuestions(cleaned)) assert.equal((await worker.fetch(request(question.id), env)).status, 200);
-                await assert.rejects(worker.fetch(request('missing'), env), /not found/);
+                await rejected(request('missing'), /not found/);
             }
             globalThis.fetch = async () => Response.json({ fields: value({ ...pack, ownerId: 'other' }).mapValue.fields });
-            await assert.rejects(worker.fetch(request('round-question-0'), env), /owner/);
+            await rejected(request('round-question-0'), /owner/);
 
             const media = { packId: 'pack', questionId: 'round-question-2', slot: 'answerMedia', fileId: 'file', filePath: '/TeamQuiz/pack-answer.png' };
             const deletion = (item = media) => new Request('https://worker.test', { method: 'POST', headers: { authorization: `Bearer ${token}` },
                 body: JSON.stringify({ action: 'delete', appId: 'test', media: item }) });
-            await assert.rejects(worker.fetch(deletion(), env), /owner/);
+            await rejected(deletion(), /owner/);
             let deleted = false;
             globalThis.fetch = async (url, options) => {
                 if (String(url).includes('firestore.googleapis.com')) return Response.json({ fields: value(pack).mapValue.fields });
                 if (options?.method === 'DELETE') { deleted = true; return Response.json({}); }
                 return Response.json({ filePath: media.filePath });
             };
-            await assert.rejects(worker.fetch(deletion({ ...media, filePath: '/TeamQuiz/another-pack.png' }), env), /does not belong/);
+            await rejected(deletion({ ...media, filePath: '/TeamQuiz/another-pack.png' }), /does not belong/);
             assert.equal(deleted, false);
             assert.equal((await worker.fetch(deletion(), env)).status, 200);
             assert.equal(deleted, true);

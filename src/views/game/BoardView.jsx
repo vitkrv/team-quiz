@@ -20,7 +20,7 @@ import {
 import SurprisePlayerDraw from '../../components/SurprisePlayerDraw';
 import HoldToConfirmButton from '../../components/HoldToConfirmButton';
 import RockPaperScissorsManager from '../../components/RockPaperScissorsManager';
-import { preloadMediaImage } from '../../hooks/useRetryableImage';
+import { cancelBackgroundPreloads, preloadMediaImage } from '../../hooks/useRetryableImage';
 import { getRoomAnalyticsSummary, trackEvent } from '../../services/analytics';
 import { useLanguage } from '../../useLanguage';
 import { areAllQuestionsDone, getTopTiedPlayerIds } from '../../utils/gameResults';
@@ -106,10 +106,11 @@ export default function BoardView({ room, roomRef, user, isHost, isSpectator = f
         categories.forEach((category) => {
             (category.questions || []).forEach((question) => {
                 if (room.questionStates?.[question.id] === 'available') {
-                    preloadMediaImage(question.questionMedia, questionImagePreloadVariant).catch(() => {});
+                    preloadMediaImage(question.questionMedia, questionImagePreloadVariant, { priority: 0 }).catch(() => {});
                 }
             });
         });
+        return cancelBackgroundPreloads;
     }, [categories, questionImagePreloadVariant, room.questionStates]);
 
     const handleHostEndGame = async () => {

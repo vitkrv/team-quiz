@@ -4,6 +4,27 @@ const PACK_PRIZE_SLOTS = new Set(['prizeHiddenMedia', 'prizeRevealedMedia']);
 const VALID_SLOTS = new Set([...QUESTION_SLOTS, ...PACK_PRIZE_SLOTS]);
 const IMAGEKIT_FOLDER = '/TeamQuiz';
 
+// Bound both connection and response-body reads. Authorization still uses the
+// caller's Firebase token, never privileged Firestore credentials.
+const fetchMediaService = async (url, options) => {
+    const controller = new AbortController();
+    let timer;
+    try {
+        return await Promise.race([
+            fetch(url, { ...options, signal: controller.signal }).then(async (response) => {
+                const body = await response.text();
+                return new Response(body || null, { status: response.status, headers: response.headers });
+            }),
+            new Promise((_, reject) => {
+                timer = setTimeout(() => {
+                    reject(Object.assign(new Error('Media service timed out.'), { code: 'timeout' }));
+                    controller.abort();
+                }, 15000);
+            })
+        ]);
+    } finally { clearTimeout(timer); }
+};
+
 const getSecret = (env, key) => {
     const value = env[key];
     if (typeof value !== 'string' || !value.trim()) {
@@ -53,7 +74,7 @@ const getAuthHeader = (env) => `Basic ${btoa(`${getSecret(env, 'IMAGEKIT_PRIVATE
 
 const getFirestorePack = async ({ env, appId, packId, idToken }) => {
     const url = `https://firestore.googleapis.com/v1/projects/${getSecret(env, 'FIREBASE_PROJECT_ID')}/databases/(default)/documents/artifacts/${appId}/public/data/packs/${packId}`;
-    const response = await fetch(url, {
+    const response = await fetchMediaService(url, {
         headers: { Authorization: `Bearer ${idToken}` }
     });
 
@@ -145,7 +166,7 @@ const handleDelete = async ({ request, env, body }) => {
         throw new Error('Media does not belong to this question pack.');
     }
 
-    const detailsResponse = await fetch(`https://api.imagekit.io/v1/files/${encodeURIComponent(fileId)}/details`, {
+    const detailsResponse = await fetchMediaService(`https://api.imagekit.io/v1/files/${encodeURIComponent(fileId)}/details`, {
         headers: { Authorization: getAuthHeader(env) }
     });
 
@@ -157,7 +178,7 @@ const handleDelete = async ({ request, env, body }) => {
         throw new Error('Media does not belong to this question pack.');
     }
 
-    const deleteResponse = await fetch(`https://api.imagekit.io/v1/files/${encodeURIComponent(fileId)}`, {
+    const deleteResponse = await fetchMediaService(`https://api.imagekit.io/v1/files/${encodeURIComponent(fileId)}`, {
         method: 'DELETE',
         headers: { Authorization: getAuthHeader(env) }
     });
@@ -176,11 +197,11 @@ export default {
 
         try {
             const body = await request.json();
-            if (body.action === 'uploadAuth') return handleUploadAuth({ request, env, body });
-            if (body.action === 'delete') return handleDelete({ request, env, body });
+            if (body.action === 'uploadAuth') return await handleUploadAuth({ request, env, body });
+            if (body.action === 'delete') return await handleDelete({ request, env, body });
             return json({ message: 'Unknown action.' }, { status: 400 });
         } catch (err) {
-            return json({ message: err.message || 'ImageKit auth request failed.' }, { status: 400 });
+            return json({ code: err.code || 'media-request-failed', message: err.message || 'ImageKit auth request failed.' }, { status: err.code === 'timeout' ? 504 : 400 });
         }
     }
 };

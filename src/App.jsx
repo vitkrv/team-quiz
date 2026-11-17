@@ -1,4 +1,6 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { clearResultHistoryCache } from './services/resultHistory';
+import ScreenBoundary from './components/ScreenBoundary';
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { GoogleAuthProvider, onAuthStateChanged, signInWithPopup, signOut } from 'firebase/auth';
 import { doc, onSnapshot, setDoc } from 'firebase/firestore';
 import { RefreshCw, X } from 'lucide-react';
@@ -13,12 +15,13 @@ import { getAuthErrorMessage } from './utils/errors';
 import { hasDefinedFinalResults } from './utils/gameResults';
 import Login from './views/Login';
 import MainMenu from './views/MainMenu';
-import UserProfile from './views/UserProfile';
-import PackCreator from './views/PackCreator';
-import PackManager from './views/PackManager';
-import HostSetup from './views/HostSetup';
-import JoinRoom from './views/JoinRoom';
-import GameRoom from './views/game/GameRoom';
+const UserProfile = lazy(() => import('./views/UserProfile'));
+const PackCreator = lazy(() => import('./views/PackCreator'));
+const PackManager = lazy(() => import('./views/PackManager'));
+const HostSetup = lazy(() => import('./views/HostSetup'));
+const JoinRoom = lazy(() => import('./views/JoinRoom'));
+const loadGameRoom = () => import('./views/game/GameRoom');
+const GameRoom = lazy(loadGameRoom);
 
 const LAST_ROOM_CODE_KEY = 'cortex-rush:lastRoomCode';
 const LANGUAGE_CACHE_KEY = 'cortex-rush:language';
@@ -91,6 +94,10 @@ export default function App() {
     const expectedRoomExitCodeRef = useRef(null);
 
     useEffect(() => {
+        if (view === 'joinRoom' || view === 'hostSetup') loadGameRoom().catch(() => {});
+    }, [view]);
+
+    useEffect(() => {
         if (!authReady) return;
 
         setAnalyticsUserContext({ signedIn: Boolean(user) });
@@ -107,6 +114,7 @@ export default function App() {
 
         const unsubscribe = onAuthStateChanged(auth, (u) => {
             if (profileUserIdRef.current !== (u?.uid || null)) {
+                clearResultHistoryCache();
                 setProfile(null);
                 profileUserIdRef.current = u?.uid || null;
             }
@@ -152,7 +160,7 @@ export default function App() {
         return () => { active = false; unsubscribe(); };
     }, [user, profileAttempt]);
 
-    const handleLanguageChange = async (nextLanguage) => {
+    const handleLanguageChange = useCallback(async (nextLanguage) => {
         const normalizedLanguage = normalizeLanguage(nextLanguage);
         setLanguage(normalizedLanguage);
         localStorage.setItem(LANGUAGE_CACHE_KEY, normalizedLanguage);
@@ -165,7 +173,7 @@ export default function App() {
             console.error("Language preference save error:", err);
             setError(translate(normalizedLanguage, 'languageSaveFailed'));
         }
-    };
+    }, [user]);
 
     const handleGoogleSignIn = async () => {
         try {
@@ -206,7 +214,7 @@ export default function App() {
         }
     };
 
-    const handleSetCurrentRoomCode = (roomCode, { remember = true } = {}) => {
+    const handleSetCurrentRoomCode = useCallback((roomCode, { remember = true } = {}) => {
         setCurrentRoomCode(roomCode);
 
         if (roomCode && remember) {
@@ -215,7 +223,7 @@ export default function App() {
         } else {
             setLatestActiveRoomCode(localStorage.getItem(LAST_ROOM_CODE_KEY));
         }
-    };
+    }, []);
 
     const handleCreatePack = () => {
         setEditingPack(null);
@@ -235,11 +243,11 @@ export default function App() {
         setView('room');
     };
 
-    const handlePrepareRoomExit = (roomCode) => {
+    const handlePrepareRoomExit = useCallback((roomCode) => {
         expectedRoomExitCodeRef.current = roomCode;
-    };
+    }, []);
 
-    const handleLeaveGamePage = ({ clearRemembered = false } = {}) => {
+    const handleLeaveGamePage = useCallback(({ clearRemembered = false } = {}) => {
         expectedRoomExitCodeRef.current = null;
         if (clearRemembered) {
             localStorage.removeItem(LAST_ROOM_CODE_KEY);
@@ -249,7 +257,7 @@ export default function App() {
         setLinkedGameRoomCode('');
         clearGameCodeFromUrl();
         setView('menu');
-    };
+    }, [handleSetCurrentRoomCode]);
 
     const handleJoinRoomCodeConsumed = () => {
         setJoinRoomCode('');
@@ -264,7 +272,7 @@ export default function App() {
         setRoomData(null);
         setView('room');
         setGameRoomCode('');
-    }, [gameRoomCode, user]);
+    }, [gameRoomCode, user, handleSetCurrentRoomCode]);
 
     useEffect(() => {
         if (!user || !joinRoomCode) return;
@@ -296,7 +304,7 @@ export default function App() {
         const serverConfirmed = !roomSnapshot.metadata.fromCache && !roomSnapshot.metadata.hasPendingWrites;
         const applyRoomSnapshot = (snapshot) => {
             if (snapshot.exists()) {
-                const room = snapshot.data();
+                const room = roomSync.data;
                 const isParticipant = Boolean(room.players?.[user.uid]);
                 const hasLinkedDefinedFinalResults = linkedGameRoomCode === currentRoomCode
                     && !isParticipant
@@ -357,7 +365,7 @@ export default function App() {
             }
         };
         applyRoomSnapshot(roomSnapshot);
-    }, [roomSnapshot, user, currentRoomCode, language, view, linkedGameRoomCode]);
+    }, [roomSnapshot, roomSync.data, user, currentRoomCode, language, view, linkedGameRoomCode, handleSetCurrentRoomCode]);
 
     if (!hasFirebaseConfig) {
         return <FirebaseSetupMissing />;
@@ -407,6 +415,8 @@ export default function App() {
                 </div>
             )}
 
+            <ScreenBoundary key={view} t={(key) => translate(language, key)}>
+            <Suspense fallback={<p role="status" className="p-8 text-center text-slate-400">{translate(language, 'screenLoading')}</p>}>
             {view === 'menu' && (
                 <MainMenu
                     setView={setView}
@@ -474,6 +484,8 @@ export default function App() {
                     showDefinedFinalResults={linkedGameRoomCode === currentRoomCode}
                 />
             )}
+            </Suspense>
+            </ScreenBoundary>
         </div>
         </LanguageProvider>
     );

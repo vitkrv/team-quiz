@@ -141,10 +141,17 @@ export async function updateRoom(roomRef, update) {
     });
 }
 
+const packReads = new WeakMap();
 export async function readRoomPack(transaction, roomRef, room) {
     if (room.dataVersion !== 2) return room.pack;
     if (!room.packVersionId) throw new Error('Game pack is not pinned');
-    const snapshot = await transaction.get(packVersionRef(roomRef, room.packVersionId));
+    // The SDK creates a new transaction object for each retry. Never share a
+    // read across attempts or use a non-transactional application cache here.
+    let reads = packReads.get(transaction);
+    if (!reads) { reads = new Map(); packReads.set(transaction, reads); }
+    const ref = packVersionRef(roomRef, room.packVersionId);
+    if (!reads.has(ref.path)) reads.set(ref.path, transaction.get(ref));
+    const snapshot = await reads.get(ref.path);
     if (!snapshot.exists()) throw new Error('Game pack is unavailable');
     return snapshot.data().content;
 }

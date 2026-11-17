@@ -65,6 +65,10 @@ Use Node.js 20 or newer (required by Firebase 12). The frontend uses the modular
 - `npm run build` creates a production-mode Vite build in `dist` for Firebase Hosting.
 - `npm run preview` previews the production build.
 - `npm run lint` runs ESLint.
+- `node scripts/verify-client-performance.mjs` runs deterministic client timing, subscription, cache, and media-transport checks without a browser or external services.
+
+Performance and recovery changes, release notes, and a copy-ready browser-testing
+handoff are documented in [performance validation](docs/performance-validation.md).
 
 ## Verification and deployment
 

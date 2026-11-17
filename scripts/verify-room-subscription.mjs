@@ -7,7 +7,7 @@ const snapshot = (value, metadata = {}) => ({
 });
 const flush = async () => { for (let i = 0; i < 8; i++) await Promise.resolve(); };
 
-function fixture() {
+function fixture(options = {}) {
     let now = 100000, serial = 0, reads = 0, state = {}, server = snapshot({ stage: 'board' });
     const timers = new Map(), listeners = [], requests = [];
     const document = new EventTarget(), window = new EventTarget(), navigator = { onLine: true };
@@ -19,7 +19,7 @@ function fixture() {
         setTimeout: (fn, delay) => schedule(fn, delay), clearTimeout: (id) => timers.delete(id),
         setInterval: (fn, delay) => schedule(fn, delay, true), clearInterval: (id) => timers.delete(id) };
     let deferred = false;
-    const controller = createRoomSubscription({ environment,
+    const controller = createRoomSubscription({ environment, ...options,
         subscribe: (next, error) => {
             const listener = { next, error, active: true }; listeners.push(listener);
             return () => { listener.active = false; };
@@ -49,6 +49,25 @@ function fixture() {
 }
 
 export async function verifyRoomSubscription(check) {
+    await check('buzzer recovery: no idle probes, failed listener recovers after foreground and manual reconnect', async () => {
+        const f = fixture({ probeIdle: false });
+        try {
+            f.live({ stage: 'open' });
+            await f.advance(120000); assert.equal(f.reads(), 0);
+            f.environment.navigator.onLine = false;
+            f.listeners.at(-1).error({ code: 'unavailable' });
+            await f.advance(60000); assert.equal(f.reads(), 0);
+            f.environment.navigator.onLine = true;
+            f.environment.window.dispatchEvent(new Event('online'));
+            await f.advance(250); assert.equal(f.reads(), 1);
+            f.live({ stage: 'collecting' }); assert.equal(f.state().status, 'synced');
+            f.listeners.at(-1).error({ code: 'permission-denied' });
+            await f.advance(60000); assert.equal(f.reads(), 1);
+            f.controller.reconnect(); await flush();
+            f.live({ stage: 'resolved' }); assert.equal(f.state().status, 'synced');
+        } finally { f.controller.dispose(); }
+        assert.equal(f.timers.size, 0);
+    });
     await check('room recovery: silent foreground stalls update state and reattach, unchanged rooms stay healthy', async () => {
         const f = fixture();
         try {

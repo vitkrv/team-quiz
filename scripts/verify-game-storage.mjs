@@ -13,7 +13,7 @@ import { resolve } from 'node:path';
 import { build } from 'esbuild';
 import { initializeApp, deleteApp } from 'firebase/app';
 import {
-    collection, connectFirestoreEmulator, deleteDoc, deleteField, doc, documentId, getDocFromServer,
+    collection, connectFirestoreEmulator, deleteDoc, deleteField, doc, documentId, Timestamp, getDocFromServer,
     getDocs, getFirestore, limit, orderBy, query, runTransaction, serverTimestamp,
     setDoc, startAfter, terminate, updateDoc, writeBatch
 } from 'firebase/firestore';
@@ -61,12 +61,12 @@ try {
     globalThis.__gameStorageTest = { db: hostDb, appId: namespace };
     await mkdir('.firebase/validation', { recursive: true });
     await build({
-        stdin: { contents: "export * from './src/utils/packTheme.js'; export * from './src/actions/roomActions.js'; export * from './src/actions/gameActions.js'; export * from './src/actions/gameStorage.js'; export * from './src/actions/buzzerActions.js'; export * from './src/actions/scoreActions.js';", resolveDir: process.cwd() },
+        stdin: { contents: "export * from './src/services/resultHistory.js'; export * from './src/utils/packTheme.js'; export * from './src/actions/roomActions.js'; export * from './src/actions/gameActions.js'; export * from './src/actions/gameStorage.js'; export * from './src/actions/buzzerActions.js'; export * from './src/actions/scoreActions.js';", resolveDir: process.cwd() },
         bundle: true, platform: 'node', format: 'esm', external: ['firebase/firestore'],
         outfile: '.firebase/validation/actions.mjs',
         plugins: [{ name: 'emulator-config', setup(builder) {
             builder.onResolve({ filter: /(^|\/)firebase$/ }, () => ({ path: 'emulator-config', namespace: 'test' }));
-            builder.onLoad({ filter: /.*/, namespace: 'test' }, () => ({ contents: 'export const { db, appId } = globalThis.__gameStorageTest;' }));
+            builder.onLoad({ filter: /.*/, namespace: 'test' }, () => ({ contents: 'export const { db, appId } = globalThis.__gameStorageTest; export const auth = { currentUser: { uid: "host" } };' }));
         } }]
     });
     const actions = await import(pathToFileURL(resolve('.firebase/validation/actions.mjs')));
@@ -307,6 +307,44 @@ try {
             await updateDoc(roomRef(seedDb, legacyId), { themeId: deleteField() });
             await denied(updateDoc(roomRef(hostDb, legacyId), { themeId: themeId }));
         }
+    });
+    await check('transaction pack reads: one fetch per path and attempt; legacy packs do not fetch', async () => {
+        let reads = 0;
+        const transaction = () => ({ get: async () => {
+            reads++; return { exists: () => true, data: () => ({ content: { name: 'Frozen' } }) };
+        } });
+        const tx = transaction(), target = roomRef(hostDb, 'memo-test');
+        const room = { dataVersion: 2, packVersionId: 'memo-version' };
+        await Promise.all([actions.readRoomPack(tx, target, room), actions.readRoomPack(tx, target, room)]);
+        assert.equal(reads, 1);
+        await actions.readRoomPack(transaction(), target, room); assert.equal(reads, 2);
+        await actions.readRoomPack(tx, target, { ...room, packVersionId: 'other-version' }); assert.equal(reads, 3);
+        assert.deepEqual(await actions.readRoomPack(tx, target, { pack: { name: 'Legacy' } }), { name: 'Legacy' });
+        assert.equal(reads, 3);
+    });
+    await check('history loading: paged scores reuse checkpoints; profile best awards retain old winners and timestamp ties', async () => {
+        const gameId = 'incremental-results';
+        const batch = writeBatch(seedDb);
+        for (let index = 0; index < 205; index++) {
+            batch.set(doc(roomRef(seedDb, gameId), 'recapScores', String(index)), { sequence: index + 1, playerId: 'host', after: index });
+            batch.set(doc(seedDb, 'artifacts', namespace, 'users', 'host', 'gameAchievements', String(index).padStart(3, '0')), {
+                completedAt: Timestamp.fromMillis(1000 + index), awards: [{ id: 'correct', value: 205 - index }] });
+        }
+        await batch.commit();
+        assert.equal((await actions.loadRecapScores(gameId, 100)).length, 100);
+        assert.equal((await actions.loadRecapScores(gameId, 205)).length, 205);
+        assert.equal((await actions.loadRecapScores(gameId, 205)).length, 205);
+        let records = await actions.loadProfileAchievements('host');
+        assert.equal(records.length, 1); assert.equal(records[0].gameId, '000');
+        await setDoc(doc(seedDb, 'artifacts', namespace, 'users', 'host', 'gameAchievements', 'same-time'), {
+            completedAt: Timestamp.fromMillis(1204), awards: [{ id: 'closestLate', value: 10 }] });
+        records = await actions.loadProfileAchievements('host');
+        assert.deepEqual(records.map((r) => r.gameId).sort(), ['000', 'same-time']);
+        await setDoc(doc(seedDb, 'artifacts', namespace, 'users', 'host', 'gameAchievements', 'newer'), {
+            completedAt: Timestamp.fromMillis(1205), awards: [{ id: 'correct', value: 205 }, { id: 'closestLate', value: 5 }] });
+        records = await actions.loadProfileAchievements('host');
+        assert.equal(records.length, 1); assert.equal(records[0].gameId, 'newer');
+        actions.clearResultHistoryCache();
     });
     await verifyRoomSubscription(check);
     await verifyScoreEdits({ actions, check, denied, hostDb, playerDb, spectatorDb, seedDb, ref, roomRef, event, t });

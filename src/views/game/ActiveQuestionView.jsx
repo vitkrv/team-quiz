@@ -1,10 +1,11 @@
+import AnswerTimer from '../../components/AnswerTimer';
 import { getPackTheme } from '../../utils/packTheme';
 import { getRoundCategories } from '../../utils/packRounds';
 import { pruneSurprisePointValues } from '../../utils/surprisePoints';
 import useBuzzer from '../../hooks/useBuzzer';
 import useSurpriseWheel from '../../hooks/useSurpriseWheel';
 import { WHEEL_ANIMATION_MS, wheelEasing } from '../../utils/wheelPolicy';
-import { ANSWER_WINDOW_MS, EARLY_BUZZ_DELAY_MS, LATE_BUZZ_NOTICE_MS, LATE_BUZZ_WINDOW_MS, timestampMillis } from '../../utils/buzzerPolicy';
+import { EARLY_BUZZ_DELAY_MS, LATE_BUZZ_NOTICE_MS, LATE_BUZZ_WINDOW_MS, timestampMillis } from '../../utils/buzzerPolicy';
 import { updateRoom, updateRoomInTransaction } from '../../actions/gameStorage';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { arrayUnion, increment, runTransaction } from 'firebase/firestore';
@@ -273,9 +274,8 @@ function SpaceBuzzHandler({ enabled, onBuzz }) {
 
 export default function ActiveQuestionView({ room, roomCode, roomRef, user, isHost, isSpectator = false, serverNow = Date.now, clockSyncKey = 0, resumedQuestion = false, clockQuality = {} }) {
     const { t } = useLanguage();
-    const buzzer = useBuzzer({ room, roomRef, uid: user.uid, isHost, isSpectator, serverNow, resumedQuestion });
+    const buzzer = useBuzzer({ room, roomRef, uid: user.uid, isHost, isSpectator, serverNow, resumedQuestion, clockSyncKey });
     const earlyBuzzDelayStorageKey = `cortex-rush:early-buzz:${roomCode || 'room'}:${room.activeQuestionId || 'question'}:${user.uid}`;
-    const [timeLeft, setTimeLeft] = useState(ANSWER_WINDOW_MS / 1000);
     const [buzzUnlockNow, setBuzzUnlockNow] = useState(() => serverNow());
     const [earlyBuzzDelayUnlockAt, setEarlyBuzzDelayUnlockAt] = useState(() => getStoredEarlyBuzzUnlockAt(earlyBuzzDelayStorageKey));
     const [isRolling, setIsRolling] = useState(false);
@@ -319,21 +319,6 @@ export default function ActiveQuestionView({ room, roomCode, roomRef, user, isHo
         }),
         [room.activeQuestionId, isSurpriseQuestion, room.themeId]
     );
-
-    // Timer logic
-    useEffect(() => {
-        let interval;
-        if (room.buzzedPlayerId && room.buzzTimestamp) {
-            interval = setInterval(() => {
-                const elapsed = (serverNow() - timestampMillis(room.buzzTimestamp)) / 1000;
-                const remaining = Math.max(0, ANSWER_WINDOW_MS / 1000 - elapsed);
-                setTimeLeft(remaining);
-            }, 100);
-        } else {
-            setTimeLeft(ANSWER_WINDOW_MS / 1000);
-        }
-        return () => clearInterval(interval);
-    }, [room.buzzedPlayerId, room.buzzTimestamp, serverNow]);
 
     useEffect(() => {
         setIsEntranceContentVisible(false);
@@ -849,25 +834,16 @@ export default function ActiveQuestionView({ room, roomCode, roomRef, user, isHo
         finally { setMediaActionBusy(false); }
     };
 
-    const answerTimer = (
-        <div className={`relative h-24 w-24 shrink-0 ${isHost ? 'mt-2' : 'mb-6 md:mb-8 md:h-32 md:w-32'}`}>
-            <svg viewBox="0 0 128 128" className="h-full w-full -rotate-90 transform">
-                <circle cx="64" cy="64" r="60" className="stroke-slate-700 fill-none" strokeWidth="8"/>
-                <circle cx="64" cy="64" r="60" className={`fill-none stroke-blue-500 transition-all duration-100 ${timeLeft < 3 ? 'stroke-red-500' : ''}`} strokeWidth="8"
-                        strokeDasharray="377" strokeDashoffset={377 - (377 * timeLeft / (ANSWER_WINDOW_MS / 1000))}
-                />
-            </svg>
-            <div className={`absolute inset-0 flex items-center justify-center font-mono text-3xl font-black md:text-4xl ${timeLeft < 3 ? 'text-red-400' : 'text-blue-400'}`}>
-                {Math.ceil(timeLeft)}
-            </div>
-        </div>
-    );
+    const answerTimer = <AnswerTimer startedAt={timestampMillis(room.buzzTimestamp)} revealed={room.answerRevealed}
+        isHost={isHost} serverNow={serverNow} clockSyncKey={clockSyncKey} />;
     const buzzerStatus = (
         <>
             {buzzer.enabled && !isSurpriseQuestion && !isAnswerRevealed && (
                 <div className="mt-3 shrink-0 text-center text-sm text-slate-400 theme-muted" role="status" aria-live="polite">
                     {buzzer.status ? <p className={buzzer.error ? 'text-red-300' : isHost && buzzer.status === 'buzzCollecting' ? 'font-bold text-yellow-400 theme-accent' : 'font-bold'}>{t(buzzer.status)}</p> : null}
                     {buzzer.error === 'buzzNotAccepted' && canIBuzz && !buzzer.waitingForHost ? <p>{t('buzzRetryAvailable')}</p> : null}
+                    {buzzer.error === 'buzzSyncFailed' && <button type="button" onClick={buzzer.reconnect}
+                        className="mt-2 rounded border border-amber-300/50 px-3 py-1 text-amber-100">{t('roomSyncReconnect')}</button>}
                     {!buzzer.online ? <p>{t('buzzOffline')}</p> : !clockQuality.ready ? <p>{t('buzzClockSyncing')}</p>
                         : Date.now() - clockQuality.lastSyncedAt > 6 * 60 * 1000 ? <p>{t('buzzClockStale')}</p>
                         : clockQuality.roundTripMs > 750 ? <p>{t('buzzConnectionSlow')}</p> : null}

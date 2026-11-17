@@ -1,9 +1,10 @@
-import { useEffect, useLayoutEffect, useRef, useState } from 'react';
-import { onSnapshot } from 'firebase/firestore';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import useRoomSubscription from './useRoomSubscription';
+import useDeadlineClock from './useDeadlineClock';
 import { buzzerRef } from '../actions/buzzerState';
 import { finalizeBuzz, recordEarlyBuzz, submitBuzz } from '../actions/buzzerActions';
 import { generateId } from '../utils/ids';
-import { buzzInputState, collectionDeadline, createReactionOrigin, EARLY_BUZZ_DELAY_MS, personalUnlockAt } from '../utils/buzzerPolicy';
+import { buzzInputState, collectionDeadline, createReactionOrigin, BUZZ_LOCAL_GRACE_MS, EARLY_BUZZ_DELAY_MS, personalUnlockAt } from '../utils/buzzerPolicy';
 
 const readOrigin = (key) => {
     try { return Number(localStorage.getItem(key)) || 0; } catch { return 0; }
@@ -11,17 +12,16 @@ const readOrigin = (key) => {
 const storeOrigin = (key, value) => {
     try { localStorage.setItem(key, String(value)); } catch { /* In-memory clock still works. */ }
 };
-const BUZZ_SYNC_RETRY_MS = 500;
-const BUZZ_SYNC_MAX_RETRIES = 3;
 
-export default function useBuzzer({ room, roomRef, uid, isHost, isSpectator, serverNow, resumedQuestion }) {
+export default function useBuzzer({ room, roomRef, uid, isHost, isSpectator, serverNow, resumedQuestion, clockSyncKey }) {
     const enabled = room.buzzerPolicyVersion === 1;
-    const [race, setRace] = useState(null);
-    const [now, setNow] = useState(serverNow);
+    const raceRef = useMemo(() => enabled ? buzzerRef(roomRef) : null, [enabled, roomRef]);
+    const sync = useRoomSubscription(raceRef, uid, { probeIdle: false, recoveryGroup: roomRef.path });
+    const race = sync.snapshot && !sync.snapshot.metadata.hasPendingWrites && sync.status === 'synced' ? sync.data : null;
+    const syncError = ['failed', 'blocked'].includes(sync.status) ? 'buzzSyncFailed' : null;
     const [online, setOnline] = useState(navigator.onLine);
     const [pending, setPending] = useState(false);
     const [error, setError] = useState(null);
-    const [syncError, setSyncError] = useState(null);
     const [outcome, setOutcome] = useState(null);
     const [origin, setOrigin] = useState(null);
     const [localPenalty, setLocalPenalty] = useState(0);
@@ -32,69 +32,11 @@ export default function useBuzzer({ room, roomRef, uid, isHost, isSpectator, ser
     activeKey.current = key;
 
     useEffect(() => {
-        if (!enabled) return undefined;
-        let disposed = false;
-        let generation = 0;
-        let retries = 0;
-        let retryTimer;
-        let unsubscribe;
-        setSyncError(null);
-        setRace(null);
-
-        const subscribe = () => {
-            const subscription = ++generation;
-            const active = () => !disposed && subscription === generation;
-            const failed = (failure) => {
-                if (!active()) return;
-                generation += 1;
-                unsubscribe?.();
-                unsubscribe = undefined;
-                // Do not enable input using race state from a failed listener.
-                setRace(null);
-                if (retries >= BUZZ_SYNC_MAX_RETRIES) {
-                    setSyncError('buzzSyncFailed');
-                    console.error('Buzzer synchronization failed after 3 retries.', failure);
-                    return;
-                }
-                retryTimer = setTimeout(() => {
-                    retryTimer = undefined;
-                    if (disposed) return;
-                    retries += 1;
-                    subscribe();
-                }, BUZZ_SYNC_RETRY_MS);
-            };
-            try {
-                const cleanup = onSnapshot(buzzerRef(roomRef), { includeMetadataChanges: true }, (snapshot) => {
-                    if (!active()) return;
-                    // Cached snapshots must not reset consecutive failed retries.
-                    if (!snapshot.metadata.fromCache && !snapshot.metadata.hasPendingWrites) {
-                        retries = 0;
-                        setSyncError(null);
-                    }
-                    // Pending local timestamps cannot start a race or announce a result.
-                    if (!snapshot.metadata.hasPendingWrites) setRace(snapshot.data() || null);
-                }, failed);
-                if (active()) unsubscribe = cleanup;
-                else cleanup();
-            } catch (failure) { failed(failure); }
-        };
-        subscribe();
-        return () => {
-            disposed = true;
-            generation += 1;
-            clearTimeout(retryTimer);
-            unsubscribe?.();
-        };
-    }, [enabled, roomRef]);
-
-    useEffect(() => {
-        if (!enabled) return undefined;
-        const tick = () => { setNow(serverNow()); setOnline(navigator.onLine); };
-        const interval = setInterval(tick, 50);
-        window.addEventListener('online', tick);
-        window.addEventListener('offline', tick);
-        return () => { clearInterval(interval); window.removeEventListener('online', tick); window.removeEventListener('offline', tick); };
-    }, [enabled, serverNow]);
+        const update = () => setOnline(navigator.onLine);
+        window.addEventListener('online', update);
+        window.addEventListener('offline', update);
+        return () => { window.removeEventListener('online', update); window.removeEventListener('offline', update); };
+    }, []);
 
     useLayoutEffect(() => {
         setLocalPenalty(0); setError(null); setOutcome(null); setPending(false); busy.current = false; setOrigin(null);
@@ -109,6 +51,17 @@ export default function useBuzzer({ room, roomRef, uid, isHost, isSpectator, ser
     useEffect(() => {
         if (current?.attempts[uid]) setError((previous) => previous === 'buzzNotAccepted' ? null : previous);
     }, [current, uid]);
+    const [, wakeGrace] = useState(0);
+    useEffect(() => {
+        if (origin?.key !== key) return undefined;
+        const remaining = origin.monotonic + BUZZ_LOCAL_GRACE_MS - performance.now();
+        if (remaining <= 0) return undefined;
+        const timer = setTimeout(() => wakeGrace((value) => value + 1), remaining + 1);
+        return () => clearTimeout(timer);
+    }, [origin, key]);
+    const now = useDeadlineClock(enabled && current && !room.answerRevealed && !room.buzzedPlayerId
+        ? [...(eligible ? [unlockAt] : []), ...(current.phase === 'collecting' ? [collectionDeadline(current)] : [])]
+        : [], serverNow, clockSyncKey);
     const { unlocked, canClick, collecting, collectionClosed } = buzzInputState({
         race: current, uid, eligible, online, pending, submitted, competitive: room.trueCompetitiveMode,
         localPenalty, now, monotonicNow: performance.now(), origin: origin?.key === key ? origin.monotonic : null
@@ -143,11 +96,14 @@ export default function useBuzzer({ room, roomRef, uid, isHost, isSpectator, ser
     }, [enabled, isHost, current, room.answerRevealed, room.status, roomRef, uid, serverNow]);
 
     const press = async () => {
-        if (!canClick || busy.current) return 'ignored';
+        const input = buzzInputState({ race: current, uid, eligible, online: navigator.onLine, pending, submitted,
+            competitive: room.trueCompetitiveMode, localPenalty, now: serverNow(), monotonicNow: performance.now(),
+            origin: origin?.key === key ? origin.monotonic : null });
+        if (!input.canClick || busy.current) return 'ignored';
         busy.current = true; setPending(true); setError(null); setOutcome(null);
         const raceId = current.raceId;
         const operationId = generateId();
-        const early = !unlocked;
+        const early = !input.unlocked;
         // Capture before the first await. Network delay/retries never change ranking.
         const reactionMs = Math.max(0, performance.now() - (origin?.monotonic ?? performance.now()));
         if (early) setLocalPenalty(personalUnlockAt(current, uid) + EARLY_BUZZ_DELAY_MS);
@@ -181,7 +137,7 @@ export default function useBuzzer({ room, roomRef, uid, isHost, isSpectator, ser
         : collecting ? 'buzzCollecting'
         : canClick && unlocked ? 'buzzReady' : null);
 
-    return { enabled, race: current, unlocked, canClick, press, pending, error: visibleError, status, online,
+    return { enabled, reconnect: sync.reconnect, race: current, unlocked, canClick, press, pending, error: visibleError, status, online,
         penalized: Boolean(localPenalty || current?.penalties[uid]) && now < unlockAt,
         collecting,
         waitingForHost: collecting && collectionClosed };

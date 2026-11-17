@@ -116,6 +116,21 @@ Uploaded file names use:
 
 ## Troubleshooting
 
+The Worker awaits upload/delete handlers inside its error boundary and returns
+JSON `{ code, message }` with CORS headers for failures. Each upstream request,
+including its response body, is bounded to 15 seconds; timeouts return HTTP 504.
+Other validation/ownership failures retain HTTP 400. Ownership and ImageKit path
+checks are unchanged. The frontend bounds authorization to 30 seconds, deletion
+to 60 seconds (it can require three upstream requests), and uploads to five minutes.
+Malformed upload responses, aborts, and timeouts reject rather than leaving an
+editor operation pending. Timeouts do not prove a remote upload/delete was not
+committed; the app does not automatically retry mutations.
+
+Run `node scripts/verify-client-performance.mjs` from the repository root for
+mocked transport/error checks and the single storage harness for owner/non-owner,
+round lookup, and deletion-path fixtures. Deploy the changed `worker.js` with
+`wrangler deploy` from this directory only when explicitly authorized.
+
 `ImageKit auth endpoint is not configured.`
 
 `VITE_IMAGEKIT_AUTH_ENDPOINT` is missing or the dev server was not restarted after editing `.env.local`.

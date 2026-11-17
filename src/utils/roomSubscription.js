@@ -3,7 +3,7 @@ const ACTIONABLE_ERRORS = new Set(['permission-denied', 'unauthenticated', 'inva
 const confirmed = (snapshot) => !snapshot.metadata.fromCache && !snapshot.metadata.hasPendingWrites;
 
 // readServer uses an independent server RPC, not another watch listener.
-export function createRoomSubscription({ subscribe, readServer, publish, environment = globalThis }) {
+export function createRoomSubscription({ subscribe, readServer, publish, probeIdle = true, environment = globalThis }) {
     const { document, navigator, window, setTimeout, clearTimeout, setInterval, clearInterval, Date } = environment;
     let disposed = false;
     let liveUnsubscribe;
@@ -36,6 +36,7 @@ export function createRoomSubscription({ subscribe, readServer, publish, environ
             recovering = true;
             publish({ status: 'reconnecting' });
             log('reconnecting', 'server-confirmation');
+            if (!probeIdle) recover('server-confirmation', true);
         }, 5000);
     };
     const fail = (code, trigger) => {
@@ -159,9 +160,9 @@ export function createRoomSubscription({ subscribe, readServer, publish, environ
     publish({ snapshot: null, status: 'connecting', errorCode: null });
     waitForConfirmation();
     attachLive();
-    const interval = setInterval(() => {
+    const interval = probeIdle ? setInterval(() => {
         if (!retryTimer && Date.now() - Math.max(lastConfirmedAt, lastProbeAt) >= 30000) recover('fallback');
-    }, 1000);
+    }, 1000) : null;
     document.addEventListener('visibilitychange', resume);
     for (const type of ['focus', 'online', 'pageshow']) window.addEventListener(type, resume);
     const dispose = () => {

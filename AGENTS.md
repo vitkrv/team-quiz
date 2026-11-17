@@ -105,6 +105,8 @@ In every summary of work that changes files under `imagekit-auth-worker/`, expli
 
 There is currently no automated test script in `package.json`. Clock scheduling has deterministic non-browser checks: `node scripts/verify-server-clock.mjs` (no Emulator required). For changes to game storage/actions/rules, run the isolated Emulator checks in `scripts/verify-game-storage.mjs` when prerequisites are available; otherwise report the blocker and provide the user with the commands. Setup and commands are in `docs/game-storage-validation.md`. This entry point includes storage, recap, buzzer, and wheel checks; do not run those modules separately.
 
+Client performance/recovery checks run with `node scripts/verify-client-performance.mjs` without a browser or Emulator. They cover deadline hooks, grouped subscription recovery/data identity, preload queue limits, incremental cache behavior, upload settlement, and Worker error responses. See `docs/performance-validation.md` for the pending browser handoff and index/Worker release requirements.
+
 The harness requires Java, the Firebase CLI, and a dedicated local Firestore Emulator. It targets `demo-game-storage`, requires a loopback `FIRESTORE_EMULATOR_HOST`, and loads this checkout's rules into the emulator project. Do not share that emulator with other active tests. It covers room reservations, concurrent starts/finishes, history permissions/pagination, frozen packs, player events, and legacy compatibility; it does not deploy rules or Hosting.
 
 Agent-allowed checks for normal code changes (from the repository root):
@@ -194,6 +196,9 @@ Coordinate storage-related rule and frontend releases. Older clients must reload
 - `src/hooks/useBuzzer.js` and `src/utils/buzzerPolicy.js`: local reaction origins, shared timing, and buzzer feedback.
 - `src/actions/gameRecap.js`: Atomic recap projections and immutable profile achievement finalization.
 - `src/hooks/useGameRecap.js`: Results summary and score-progression loading.
+- `src/services/resultHistory.js`: session-scoped incremental score/achievement reads, cleared on auth identity changes; profile loading retains best-award records after a complete initial paged scan.
+- `src/hooks/useDeadlineClock.js` and `src/components/AnswerTimer.jsx`: deadline-driven gameplay refreshes and isolated visual countdown updates.
+- `src/utils/mediaTransport.js` and `src/utils/preloadQueue.js`: bounded media transport and prioritized, deduplicated preloading.
 - `src/actions/roomActions.js`: Room-code reservation, room creation and atomic game start.
 - `src/services/`: analytics and ImageKit/media storage integration.
 - `src/hooks/`: reusable React hooks.

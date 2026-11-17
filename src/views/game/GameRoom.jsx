@@ -1,3 +1,4 @@
+import useDeadlineClock from '../../hooks/useDeadlineClock';
 import PlayerScoreDialog from '../../components/PlayerScoreDialog';
 import { HistoryMessage } from '../../components/historyMessage';
 import { compareHistoryEvents, validScore } from '../../utils/scoreHistory';
@@ -8,7 +9,7 @@ import { startGame } from '../../actions/roomActions';
 import useGamePack from '../../hooks/useGamePack';
 import useGameHistory from '../../hooks/useGameHistory';
 import { updateRoom } from '../../actions/gameStorage';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { memo, useEffect, useMemo, useRef, useState } from 'react';
 import { deleteField, doc } from 'firebase/firestore';
 import { ArrowLeft, ArrowRight, Check, Copy, Gift, Link, Minus, Play, Pencil, Plus, Users, SlidersHorizontal, ScrollText, Swords, Trophy, X } from 'lucide-react';
 import { HOST_AVATAR } from '../../constants';
@@ -568,7 +569,9 @@ function GameRoomContent({ room, roomCode, user, onPrepareRoomExit, onLeaveRoom,
         || (isSpectator && showDefinedFinalResults && hasDefinedFinalResults(room));
     const clockEnabled = !showResults && ['category_preview', 'playing', 'round_break'].includes(room.status);
     const { offsetMs, lastSyncedAt, serverNow, syncClock, ready, roundTripMs } = useServerClock(user.uid, { enabled: clockEnabled });
-    const [now, setNow] = useState(() => serverNow());
+    const answerStartedAt = timestampMillis(room.buzzTimestamp);
+    const now = useDeadlineClock(room.buzzedPlayerId && answerStartedAt && !room.answerRevealed
+        ? [answerStartedAt, answerStartedAt + ANSWER_WINDOW_MS] : [], serverNow, lastSyncedAt);
     const [copiedRoomCode, setCopiedRoomCode] = useState(false);
     const [copiedJoinLink, setCopiedJoinLink] = useState(false);
     const [isScoreEditorOpen, setIsScoreEditorOpen] = useState(false);
@@ -598,16 +601,6 @@ function GameRoomContent({ room, roomCode, user, onPrepareRoomExit, onLeaveRoom,
         && !room.tieBreaker?.status
         && !room.prizeModal;
     const clockSyncKey = lastSyncedAt ?? offsetMs;
-
-    useEffect(() => {
-        if (!room.buzzedPlayerId || !room.buzzTimestamp || room.answerRevealed) {
-            setNow(serverNow());
-            return undefined;
-        }
-
-        const intervalId = window.setInterval(() => setNow(serverNow()), 100);
-        return () => window.clearInterval(intervalId);
-    }, [room.answerRevealed, room.buzzedPlayerId, room.buzzTimestamp, serverNow]);
 
     useEffect(() => {
         if (clockEnabled) syncClock();
@@ -987,6 +980,8 @@ function LoadedGameRoom(props) {
     return <GameRoomContent key={`${props.roomCode}/${props.user.uid}`} {...props} room={{ ...props.room, pack }} />;
 }
 
-export default function GameRoom(props) {
+function GameRoom(props) {
  return <PackThemeScope themeId={props.room.themeId}><LoadedGameRoom {...props} /></PackThemeScope>;
 }
+
+export default memo(GameRoom);

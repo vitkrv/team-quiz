@@ -1,3 +1,4 @@
+import { requestMediaJson, uploadMediaForm } from '../utils/mediaTransport';
 import { appId, auth } from '../firebase';
 
 export const IMAGE_SIZE_LIMIT_BYTES = 10 * 1024 * 1024;
@@ -115,10 +116,10 @@ const readUploadAuthFromSession = (key) => {
     try {
         const data = JSON.parse(sessionStorage.getItem(key) || 'null');
         if (isUploadAuthUsable(data)) return data;
-        sessionStorage.removeItem(key);
+        try { sessionStorage.removeItem(key); } catch { /* Optional cache. */ }
     } catch (err) {
         console.error("ImageKit auth cache read error:", err);
-        sessionStorage.removeItem(key);
+        try { sessionStorage.removeItem(key); } catch { /* Optional cache. */ }
     }
 
     return null;
@@ -126,29 +127,34 @@ const readUploadAuthFromSession = (key) => {
 
 const writeUploadAuthToSession = (key, data) => {
     if (!isUploadAuthUsable(data)) return;
-    sessionStorage.setItem(key, JSON.stringify(data));
+    try { sessionStorage.setItem(key, JSON.stringify(data)); } catch { /* Optional cache. */ }
 };
 
 const consumeUploadAuthFromSession = (key) => {
     const data = readUploadAuthFromSession(key);
-    if (data) sessionStorage.removeItem(key);
+    if (data) {
+        try { sessionStorage.removeItem(key); } catch { return null; }
+    }
     return data;
 };
 
 export const clearImageKitAuthSession = () => {
-    Object.keys(sessionStorage)
-        .filter((key) => key.startsWith(IMAGEKIT_AUTH_CACHE_PREFIX))
-        .forEach((key) => sessionStorage.removeItem(key));
+    try {
+        Object.keys(sessionStorage)
+            .filter((key) => key.startsWith(IMAGEKIT_AUTH_CACHE_PREFIX))
+            .forEach((key) => sessionStorage.removeItem(key));
+    } catch { /* Storage may be unavailable; signing out must still work. */ }
 };
 
-const getUploadAuth = async ({ packId, questionId, slot }) => {
+const getUploadAuth = async ({ packId, questionId, slot, signal }) => {
     const uid = auth.currentUser.uid;
     const cacheKey = getAuthCacheKey({ uid, packId, questionId, slot });
     const cachedAuth = consumeUploadAuthFromSession(cacheKey);
     if (cachedAuth) return cachedAuth;
 
     const idToken = await auth.currentUser.getIdToken();
-    const authResponse = await fetch(imageKitAuthEndpoint, {
+    const data = await requestMediaJson(imageKitAuthEndpoint, {
+        signal,
         method: 'POST',
         headers: {
             'Content-Type': 'application/json',
@@ -161,15 +167,11 @@ const getUploadAuth = async ({ packId, questionId, slot }) => {
             questionId,
             slot
         })
-    });
+    }, { messageKey: 'mediaKitUploadAuthFailed' });
 
-    const data = await authResponse.json();
-    if (!authResponse.ok) {
-        throw createStorageError('mediaKitUploadAuthFailed', data.message || 'ImageKit upload authorization failed.');
-    }
-
+    if (!isUploadAuthUsable(data)) throw createStorageError('mediaKitUploadAuthFailed', 'Invalid upload authorization response.');
     writeUploadAuthToSession(cacheKey, data);
-    return consumeUploadAuthFromSession(cacheKey);
+    return consumeUploadAuthFromSession(cacheKey) || data;
 };
 
 export const validateMediaFile = (file) => {
@@ -214,7 +216,7 @@ export const getMediaUrl = (media, variant = 'full') => {
     }
 };
 
-export const uploadMedia = async (file, { packId, questionId, slot, onProgress }) => {
+export const uploadMedia = async (file, { packId, questionId, slot, onProgress, signal }) => {
     const validation = validateMediaFile(file);
     if (!validation.valid) {
         const error = new Error(validation.messageKey);
@@ -228,7 +230,7 @@ export const uploadMedia = async (file, { packId, questionId, slot, onProgress }
     const kind = validation.kind;
     const uploadFile = kind === MEDIA_KINDS.IMAGE ? await compressImage(file) : file;
     const uploadTimestamp = Date.now();
-    const data = await getUploadAuth({ packId, questionId, slot });
+    const data = await getUploadAuth({ packId, questionId, slot, signal });
 
     const formData = new FormData();
     formData.append('file', uploadFile);
@@ -241,25 +243,7 @@ export const uploadMedia = async (file, { packId, questionId, slot, onProgress }
     formData.append('useUniqueFileName', 'false');
     formData.append('tags', ['team-quiz', appId, packId, questionId, slot, kind].join(','));
 
-    const response = await new Promise((resolve, reject) => {
-        const xhr = new XMLHttpRequest();
-        xhr.open('POST', IMAGEKIT_UPLOAD_URL);
-        xhr.upload.onprogress = (event) => {
-            if (event.lengthComputable && onProgress) {
-                onProgress(Math.round((event.loaded / event.total) * 100));
-            }
-        };
-        xhr.onload = () => {
-            const body = xhr.responseText ? JSON.parse(xhr.responseText) : {};
-            if (xhr.status >= 200 && xhr.status < 300) {
-                resolve(body);
-            } else {
-                reject(createStorageError('mediaUploadFailed', body.message || 'Media upload failed.'));
-            }
-        };
-        xhr.onerror = () => reject(createStorageError('mediaUploadFailed', 'Media upload failed.'));
-        xhr.send(formData);
-    });
+    const response = await uploadMediaForm(IMAGEKIT_UPLOAD_URL, formData, { onProgress, signal });
 
     return {
         provider: 'imagekit',
@@ -283,10 +267,11 @@ export const uploadMedia = async (file, { packId, questionId, slot, onProgress }
     };
 };
 
-export const deleteMedia = async (media) => {
+export const deleteMedia = async (media, { signal } = {}) => {
     if (!media?.fileId || !imageKitAuthEndpoint || !auth?.currentUser) return;
     const idToken = await auth.currentUser.getIdToken();
-    const response = await fetch(imageKitAuthEndpoint, {
+    await requestMediaJson(imageKitAuthEndpoint, {
+        signal,
         method: 'POST',
         headers: {
             'Content-Type': 'application/json',
@@ -297,10 +282,5 @@ export const deleteMedia = async (media) => {
             appId,
             media
         })
-    });
-
-    if (!response.ok) {
-        const data = await response.json().catch(() => ({}));
-        throw createStorageError('mediaKitDeleteFailed', data.message || 'ImageKit delete failed.');
-    }
+    }, { messageKey: 'mediaKitDeleteFailed', timeoutMs: 60000 });
 };
