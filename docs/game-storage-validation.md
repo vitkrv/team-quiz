@@ -99,6 +99,14 @@ the host retains both. The requested narrow viewport override did not take effec
 so narrow layout remains pending. Report:
 `.firebase/validation/text-layout-browser-report.md`.
 
+The adaptive End Answering button passed lint/build and the Git whitespace check
+(exit 0). GPT-6.1 Sol Medium desktop browser checks confirmed a short press does
+not close answering with missing submissions, while a two-second hold does. UI
+submissions from all three contestants switched the host button to Review answers
+without closing automatically; one click then entered hidden first-answer review.
+The Ukrainian single-click label was also verified. Report:
+`.firebase/validation/text-end-button-browser-report.md`.
+
 Remaining manual checks:
 
 - On narrow/mobile layouts, confirm centered review cards, host section ordering,

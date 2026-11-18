@@ -135,8 +135,10 @@ answer. Saved feedback follows server acknowledgment. Offline/failed submissions
 show an error for retry; unsent drafts need not survive refresh.
 
 The host panel shows the count and names of submitted contestants without their
-text. A two-second hold on End Answering closes the phase with no automatic timer.
-Releasing early or losing focus cancels the hold. Only submissions committed before
+text. While answers are missing, End answering requires a two-second hold to close
+the phase. Releasing early or losing focus cancels the hold. Once all rostered
+contestants have a saved answer, it becomes a single-click Review answers button.
+The phase never closes automatically. Only submissions committed before
 closure count; the frozen map includes empty strings for missing answers. Refresh
 restores saved answers and the current shared phase. Answers are UI-concealed shared
 data, not confidential against inspecting the room document.

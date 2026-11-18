@@ -20,7 +20,9 @@ Authors can enable this option on an individual question in either editor mode.
 It replaces Buzz and is mutually exclusive with Surprise. Contestants send
 1–40 Unicode code points, with surrounding whitespace trimmed and no line breaks;
 sending again replaces their saved answer. The host sees submitted names/count,
-then holds End Answering for two seconds to freeze submissions. There is no timer.
+then ends answering to freeze submissions. While answers are missing this requires
+a two-second hold; once everyone has submitted, Review answers takes one click.
+There is no timer or automatic closure.
 The host clicks Reveal answers once to show the first answer, then each judgment
 automatically shows the next player's answer. Once Answering ends,
 contestants and spectators see no question text or question media; the host keeps

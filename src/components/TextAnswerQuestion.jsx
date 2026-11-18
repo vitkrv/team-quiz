@@ -29,6 +29,9 @@ export default function TextAnswerQuestion({ room, roomRef, user, question, isHo
     const currentId = round.playerIds[round.reviewIndex];
     const playerName = room.players[currentId]?.name || t('playerFallback');
     const step = getRoundPointStep(room.currentRoundIndex || 0);
+    const submittedPlayerIds = round.playerIds.filter((uid) => round.answers[uid]);
+    const allPlayersAnswered = round.playerIds.length > 0 && submittedPlayerIds.length === round.playerIds.length;
+    const endAnswering = () => run(() => closeTextAnswering(roomRef, round.id, user.uid));
     const judge = (decision) => run(() => judgeTextAnswer(roomRef, round.id,
         { id: user.uid, name: room.players[user.uid]?.name || t('hostLabel') }, round.reviewIndex, decision, points, t));
     const buttonClass = 'min-h-11 rounded-xl px-4 py-3 font-bold focus-visible:ring-2 focus-visible:ring-blue-300 disabled:opacity-50';
@@ -36,10 +39,13 @@ export default function TextAnswerQuestion({ room, roomRef, user, question, isHo
     if (round.phase === 'complete') return null;
     if (controls) return <section aria-label={t('textAnswerHostPanel')} className="flex w-full flex-col gap-3">
         {round.phase === 'answering' ? <>
-            <p className="font-bold" role="status">{t('textAnswerCount', { count: round.playerIds.filter((uid) => round.answers[uid]).length, total: round.playerIds.length })}</p>
-            <ul className="break-words text-sm text-slate-300">{round.playerIds.filter((uid) => round.answers[uid]).map((uid) => <li key={uid}>{room.players[uid]?.name}</li>)}</ul>
-            <HoldToConfirmButton disabled={pending} durationMs={2000} onConfirm={() => run(() => closeTextAnswering(roomRef, round.id, user.uid))}
-                className={buttonClass + ' border border-slate-500'}>{t('textAnswerEnd')}</HoldToConfirmButton>
+            <p className="font-bold" role="status">{t('textAnswerCount', { count: submittedPlayerIds.length, total: round.playerIds.length })}</p>
+            <ul className="break-words text-sm text-slate-300">{submittedPlayerIds.map((uid) => <li key={uid}>{room.players[uid]?.name}</li>)}</ul>
+            {allPlayersAnswered
+                ? <button type="button" disabled={pending} onClick={endAnswering}
+                    className={buttonClass + ' bg-blue-600'}>{t('textAnswerEndAllAnswered')}</button>
+                : <HoldToConfirmButton disabled={pending} durationMs={2000} onConfirm={endAnswering}
+                    className={buttonClass + ' border border-slate-500'}>{t('textAnswerEnd')}</HoldToConfirmButton>}
         </> : <>
             <p className="font-bold">{t('textAnswerProgress', { current: round.reviewIndex + 1, total: round.playerIds.length })}</p>
             <p className="break-words">{playerName}</p>
