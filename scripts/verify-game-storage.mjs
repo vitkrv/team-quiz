@@ -1,4 +1,5 @@
 import { verifyScoreEdits } from './verify-score-edits.mjs';
+import { verifyTextAnswers } from './verify-text-answers.mjs';
 import { verifyRoomSubscription } from './verify-room-subscription.mjs';
 import { verifyPackRounds } from './verify-pack-rounds.mjs';
 import { verifyMediaStops } from './verify-media-stops.mjs';
@@ -61,7 +62,7 @@ try {
     globalThis.__gameStorageTest = { db: hostDb, appId: namespace };
     await mkdir('.firebase/validation', { recursive: true });
     await build({
-        stdin: { contents: "export * from './src/services/resultHistory.js'; export * from './src/utils/packTheme.js'; export * from './src/actions/roomActions.js'; export * from './src/actions/gameActions.js'; export * from './src/actions/gameStorage.js'; export * from './src/actions/buzzerActions.js'; export * from './src/actions/scoreActions.js';", resolveDir: process.cwd() },
+        stdin: { contents: "export * from './src/services/resultHistory.js'; export * from './src/utils/packTheme.js'; export * from './src/actions/roomActions.js'; export * from './src/actions/gameActions.js'; export * from './src/actions/gameStorage.js'; export * from './src/actions/buzzerActions.js'; export * from './src/actions/scoreActions.js'; export * from './src/actions/textAnswerActions.js';", resolveDir: process.cwd() },
         bundle: true, platform: 'node', format: 'esm', external: ['firebase/firestore'],
         outfile: '.firebase/validation/actions.mjs',
         plugins: [{ name: 'emulator-config', setup(builder) {
@@ -367,6 +368,7 @@ try {
     await verifyWheel({ actions, check, denied, hostDb, playerDb, spectatorDb, seedDb, ref, roomRef, event, t, client });
     await verifyPackRounds({ actions, check, denied, hostDb, playerDb, spectatorDb, seedDb, ref, roomRef, event, t, client });
     await verifyMediaStops({ actions, check, denied, hostDb, playerDb, spectatorDb, seedDb, ref, roomRef, event, t });
+    await verifyTextAnswers({ actions, check, denied, hostDb, playerDb, spectatorDb, seedDb, ref, roomRef, event, t, client });
     console.log(`${checks} scenario groups passed. Namespace: ${namespace}`);
 } finally {
     await Promise.all(clients.map(async ({ db, app }) => { await terminate(db); await deleteApp(app); }));

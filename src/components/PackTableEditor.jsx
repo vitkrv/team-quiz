@@ -57,6 +57,7 @@ export default function PackTableEditor({
                                             <span className="line-clamp-2 break-words text-sm text-slate-200">{q.text.trim() || t('editorNoQuestionText')}</span>
                                             <span className="flex flex-wrap gap-1 text-xs">
                                                 {q.isSurpriseQuestion && <span className="rounded bg-yellow-400/10 px-2 py-1 text-yellow-200">{t('surpriseQuestion')}</span>}
+                                                {q.isTextAnswerQuestion && <span className="rounded bg-blue-400/10 px-2 py-1 text-blue-200">{t('textAnswerBadge')}</span>}
                                                 {q.questionMedia && <span className="rounded bg-slate-800 px-2 py-1">{t('questionMediaAlt')}</span>}
                                                 {q.answerMedia && <span className="rounded bg-slate-800 px-2 py-1">{t('answerMediaAlt')}</span>}
                                                 {!isQuestionReady(q) && <span className="rounded bg-orange-500/10 px-2 py-1 text-orange-200">{t('editorIncomplete')}</span>}

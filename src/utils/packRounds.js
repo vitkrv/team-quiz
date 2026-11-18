@@ -34,6 +34,7 @@ export function validatePackRounds(pack) {
             }
             categoryIds.add(category.id);
             for (const question of category.questions) {
+                if (question?.isTextAnswerQuestion && question?.isSurpriseQuestion) return { roundIndex, key: 'invalidQuestionMode' };
                 if (!question || typeof question.id !== 'string' || !question.id || questionIds.has(question.id)) {
                     return { roundIndex, key: 'invalidPackRounds' };
                 }

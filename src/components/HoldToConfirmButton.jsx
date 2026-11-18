@@ -15,6 +15,7 @@ export default function HoldToConfirmButton({
     className,
     fillClassName = 'bg-red-600',
     durationMs = 3000,
+    disabled = false,
     onConfirm,
     title
 }) {
@@ -28,7 +29,7 @@ export default function HoldToConfirmButton({
     const heldKeyRef = useRef(null);
 
     useEffect(() => {
-        if (!isHolding) return undefined;
+        if (!isHolding || disabled) return undefined;
 
         const intervalId = window.setInterval(() => {
             if (startedAtRef.current === null) return;
@@ -44,9 +45,10 @@ export default function HoldToConfirmButton({
         }, 30);
 
         return () => window.clearInterval(intervalId);
-    }, [durationMs, isHolding, onConfirm]);
+    }, [durationMs, isHolding, onConfirm, disabled]);
 
     const startHold = () => {
+        if (disabled) return;
         clearHoldGuidance();
         startedAtRef.current = Date.now();
         confirmedRef.current = false;
@@ -115,6 +117,7 @@ export default function HoldToConfirmButton({
     return (
         <button
             type="button"
+            disabled={disabled}
             aria-label={ariaLabel}
             title={title}
             onPointerDown={handlePointerDown}

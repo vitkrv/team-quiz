@@ -17,6 +17,7 @@ There is one host-led category-board game, with an optional competitive setting.
 | Standard play | Default for a new room | Correct ordinary answers earn their question value; incorrect ordinary answers cost no points. |
 | True Competitive Mode | Host toggle in the lobby; default off | Incorrect ordinary answers lose their question value. Clicking the buzzer before unlock adds a personal delay. |
 | Surprise question | Pack editor, per question | One selected contestant answers; a signed random/hidden value determines their score change after judging. |
+| Text answers for all players | Pack editor, per question; off by default | Every contestant can send/update a short answer; the host freezes, reveals and judges each separately. Mutually exclusive with Surprise. |
 | Surprise wheel or hidden table | Pack editor, per pack | Chooses how surprise points are selected. Missing or invalid settings default to wheel. |
 | Host RPS | Host tool between questions | Two selected room members (including the host if selected) play an independent RPS match. It does not automatically change quiz points or the question-selection turn. |
 | Final RPS tie-breaker | Completed board with tied top scores | Determines a champion among the highest-scoring contestants without changing quiz scores. |
@@ -58,6 +59,7 @@ Selection turns follow these rules:
 | Game start | Random contestant |
 | Correct ordinary answer | Contestant who answered correctly |
 | Incorrect ordinary answer | Unchanged |
+| Text-answer judgments | Unchanged, regardless of judgment order or accepted players |
 | Skip/reveal without awarding points | Unchanged |
 | Judged surprise answer, correct or incorrect | Assigned surprise answerer |
 | Host RPS completion | Unchanged |
@@ -117,6 +119,57 @@ In policy-v1 rooms, both button and Space follow this rule. The first early repo
 A penalized contestant's reaction is measured from their personal unlock without adding 2.5 seconds to their ranking duration. The early report is client-trusted because the server cannot observe when a button appeared enabled locally; once stored, rules enforce the penalty before accepting a submission. Older rooms retain browser-local penalties and ignore premature Space presses.
 
 Example: on a 300-point ordinary question, Alice answers incorrectly and Bob answers correctly. Standard play gives Alice 0 and Bob +300. Competitive play gives Alice -300 and Bob +300. Bob receives the next selection turn in either case.
+
+### Text answers for all players
+
+Enabling `isTextAnswerQuestion` replaces Buzz for that question only. At opening,
+the game captures a fixed roster of contestants, ordered by player ID. Host and
+spectators cannot submit; disconnected contestants remain in the roster. There is
+no buzzer delay, race, penalty or answer countdown. Question text and all media
+formats, start/stop points and replay settings remain available.
+
+Contestants explicitly Send 1–40 Unicode code points after trimming surrounding
+whitespace. Empty/whitespace-only, multiline and oversized answers are rejected.
+Typing is local; each successful send replaces only that player's previous saved
+answer. Saved feedback follows server acknowledgment. Offline/failed submissions
+show an error for retry; unsent drafts need not survive refresh.
+
+The host panel shows the count and names of submitted contestants without their
+text. A two-second hold on End Answering closes the phase with no automatic timer.
+Releasing early or losing focus cancels the hold. Only submissions committed before
+closure count; the frozen map includes empty strings for missing answers. Refresh
+restores saved answers and the current shared phase. Answers are UI-concealed shared
+data, not confidential against inspecting the room document.
+
+During review everyone sees the current player's name and review position. The host
+clicks Reveal answers once to show the first contestant's answer. Each judgment
+automatically shows the next contestant's answer.
+Question text and question media disappear for contestants and spectators as soon
+as Answering ends, including before the initial Reveal answers click, and remain
+hidden throughout review. The host keeps the question text/media and controls.
+The answer-review section is centered in the play area for contestants and
+spectators; the host sees it first, above the question text and media.
+Empty answers show translated,
+semi-transparent italic “Nothing” and are judged normally. Accept adds the selected
+amount; Deny costs zero in standard mode or subtracts the amount in competitive mode.
+Competitive Skip changes neither points nor answer statistics/streaks. Accept counts
+as correct and advances streaks; Deny counts as incorrect and resets them, including
+zero-point judgments. Buzz-related achievements do not count text submissions.
+
+The host panel permits nonnegative safe integer amounts, including zero, with
+100/200/400 adjustment increments by round and a zero floor. Amounts need not be
+multiples of the increment. Every next contestant resets to the question value;
+unsaved adjustments reset on refresh. Score overflow is rejected. Each judgment
+advances to the next visible answer without another reveal click. There is no
+whole-question Skip/Reveal during this flow. The final judgment marks the question
+done and reveals its official answer, then normal Continue returns to the board or
+round standings. Selection turn remains unchanged.
+
+Question media continues during submissions and pauses for review. Judgments,
+scores, history and recap commit atomically once. History omits submitted text;
+nonzero changes support score reversal without undoing judgments/statistics. Continue
+and explicit Finish clear the submitted text. Existing unflagged questions retain
+their Buzz behavior and existing rooms need no migration.
 
 ## 5. Surprise questions
 

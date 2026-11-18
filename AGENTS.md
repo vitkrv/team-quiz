@@ -28,6 +28,7 @@ For product or gameplay changes, read [the app baseline](docs/app-overview.md) a
 - Owned/public packs with previews, ordered categories/questions, question/answer media, and optional prize images.
 - Up to 20 contestants plus the host; category previews, question suggestions, host judging, and standard/True Competitive scoring.
 - Late-buzz feedback, animated surprise contestant selection, wheel/table surprise scoring, score editing, and host history.
+- Per-question text answers for all contestants, replaceable submissions, host-controlled freeze/reveal/judging, and custom per-answer points.
 - Host RPS side matches, final top-score tie-breakers, remembered rooms, and shared results. The host is excluded from contestant standings.
 
 ## Setup
@@ -192,6 +193,7 @@ Coordinate storage-related rule and frontend releases. Older clients must reload
 - `src/components/`: reusable UI and media components.
 - `src/actions/gameActions.js`: Firestore writes and game state transitions.
 - `src/actions/gameStorage.js`: Atomic history writes, legacy compatibility and frozen-pack references.
+- `src/actions/textAnswerActions.js` and `src/utils/textAnswerPolicy.js`: transactional all-player text submissions, frozen review, and per-answer scoring policy.
 - `src/actions/buzzerActions.js` and `buzzerState.js`: policy-v1 submissions, penalties, host finalization, and atomic race lifecycle.
 - `src/hooks/useBuzzer.js` and `src/utils/buzzerPolicy.js`: local reaction origins, shared timing, and buzzer feedback.
 - `src/actions/gameRecap.js`: Atomic recap projections and immutable profile achievement finalization.

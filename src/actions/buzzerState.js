@@ -25,7 +25,7 @@ export async function prepareBuzzerLifecycle(transaction, roomRef, room, update,
     const questionIndex = categories[categoryIndex]?.questions.findIndex((q) => q.id === questionId);
     const question = categories[categoryIndex]?.questions[questionIndex];
     if (!question) throw new Error('Question is unavailable');
-    if (question.isSurpriseQuestion) {
+    if (question.isSurpriseQuestion || question.isTextAnswerQuestion) {
         update.buzzerRoundId = null;
         return () => { if (previous) transaction.update(ref, { phase: 'cancelled' }); };
     }

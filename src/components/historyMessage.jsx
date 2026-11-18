@@ -39,11 +39,15 @@ export const HistoryMessage = ({ item, t }) => {
                 delta: formatBuzzDelta(Number(details.deltaMs) || 0)
             })}</>;
         case 'answer_correct':
+        case 'text_answer_accepted':
             return <><PlayerName>{details.playerName || t('playerFallback')}</PlayerName> {t('historyViewCorrect')}, <PointValue value={details.points} showSign /></>;
         case 'answer_incorrect':
+        case 'text_answer_denied':
             return <><PlayerName>{details.playerName || t('playerFallback')}</PlayerName> {t('historyViewIncorrect')}{details.points ? <>, <PointValue value={details.points} showSign /></> : null}</>;
         case 'surprise_answer_correct':
             return <><PlayerName>{details.playerName || t('playerFallback')}</PlayerName> {t('historyViewSurpriseCorrect')}</>;
+        case 'text_answer_skipped':
+            return <><PlayerName>{details.playerName || t('playerFallback')}</PlayerName> — {t('textAnswerSkip')}</>;
         case 'surprise_answer_incorrect':
             return <><PlayerName>{details.playerName || t('playerFallback')}</PlayerName> {t('historyViewSurpriseIncorrect')}</>;
         case 'surprise_wheel_rolled':

@@ -1,4 +1,5 @@
 import AnswerTimer from '../../components/AnswerTimer';
+import TextAnswerQuestion from '../../components/TextAnswerQuestion';
 import { getPackTheme } from '../../utils/packTheme';
 import { getRoundCategories } from '../../utils/packRounds';
 import { pruneSurprisePointValues } from '../../utils/surprisePoints';
@@ -307,6 +308,9 @@ export default function ActiveQuestionView({ room, roomCode, roomRef, user, isHo
     }
 
     const isSurpriseQuestion = Boolean(activeQ?.isSurpriseQuestion);
+    const isTextAnswerQuestion = Boolean(activeQ?.isTextAnswerQuestion);
+    const textRound = room.textAnswerRound?.questionId === activeQ?.id ? room.textAnswerRound : null;
+    const textReview = Boolean(isTextAnswerQuestion && textRound && textRound.phase !== 'answering');
     const questionBackgroundItems = useMemo(
         () => createFloatingBackgroundItems({
             seed: room.activeQuestionId || 'question',
@@ -422,7 +426,7 @@ export default function ActiveQuestionView({ room, roomCode, roomRef, user, isHo
     const hasBuzzed = !!room.buzzedPlayerId;
     const amIIncorrect = (room.incorrectBuzzedIds || []).includes(user.uid);
     const isBuzzUnlocked = buzzer.enabled ? buzzer.unlocked : !effectiveBuzzUnlockAt || buzzUnlockNow >= effectiveBuzzUnlockAt;
-    const canAttemptBuzz = !isSurpriseQuestion && !isHost && !isSpectator && !hasBuzzed && !amIIncorrect;
+    const canAttemptBuzz = !isTextAnswerQuestion && !isSurpriseQuestion && !isHost && !isSpectator && !hasBuzzed && !amIIncorrect;
     const canIBuzz = buzzer.enabled ? buzzer.canClick && buzzer.unlocked : canAttemptBuzz && isBuzzUnlocked;
     const canClickBuzzButton = buzzer.enabled ? buzzer.canClick : canIBuzz || (room.trueCompetitiveMode && canAttemptBuzz);
     const shouldShowBuzzButton = !isHost && !isSpectator && !amIIncorrect;
@@ -725,6 +729,7 @@ export default function ActiveQuestionView({ room, roomCode, roomRef, user, isHo
         if (!isHost) return;
         await updateRoom(roomRef, {
             activeQuestionId: null,
+            textAnswerRound: null,
             answerRevealed: false,
             buzzedPlayerId: null,
             buzzTimestamp: null,
@@ -877,20 +882,23 @@ export default function ActiveQuestionView({ room, roomCode, roomRef, user, isHo
                 className={`left-1/2 top-1/2 -z-10 h-screen w-screen -translate-x-1/2 -translate-y-1/2 ${isSurpriseQuestion || Boolean(getPackTheme(room.themeId).palette) ? '' : 'grayscale brightness-50'}`}
             />
 
-            <div className={`active-question-enter-content ${isHost ? 'host-question-layout' : ''} relative z-10 flex min-h-0 w-full flex-1 flex-col items-center ${isAnswerFocused ? 'justify-center' : 'justify-start'} ${isEntranceContentVisible ? 'active-question-enter-content--visible' : ''}`}>
+            <div className={`active-question-enter-content ${isHost ? 'host-question-layout' : ''} relative z-10 flex min-h-0 w-full flex-1 flex-col items-center ${isAnswerFocused || (!isHost && isTextAnswerQuestion && textRound?.phase === 'reviewing') ? 'justify-center' : 'justify-start'} ${isEntranceContentVisible ? 'active-question-enter-content--visible' : ''}`}>
             <div className={isHost ? 'host-question-content' : 'contents'}>
+            {isHost && isTextAnswerQuestion && textRound && <TextAnswerQuestion key={`${textRound.id}:${user.uid}`} room={room} roomRef={roomRef} user={user}
+                question={activeQ} isHost={isHost} isSpectator={isSpectator} t={t} />}
             <QuestionPresenter
                 question={activeQ}
                 categoryName={activeCatName}
                 isHost={isHost}
                 isAnswerRevealed={isAnswerRevealed}
+                hideQuestionContent={isTextAnswerQuestion && textRound?.phase === 'reviewing'}
                 t={t}
                 questionMediaProps={{
                     locked: hasGatedQuestionMedia && !isHost && !isQuestionMediaStarted,
                     unlocked: !hasGatedQuestionMedia || isQuestionMediaStarted,
                     shouldStart: hasGatedQuestionMedia && isQuestionMediaStarted,
                     startAt: questionMediaStartAt,
-                    pauseSignal: buzzMediaPauseSignal,
+                    pauseSignal: textReview ? 1 : buzzMediaPauseSignal,
                     stopPlayback: hasGatedQuestionMedia ? {
                         gated: true, playback: matchingStopPlayback || (isQuestionMediaStarted && !questionStops.length ? {
                             ...mediaPlayback, sessionId: `legacy:${questionMediaStartAt}`
@@ -903,11 +911,14 @@ export default function ActiveQuestionView({ room, roomCode, roomRef, user, isHo
                             && previous.resume === next.resume
                             && previous.boundary === next.boundary ? previous : next) : undefined,
                         storageScope: `${user.uid}:${roomRef.id}:${activeQ.id}`,
-                        stopped: isAnswerRevealed,
+                        stopped: isAnswerRevealed || textReview,
                         onStop: isHost ? setMediaStopReached : undefined
                     } : undefined
                 }}
             />
+
+            {!isHost && isTextAnswerQuestion && textRound && <TextAnswerQuestion key={`${textRound.id}:${user.uid}`} room={room} roomRef={roomRef} user={user}
+                question={activeQ} isHost={isHost} isSpectator={isSpectator} t={t} />}
 
             {isAnswerRevealed && (
                 <div className="mt-4 flex w-full flex-col items-center gap-4 md:mt-6">
@@ -1037,7 +1048,7 @@ export default function ActiveQuestionView({ room, roomCode, roomRef, user, isHo
             )}
 
             {/* State: Waiting for buzz */}
-            {!isHost && !hasBuzzed && !isAnswerRevealed && !isSurpriseQuestion && (
+            {!isTextAnswerQuestion && !isHost && !hasBuzzed && !isAnswerRevealed && !isSurpriseQuestion && (
                 <div className="mt-4 flex w-full max-w-md shrink-0 flex-col items-center md:mt-6">
                     {isSpectator ? (
                         <div className="w-full rounded-xl border-2 border-dashed border-slate-700 theme-border p-5 text-lg font-bold text-slate-500 md:p-8 md:text-xl">
@@ -1071,7 +1082,9 @@ export default function ActiveQuestionView({ room, roomCode, roomRef, user, isHo
             {isHost && (
                 <aside className="host-question-controls" aria-label={t('hostQuestionControls')}>
                     <h2 className="text-xs font-bold uppercase tracking-widest text-slate-400 theme-muted">{t('hostQuestionControls')}</h2>
-                    {!isAnswerRevealed && (isSurpriseQuestion || hasBuzzed) && (
+                    {isTextAnswerQuestion && textRound && <TextAnswerQuestion key={`${textRound.id}:controls`} controls room={room} roomRef={roomRef} user={user}
+                        question={activeQ} isHost={isHost} isSpectator={isSpectator} t={t} />}
+                    {!isTextAnswerQuestion && !isAnswerRevealed && (isSurpriseQuestion || hasBuzzed) && (
                         <div className="flex min-w-0 flex-col items-center gap-2">
                             <div className="flex max-w-full items-center gap-2 text-lg font-bold text-yellow-400 theme-accent">
                                 <span>{isSurpriseQuestion ? surpriseAnswerer?.avatar : buzzedPlayerAvatar}</span>
@@ -1081,7 +1094,7 @@ export default function ActiveQuestionView({ room, roomCode, roomRef, user, isHo
                             {!isSurpriseQuestion && answerTimer}
                         </div>
                     )}
-                    {!isAnswerRevealed && hasGatedQuestionMedia && (
+                    {!textReview && !isAnswerRevealed && hasGatedQuestionMedia && (
                         <div className="flex flex-col gap-3">
                             {(!isQuestionMediaStarted || hasPendingMediaStop || hostNeedsMediaResume
                                 || (!allowParticipantMediaReplay && (!questionStops.length || hostMediaCompleted))) && (
@@ -1116,7 +1129,7 @@ export default function ActiveQuestionView({ room, roomCode, roomRef, user, isHo
                             </button>
                         </div>
                     )}
-                    {!isAnswerRevealed && (isSurpriseQuestion || !hasBuzzed) && (
+                    {!isTextAnswerQuestion && !isAnswerRevealed && (isSurpriseQuestion || !hasBuzzed) && (
                         <HoldToConfirmButton
                             onConfirm={handleSkip}
                             durationMs={2000}
@@ -1144,7 +1157,7 @@ export default function ActiveQuestionView({ room, roomCode, roomRef, user, isHo
                             {t('continue')}
                         </button>
                     )}
-                    {!isAnswerRevealed && !isSurpriseQuestion && !hasBuzzed && !buzzer.collecting && (
+                    {!isTextAnswerQuestion && !isAnswerRevealed && !isSurpriseQuestion && !hasBuzzed && !buzzer.collecting && (
                         <p className="text-sm text-slate-400 theme-muted">{t('waitingForBuzz')}</p>
                     )}
                     {buzzerStatus}

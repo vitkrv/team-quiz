@@ -5,6 +5,109 @@ The focused integration harness exercises the actual room/game action modules an
 Vite/esbuild dependencies; no production credentials or new packages are required.
 It is not a general unit or browser test suite.
 
+## Text answers for all players
+
+The single `npm run test:storage` entry point includes real-action/rule checks for
+per-question text mode: Unicode limits, replacing answers, 20 simultaneous
+contestants, closure races, immutable frozen submissions, role/forgery rejection,
+initial reveal followed by automatic answer advancement on judgment,
+standard/competitive custom scoring, blank answers,
+Skip neutrality, duplicate host requests, recap/history/reversals, media sessions,
+round breaks, legacy packs and Finish cleanup. No submitted answer text is retained
+in history or recap. `npm run test:gameplay` covers the corresponding pure policies.
+
+For release, validate the checked-in Firestore rules, deploy them before the new
+frontend only when authorized, and reload older clients before playing text-enabled
+packs. No migration, index or ImageKit Worker release is required.
+
+Browser acceptance uses the actual editor/game components with isolated local
+Emulator identities: host, at least two contestants and a spectator; English and
+Ukrainian; desktop and mobile. Check both editor modes and modal focus, text/media
+questions, Send/update/error states, the two-second hold and its cancellation,
+first-answer Reveal answers gating, automatic subsequent answers, “Nothing”, custom amounts and per-player resets, all
+judgments, final reveal/Continue, refresh/reconnect, plus ordinary Buzz and Surprise.
+Report browser observations separately from deterministic/Emulator results;
+production sign-in, external media and physical-device behavior require separate checks.
+
+### Agent verification — 2026-11-18
+
+Agent-run checks all exited with code **0**: lint, production build, 22 gameplay
+policy tests, 32 server-clock checks, 8 client-performance checks, the complete
+**108 storage scenario groups**, and the Git whitespace check. The storage run
+used a dedicated Firestore Emulator on `127.0.0.1:8097` with project
+`demo-game-storage`, then stopped it. It included all 20 contestants submitting,
+replacing, freezing, and receiving exactly one judgment with correct scores/recap.
+Expected permission-denied logs came from negative cases; the final run had no
+failed assertions. The build retained Vite's existing large-chunk warning.
+
+Copy-ready checks, from the repository root (start a dedicated Emulator first for
+the storage command, and replace `8080` with its actual port):
+
+```powershell
+npm run lint
+npm run build
+npm run test:gameplay
+node scripts/verify-server-clock.mjs
+node scripts/verify-client-performance.mjs
+$env:FIRESTORE_EMULATOR_HOST = '127.0.0.1:8080'
+npm run test:storage
+git -c core.autocrlf=false diff --check
+```
+
+The requested GPT-6.1 Sol subagent with Medium reasoning ran browser checks against
+the actual GameRoom/PackCreator components and a separate local Emulator on 8098,
+using simulated Google identities. English desktop host/three contestants/spectator
+sessions covered submission counts/names, replacing answers, refresh recovery,
+two-second hold cancellation/completion, separate reveal/judge steps, custom points,
+standard Deny, competitive deductions/Skip, blank answers, final reveal/Continue,
+turn preservation, ordinary Buzz and Surprise assignment. English/Ukrainian editor
+checks covered Form/Table, save/reload, mutual exclusivity and nested help dismissal.
+Forty astral Unicode characters saved successfully and 41 disabled Send.
+
+Local image/audio/video question and official-answer fixtures loaded in the browser.
+Sending while audio/video played did not pause them; closing answering paused them
+before their natural end. Blocked audio autoplay recovered through the existing
+Resume control. Offline Send showed failure and retained the draft; restoring the
+connection and explicitly retrying saved it. Ukrainian narrow-viewport checks
+confirmed a 390 px layout/scroll width and successful submission, but the browser
+tool's screenshots scaled inconsistently, so full mobile visual QA remains pending.
+
+The subsequent reveal-flow adjustment was revalidated with lint/build, all 22
+gameplay tests and all 108 storage scenario groups (exit 0), plus the Git whitespace
+check. A fresh GPT-6.1 Sol Medium browser subagent verified English standard and
+Ukrainian competitive sessions: the first answer stays hidden until Reveal answers,
+then Accept/Deny/Skip automatically shows the next answer with reset points.
+Refresh preserves the visible answer; blanks and final reveal/Continue still work.
+The local follow-up report is `.firebase/validation/text-reveal-browser-report.md`.
+
+The question-visibility adjustment passed lint/build and the Git whitespace check
+(exit 0). GPT-6.1 Sol Medium browser checks at 1280×720 confirmed that contestants
+and spectators retain question text/media until the first Reveal answers, then
+lose both throughout review, including after refresh and automatic next answers.
+The host retains question content and judging controls. Final official text/image
+answers still display; audio/video question nodes unmount for non-host viewers.
+Playback-stop timing was not asserted in this run because local autoplay remained
+paused. The report is `.firebase/validation/text-review-visibility-report.md`.
+
+The review-layout and closure-timing follow-up passed lint/build and the Git
+whitespace check (exit 0). GPT-6.1 Sol Medium browser checks in English and Ukrainian
+at the actual 1280×720 viewport confirmed centered contestant/spectator review
+cards before reveal, after reveal and after advancing to the next answer. The host
+review appears above question content without overlap. End Answering immediately
+removes question text/video for contestants and spectators before Reveal answers;
+the host retains both. The requested narrow viewport override did not take effect,
+so narrow layout remains pending. Report:
+`.firebase/validation/text-layout-browser-report.md`.
+
+Remaining manual checks:
+
+- On narrow/mobile layouts, confirm centered review cards, host section ordering,
+  and immediate question text/media removal on End Answering before Reveal answers.
+- Physical desktop/mobile devices: keyboard, long names, responsive visuals and modal focus.
+- Browser media stop-point/replay variants and the editor attachment save/replace/remove lifecycle.
+- Production Google sign-in, external ImageKit media and device-specific playback restrictions.
+- Actual multi-device background/offline recovery and latency; the browser run used local simulated identities.
+
 ## Run
 
 ### Playback, buzzer concurrency, and room recovery

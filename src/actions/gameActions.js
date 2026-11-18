@@ -7,6 +7,7 @@ import { deleteField, getDocFromServer, runTransaction, serverTimestamp } from '
 import { timestampMillis } from '../utils/buzzerPolicy';
 import { hasPendingSurpriseAward, isCurrentGame, WHEEL_ANIMATION_MS } from '../utils/wheelPolicy';
 import { generateId } from '../utils/ids';
+import { createTextAnswerRound } from '../utils/textAnswerPolicy';
 
 export const RPS_CHOICES = {
     rock: { emoji: '🪨', beats: 'scissors' },
@@ -25,7 +26,8 @@ export const SURPRISE_PLAYER_DRAW_RESULT_HOLD_MS = 2000;
 export async function startQuestionMedia(roomRef, hostId, questionId, expectedStartedAt = null) {
     const sessionId = generateId();
     return runRoomTransaction(roomRef, async (transaction, room) => {
-        if (!room || room.hostId !== hostId || room.status !== 'playing' || room.answerRevealed || room.activeQuestionId !== questionId) return false;
+        if (!room || room.hostId !== hostId || room.status !== 'playing' || room.answerRevealed || room.activeQuestionId !== questionId
+            || (room.textAnswerRound && room.textAnswerRound.phase !== 'answering')) return false;
         if (room.mediaPlayback?.questionId === questionId && room.mediaPlayback.status === 'started'
             && (expectedStartedAt === null || room.mediaPlayback.startedAt !== expectedStartedAt)) return false;
         const pack = await readRoomPack(transaction, roomRef, room);
@@ -45,6 +47,7 @@ export async function continueQuestionMedia(roomRef, hostId, questionId, session
     return runRoomTransaction(roomRef, async (transaction, room) => {
         const playback = room?.mediaPlayback;
         if (!room || room.hostId !== hostId || room.status !== 'playing' || room.answerRevealed || room.activeQuestionId !== questionId
+            || (room.textAnswerRound && room.textAnswerRound.phase !== 'answering')
             || playback?.questionId !== questionId || playback.policyVersion !== 1 || playback.sessionId !== sessionId
             || playback.releasedStopCount !== expectedReleasedCount) return false;
         const pack = await readRoomPack(transaction, roomRef, room);
@@ -321,6 +324,15 @@ export const handlePickQuestion = async (roomRef, qId, actorId, historyItem, ext
             ...extraUpdate
         };
 
+        const pack = await readRoomPack(transaction, roomRef, room);
+        const question = getRoundCategories(pack, room.currentRoundIndex || 0).flatMap((category) => category.questions).find((q) => q.id === qId);
+        if (!question || (question.isTextAnswerQuestion && question.isSurpriseQuestion)) throw new Error('Invalid question mode');
+        const categories = getRoundCategories(pack, room.currentRoundIndex || 0);
+        const categoryIndex = categories.findIndex((category) => category.questions.some((q) => q.id === qId));
+        const questionIndex = categories[categoryIndex].questions.findIndex((q) => q.id === qId);
+        update.textAnswerRound = question.isTextAnswerQuestion ? createTextAnswerRound(room, qId, generateId(), categoryIndex, questionIndex) : null;
+        if (question.isTextAnswerQuestion) { update.buzzUnlockAt = null; update.buzzerRoundId = null; }
+
         if (historyItem) {
             update.history = [historyItem];
         }
@@ -357,6 +369,7 @@ export const beginSurprisePlayerDraw = async (roomRef, qId, actorId, requestedPl
             || (room.currentRoundQuestionIds && !room.currentRoundQuestionIds.includes(qId))
             || room.surprisePlayerDraw
             || !question?.isSurpriseQuestion
+            || question.isTextAnswerQuestion
             || !answererId
         ) {
             return;
@@ -481,7 +494,7 @@ export const pulseQuestionSelection = async (roomRef, qId, actorId) => {
 };
 
 export const handleEndGame = async (roomRef, historyItem, extraUpdate = {}) => {
-    const update = { status: 'finished', mediaPlayback: null, prizeModal: deleteField(), surprisePlayerDraw: null, ...extraUpdate };
+    const update = { status: 'finished', mediaPlayback: null, prizeModal: deleteField(), surprisePlayerDraw: null, ...extraUpdate, textAnswerRound: null };
 
     if (historyItem) {
         update.history = [historyItem];

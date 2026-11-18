@@ -12,7 +12,28 @@ This baseline comes from source inspection, not a live multiplayer verification.
 
 Cortex Rush is a real-time, host-led multiplayer trivia game. An author prepares a question pack, a host opens a room using that pack, and players compete for points by answering questions from a category board. A human host opens questions, judges spoken or otherwise externally communicated answers, reveals solutions, and controls the pace of the game.
 
-The app supplies the shared board, buzzer, scores, media, history, surprise-question scoring, and final standings. It does not automatically evaluate free-text answers or provide a built-in voice conversation. Players use their own devices; a shared screen or an external call can support the session.
+The app supplies the shared board, buzzer, optional all-player text answers, scores, media, history, surprise-question scoring, and final standings. It does not automatically evaluate answers or provide a built-in voice conversation. Players use their own devices; a shared screen or an external call can support the session.
+
+### Text answers for all players
+
+Authors can enable this option on an individual question in either editor mode.
+It replaces Buzz and is mutually exclusive with Surprise. Contestants send
+1–40 Unicode code points, with surrounding whitespace trimmed and no line breaks;
+sending again replaces their saved answer. The host sees submitted names/count,
+then holds End Answering for two seconds to freeze submissions. There is no timer.
+The host clicks Reveal answers once to show the first answer, then each judgment
+automatically shows the next player's answer. Once Answering ends,
+contestants and spectators see no question text or question media; the host keeps
+both for reference. The answer-review section is centered in the play area for
+contestants and spectators and appears above question content for the host.
+The host accepts/denies with adjustable points; competitive
+mode also offers neutral Skip. Blank answers display muted italic
+“Nothing” and receive the same controls. Every next answer resets to the question
+value, with +/- increments of 100/200/400 by round. After all judgments the official
+answer appears, followed by the usual Continue. Selection turn is preserved.
+Accept/Deny update correctness, streaks, category totals and score history; Skip
+is neutral. Submitted text is shared room data hidden by the UI, not confidential
+against inspection, and is cleared on Continue/Finish without being saved in history.
 
 Despite the repository name `team-quiz`, the current game stores and ranks individual player entries. It has no separate team roster or team-scoring model.
 

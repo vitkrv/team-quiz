@@ -7,6 +7,7 @@ export const isAnswerJudgment = (type) => /^(surprise_)?answer_(correct|incorrec
 export function getTransitionBlockReason(room, event) {
     const { type, actorId, details: d = {} } = event;
     if (room.status === 'finished') return 'game_finished';
+    if (room.textAnswerRound && (isAnswerJudgment(type) || type === 'question_skipped')) return 'text_answer_action_required';
     if (isCurrentGame(room)) {
         const scoreEdit = ['score_set', 'score_adjusted'].includes(type);
         const hostAction = isAnswerJudgment(type) || scoreEdit || ['question_skipped', 'board_resumed'].includes(type);

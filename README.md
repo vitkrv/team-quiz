@@ -9,7 +9,7 @@ Question packs are owner-only by default. Authors can mark a pack as available t
 - Google sign-in and English/Ukrainian interfaces.
 - Packs with 1–3 ordered rounds, round tabs, category/question reordering within each round, board previews, image/audio/video questions and answers, and optional concealed/revealed prize images.
 - Host-led rooms for up to 20 contestants plus the host, with six-digit invitations, remembered rooms, and spectator support after play starts.
-- Category previews, a shared question board, contestant question suggestions, and host judging/reveal controls. Answers are given outside the app; the app does not evaluate free-text answers or provide voice chat.
+- Category previews, a shared question board, contestant question suggestions, and host judging/reveal controls. Questions use Buzz by default or optional text answers for all contestants; the host judges every answer. The app does not automatically evaluate answers or provide voice chat.
 - Standard scoring or optional True Competitive Mode with wrong-answer deductions and early-buzz delays. New rooms allow buzzing throughout a two-second collection window and rank device-reported local reaction times; accepted losing presses retain personal reaction-gap feedback.
 - Surprise questions with animated contestant selection and wheel or hidden-table scoring; host score adjustments and paginated game history.
 - Rock-paper-scissors side matches and final top-score tie-breakers, plus shareable results that exclude the host from contestant standings.
@@ -198,6 +198,20 @@ document writes; recovery listeners and rule reads can add cost. See the
 New rooms use `buzzerPolicyVersion: 1` and a bounded `rooms/{gameId}/buzzer/current` document. The first server-committed submission starts a two-second collection window. Eligible players can still press Buzz or Space during collection. A delayed client keeps a one-second local opportunity from its enabled-button render, ending immediately when a winner is announced; refresh restores the existing timing instead of restarting it. This local grace does not extend server acceptance: presses committed after the deadline receive neutral too-late feedback and cannot change the result. Genuine save failures receive connection/error feedback separately. The host resolves accepted submissions by reported local reaction duration, then server acceptance timestamp and player ID. Device measurements and host ranking are trusted; there is no new backend service or latency estimate. Shared penalties apply to button and Space, and the answer countdown begins only when the winner is finalized. Existing rooms keep their previous policy.
 
 Rules and frontend require a coordinated release; older clients must reload before creating new rooms. No migration or new indexes are required. The existing storage verification command also runs `scripts/verify-buzzer.mjs`. See the [gameplay reference](docs/gameplay-reference.md#4-ordinary-question-sequence) for refresh, penalties, deadlines, and host recovery.
+
+## Text answers for all players
+
+Enable **Text answers for all players** on a single question in either pack editor
+mode. Buzz remains the default; Text Answers and Surprise cannot be combined.
+Contestants explicitly send or replace a 1–40 character answer. The host closes
+answering with a two-second hold, then clicks **Reveal answers** once for the first
+answer. Each judgment automatically shows the next player's answer, with customizable
+points reset for each player. The official answer appears after all judgments. See the
+[gameplay reference](docs/gameplay-reference.md#text-answers-for-all-players).
+
+Validate the checked-in rules through `npm run test:storage`, then release rules
+before the frontend only when deployment is authorized. Older clients must reload
+before playing text-enabled packs. No migration, index, or Worker release is needed.
 
 ## Pack rounds
 

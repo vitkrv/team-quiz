@@ -1,0 +1,95 @@
+import { useEffect, useRef, useState } from 'react';
+import { Check, Minus, Plus, X } from 'lucide-react';
+import { closeTextAnswering, judgeTextAnswer, revealTextAnswer, submitTextAnswer } from '../actions/textAnswerActions';
+import { normalizeTextAnswer, validTextPoints } from '../utils/textAnswerPolicy';
+import { getRoundPointStep } from '../utils/packRounds';
+import HoldToConfirmButton from './HoldToConfirmButton';
+
+export default function TextAnswerQuestion({ room, roomRef, user, question, isHost, isSpectator, t, controls = false }) {
+    const round = room.textAnswerRound;
+    const saved = round.answers[user.uid] || '';
+    const [draft, setDraft] = useState(saved);
+    const [points, setPoints] = useState(String(question.points));
+    const [pending, setPending] = useState(false);
+    const [error, setError] = useState('');
+    const [sent, setSent] = useState(null);
+    const dirty = useRef(false);
+    const busy = useRef(false);
+    useEffect(() => { if (!dirty.current) setDraft(saved); setSent(null); }, [saved]);
+    useEffect(() => { setPoints(String(question.points)); setError(''); }, [round.reviewIndex, question.points]);
+    const run = async (action) => {
+        if (busy.current) return;
+        busy.current = true; setPending(true); setError('');
+        try {
+            const result = await action();
+            if (result === 'stale') setError('textAnswerClosed');
+        } catch { setError('textAnswerFailed'); }
+        finally { busy.current = false; setPending(false); }
+    };
+    const currentId = round.playerIds[round.reviewIndex];
+    const playerName = room.players[currentId]?.name || t('playerFallback');
+    const step = getRoundPointStep(room.currentRoundIndex || 0);
+    const judge = (decision) => run(() => judgeTextAnswer(roomRef, round.id,
+        { id: user.uid, name: room.players[user.uid]?.name || t('hostLabel') }, round.reviewIndex, decision, points, t));
+    const buttonClass = 'min-h-11 rounded-xl px-4 py-3 font-bold focus-visible:ring-2 focus-visible:ring-blue-300 disabled:opacity-50';
+    const feedback = <>{pending && <p role="status">{t('textAnswerPending')}</p>}{error && <p role="alert" className="text-red-300">{t(error)}</p>}</>;
+    if (round.phase === 'complete') return null;
+    if (controls) return <section aria-label={t('textAnswerHostPanel')} className="flex w-full flex-col gap-3">
+        {round.phase === 'answering' ? <>
+            <p className="font-bold" role="status">{t('textAnswerCount', { count: round.playerIds.filter((uid) => round.answers[uid]).length, total: round.playerIds.length })}</p>
+            <ul className="break-words text-sm text-slate-300">{round.playerIds.filter((uid) => round.answers[uid]).map((uid) => <li key={uid}>{room.players[uid]?.name}</li>)}</ul>
+            <HoldToConfirmButton disabled={pending} durationMs={2000} onConfirm={() => run(() => closeTextAnswering(roomRef, round.id, user.uid))}
+                className={buttonClass + ' border border-slate-500'}>{t('textAnswerEnd')}</HoldToConfirmButton>
+        </> : <>
+            <p className="font-bold">{t('textAnswerProgress', { current: round.reviewIndex + 1, total: round.playerIds.length })}</p>
+            <p className="break-words">{playerName}</p>
+            {!round.answerVisible ? <button type="button" disabled={pending} className={buttonClass + ' bg-blue-600'}
+                onClick={() => run(() => revealTextAnswer(roomRef, round.id, user.uid, round.reviewIndex))}>{t('textAnswerShow')}</button> : <>
+                <label className="text-sm font-bold" htmlFor="text-answer-points">{t('points')}</label>
+                <div className="flex items-center gap-2">
+                    <button type="button" disabled={pending} aria-label={t('textAnswerDecrease')} className={buttonClass + ' bg-slate-700'}
+                        onClick={() => setPoints(String(Math.max(0, (validTextPoints(points) ? Number(points) : question.points) - step)))}><Minus size={18} /></button>
+                    <input id="text-answer-points" type="number" min="0" step={step} value={points} disabled={pending} onChange={(e) => setPoints(e.target.value)}
+                        className="min-h-11 w-full min-w-0 rounded-lg border border-slate-600 bg-slate-900 p-2 text-center" />
+                    <button type="button" disabled={pending || !Number.isSafeInteger(Number(points) + step)} aria-label={t('textAnswerIncrease')} className={buttonClass + ' bg-slate-700'}
+                        onClick={() => setPoints(String((validTextPoints(points) ? Number(points) : question.points) + step))}><Plus size={18} /></button>
+                </div>
+                {!validTextPoints(points) && <p role="alert" className="text-red-300">{t('textAnswerInvalidPoints')}</p>}
+                <button type="button" disabled={pending || !validTextPoints(points)} onClick={() => judge('accept')} className={buttonClass + ' flex items-center justify-center gap-2 bg-green-600'}><Check />{t('textAnswerAccept')}</button>
+                <button type="button" disabled={pending || !validTextPoints(points)} onClick={() => judge('deny')} className={buttonClass + ' flex items-center justify-center gap-2 bg-red-600'}><X />{t('textAnswerDeny')}</button>
+                {room.trueCompetitiveMode && <button type="button" disabled={pending} onClick={() => judge('skip')} className={buttonClass + ' bg-slate-700'}>{t('textAnswerSkip')}</button>}
+            </>}
+        </>}
+        {feedback}
+    </section>;
+    if (round.phase === 'reviewing') return <section aria-label={t('textAnswerReview')} className={`${isHost ? 'mt-8 md:mt-10' : ''} w-full max-w-xl space-y-3 rounded-xl border border-slate-600 bg-slate-900/80 p-5`}>
+        <p className="text-sm text-slate-400">{t('textAnswerProgress', { current: round.reviewIndex + 1, total: round.playerIds.length })}</p>
+        <h3 className="break-words text-xl font-bold">{playerName}</h3>
+        {round.answerVisible ? round.answers[currentId]
+            ? <p className="break-words text-2xl font-bold">{round.answers[currentId]}</p>
+            : <p className="text-2xl italic opacity-50">{t('textAnswerNothing')}</p>
+            : <p className="text-slate-400" role="status">{t('textAnswerWaitingReveal')}</p>}
+    </section>;
+    if (isHost) return null;
+    if (isSpectator || !round.playerIds.includes(user.uid)) return <p className="mt-6 text-slate-400" role="status">{t('textAnswerWaiting')}</p>;
+    const valid = normalizeTextAnswer(draft) !== null;
+    return <form className="mt-6 flex w-full max-w-xl flex-col gap-3" onSubmit={(e) => {
+        e.preventDefault();
+        if (!valid) return;
+        const value = normalizeTextAnswer(draft);
+        run(async () => {
+            const result = await submitTextAnswer(roomRef, round.id, user.uid, value);
+            if (result === 'saved') { dirty.current = false; setDraft(value); setSent(value); }
+            return result;
+        });
+    }}>
+        <label htmlFor="text-player-answer" className="font-bold">{t('textAnswerInput')}</label>
+        <input id="text-player-answer" type="text" autoComplete="off" value={draft} disabled={pending}
+            aria-describedby="text-answer-counter" onChange={(e) => { dirty.current = true; setDraft(e.target.value); }}
+            className="min-h-12 rounded-xl border border-slate-600 bg-slate-900 p-3 text-white focus:ring-2 focus:ring-blue-400" />
+        <span id="text-answer-counter" className={valid || !draft ? 'text-sm text-slate-400' : 'text-sm text-red-300'}>{Array.from(draft.trim()).length}/40</span>
+        <button type="submit" disabled={pending || !valid} className={buttonClass + ' bg-blue-600'}>{t('textAnswerSend')}</button>
+        {!pending && !error && <p role="status" className="text-sm text-slate-300">{t(draft === (sent ?? saved) && (sent ?? saved) ? 'textAnswerSaved' : 'textAnswerUnsent')}</p>}
+        {feedback}
+    </form>;
+}

@@ -14,7 +14,7 @@ const storeOrigin = (key, value) => {
 };
 
 export default function useBuzzer({ room, roomRef, uid, isHost, isSpectator, serverNow, resumedQuestion, clockSyncKey }) {
-    const enabled = room.buzzerPolicyVersion === 1;
+    const enabled = room.buzzerPolicyVersion === 1 && !room.textAnswerRound;
     const raceRef = useMemo(() => enabled ? buzzerRef(roomRef) : null, [enabled, roomRef]);
     const sync = useRoomSubscription(raceRef, uid, { probeIdle: false, recoveryGroup: roomRef.path });
     const race = sync.snapshot && !sync.snapshot.metadata.hasPendingWrites && sync.status === 'synced' ? sync.data : null;

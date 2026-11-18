@@ -4,6 +4,7 @@ import { getAchievements } from '../utils/achievements';
 
 export const recapRef = (roomRef) => doc(roomRef, 'recap', 'summary');
 const tracked = new Set(['player_buzzed', 'player_buzzed_late', 'player_buzzed_early', 'answer_correct', 'answer_incorrect',
+    'text_answer_accepted', 'text_answer_denied',
     'surprise_answer_correct', 'surprise_answer_incorrect', 'score_set', 'score_adjusted', 'score_reverted',
     'surprise_table_picked', 'surprise_wheel_scored']);
 
@@ -48,14 +49,14 @@ export async function prepareRecap(transaction, roomRef, room, update, readPack)
                     categoryName: category.name, questionPoints: question.points };
             }
         }
-        if (/^(surprise_)?answer_(correct|incorrect)$/.test(event.type)) {
-            const correct = event.type.endsWith('_correct');
+        if (/^(surprise_)?answer_(correct|incorrect)$/.test(event.type) || ['text_answer_accepted', 'text_answer_denied'].includes(event.type)) {
+            const correct = event.type.endsWith('_correct') || event.type === 'text_answer_accepted';
             p[correct ? 'correct' : 'incorrect']++;
             p.streak = correct ? p.streak + 1 : 0;
             p.longestStreak = Math.max(p.longestStreak, p.streak);
         }
         const manual = ['score_set', 'score_adjusted', 'score_reverted'].includes(event.type);
-        const scoring = manual || ['answer_correct', 'answer_incorrect', 'surprise_table_picked', 'surprise_wheel_scored'].includes(event.type);
+        const scoring = manual || ['answer_correct', 'answer_incorrect', 'text_answer_accepted', 'text_answer_denied', 'surprise_table_picked', 'surprise_wheel_scored'].includes(event.type);
         if (scoring) {
             const before = runningScores[playerId] ?? (Number(room.players[playerId].score) || 0);
             const delta = manual ? (event.type === 'score_set' ? Number(d.nextScore) - before : Number(d.delta)) : Number(d.points) || 0;

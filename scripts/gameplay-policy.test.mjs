@@ -2,6 +2,52 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { getTransitionBlockReason as block, projectAnswerScore } from '../src/utils/gameTransitionPolicy.js';
 import { createGameplayDiagnostics } from '../src/utils/gameplayDiagnostics.js';
+import { createTextAnswerRound, normalizeTextAnswer, projectTextAnswerScore, textAnswerBlockReason, validTextPoints } from '../src/utils/textAnswerPolicy.js';
+import { getRoundPointStep, validatePackRounds } from '../src/utils/packRounds.js';
+
+test('text answers: trim, Unicode limits, multiline rejection and point validation', () => {
+    assert.equal(normalizeTextAnswer('  Kyiv  '), 'Kyiv');
+    assert.equal(normalizeTextAnswer('😀'.repeat(40)), '😀'.repeat(40));
+    for (const value of ['', '   ', '\u00a0', '😀'.repeat(41), 'a\nb', '\na', 'a\rb', 'a\u2028b', 'a\u2029b', null]) assert.equal(normalizeTextAnswer(value), null);
+    for (const value of [0, '0', 123, '001', Number.MAX_SAFE_INTEGER]) assert.equal(validTextPoints(value), true);
+    for (const value of ['', ' ', -1, 0.5, '1e3', Number.MAX_SAFE_INTEGER + 1]) assert.equal(validTextPoints(value), false);
+    assert.deepEqual([0, 1, 2].map(getRoundPointStep), [100, 200, 400]);
+    assert.equal(validatePackRounds({ categories: [{ id: 'c', questions: [{ id: 'q', isSurpriseQuestion: true, isTextAnswerQuestion: true }] }] }).key, 'invalidQuestionMode');
+});
+
+test('text answers: roster, role, phase and expected-review guards', () => {
+    const current = room({ players: { host: { isHost: true, score: 0 }, bob: { isHost: false, score: 0 }, alice: { isHost: false, score: 200 } } });
+    current.textAnswerRound = createTextAnswerRound(current, 'q', 'session');
+    assert.deepEqual(current.textAnswerRound.playerIds, ['alice', 'bob']);
+    assert.deepEqual(current.textAnswerRound.answers, { alice: '', bob: '' });
+    assert.equal(textAnswerBlockReason(current, 'session', 'alice', 'submit'), null);
+    for (const uid of ['host', 'spectator']) assert.equal(textAnswerBlockReason(current, 'session', uid, 'submit'), 'ineligible');
+    assert.equal(textAnswerBlockReason(current, 'old', 'alice', 'submit'), 'stale');
+    assert.equal(textAnswerBlockReason(current, 'session', 'alice', 'close'), 'host_required');
+    assert.equal(block(current, event('answer_correct')), 'text_answer_action_required');
+    assert.equal(block(current, event('question_skipped')), 'text_answer_action_required');
+    current.textAnswerRound.phase = 'reviewing';
+    assert.equal(textAnswerBlockReason(current, 'session', 'alice', 'submit'), 'ineligible');
+    assert.equal(textAnswerBlockReason(current, 'session', 'host', 'judge', 0), 'answer_hidden');
+    assert.equal(textAnswerBlockReason(current, 'session', 'host', 'reveal', 0), null);
+    current.textAnswerRound.answerVisible = true;
+    assert.equal(textAnswerBlockReason(current, 'session', 'host', 'judge', 0), null);
+    assert.equal(textAnswerBlockReason(current, 'session', 'host', 'judge', 1), 'stale');
+});
+
+test('text answers: custom and zero judgments, Skip neutrality, safe-score boundaries', () => {
+    for (const competitive of [false, true]) {
+        const current = room({ trueCompetitiveMode: competitive });
+        for (const amount of [0, 123, 400]) {
+            assert.deepEqual(projectTextAnswerScore(current, 'alice', 'accept', amount), { previousScore: 200, nextScore: 200 + amount, delta: amount });
+            assert.equal(projectTextAnswerScore(current, 'alice', 'deny', amount).delta, competitive && amount ? -amount : 0);
+            assert.equal(current.currentTurn, undefined);
+        }
+        assert.equal(projectTextAnswerScore(current, 'alice', 'skip', 0)?.delta ?? null, competitive ? 0 : null);
+        assert.equal(projectTextAnswerScore(current, 'alice', 'accept', Number.MAX_SAFE_INTEGER), null);
+        assert.equal(projectTextAnswerScore(current, 'alice', 'accept', ''), null);
+    }
+});
 
 const room = (extra = {}) => ({
     dataVersion: 2, recapVersion: 1, buzzerPolicyVersion: 1,

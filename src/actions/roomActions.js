@@ -60,7 +60,8 @@ export async function startGame(roomRef, actor, t) {
             pack = source.data();
             if (pack.ownerId !== actor.id && pack.isPublic !== true) throw new Error('Pack is private');
         }
-        if (validatePackRounds(pack)) throw new Error(t('invalidPackRounds'));
+        const invalidPack = validatePackRounds(pack);
+        if (invalidPack) throw new Error(t(invalidPack.key));
         const rounds = getPackRounds(pack);
         const questionStates = {};
         for (const category of getAllCategories(pack)) {

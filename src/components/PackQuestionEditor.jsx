@@ -2,6 +2,7 @@ import { useId, useState } from 'react';
 import { ArrowDown, ArrowUp, HelpCircle, PartyPopper, Trash2, X } from 'lucide-react';
 import PackMediaAttachment from './PackMediaAttachment';
 import SurpriseQuestionHelpDialog from './SurpriseQuestionHelpDialog';
+import TextAnswerHelpDialog from './TextAnswerHelpDialog';
 import { MEDIA_SLOTS } from '../services/imageStorage';
 
 const inputClass = 'min-h-11 w-full rounded-lg border border-slate-700 bg-slate-800 p-2 text-white outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-400/50 disabled:opacity-50';
@@ -15,6 +16,7 @@ export default function PackQuestionEditor({
     const id = useId();
     const [expanded, setExpanded] = useState(false);
     const [surpriseHelpOpen, setSurpriseHelpOpen] = useState(false);
+    const [textHelpOpen, setTextHelpOpen] = useState(false);
     const q = question;
     const showDetails = !compact || expanded;
     const pointsField = q.isSurpriseQuestion ? 'surpriseDisplayPoints' : 'points';
@@ -80,6 +82,17 @@ export default function PackQuestionEditor({
                 {t(expanded ? 'editorHideDetails' : 'editorShowDetails')}
             </button>}
             <div id={id + '-details'} hidden={!showDetails} className={`space-y-4 ${formLayout ? 'sm:col-start-1 sm:row-start-3' : ''}`}>
+                <div>
+                    <div className="flex flex-wrap items-center gap-1">
+                        <label className="flex min-h-11 min-w-0 max-w-full items-center gap-2 text-sm font-bold text-blue-300">
+                            <input type="checkbox" checked={Boolean(q.isTextAnswerQuestion)} disabled={disabled} className="h-5 w-5 shrink-0 accent-blue-400"
+                                onChange={(event) => onUpdate('isTextAnswerQuestion', event.target.checked)} /><span className="min-w-0 break-words">{t('textAnswerOption')}</span>
+                        </label>
+                        <button type="button" onClick={() => setTextHelpOpen(true)} aria-label={t('textAnswerHelpTitle')} aria-haspopup="dialog"
+                            className="flex min-h-11 min-w-11 items-center justify-center rounded-lg text-slate-400 hover:bg-slate-800 focus-visible:ring-2 focus-visible:ring-blue-400"><HelpCircle size={19} /></button>
+                    </div>
+                    <p className="text-xs text-slate-400">{t('textAnswerOptionHint')}</p>
+                </div>
                 <div className="flex flex-wrap items-center gap-1">
                 <label className="flex min-h-11 min-w-0 max-w-full items-center gap-2 text-sm font-bold text-yellow-300">
                     <input type="checkbox" checked={Boolean(q.isSurpriseQuestion)} disabled={disabled}
@@ -102,6 +115,7 @@ export default function PackQuestionEditor({
                 </>}
             </div>
             {surpriseHelpOpen && <SurpriseQuestionHelpDialog t={t} onClose={() => setSurpriseHelpOpen(false)} />}
+            {textHelpOpen && <TextAnswerHelpDialog t={t} onClose={() => setTextHelpOpen(false)} />}
         </div>
     );
 }

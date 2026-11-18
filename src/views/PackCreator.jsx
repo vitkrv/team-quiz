@@ -129,6 +129,8 @@ const stripPendingCategories = (categories) => categories.map((category) => ({
             answer: question.answer
         };
 
+        if (question.isTextAnswerQuestion) nextQuestion.isTextAnswerQuestion = true;
+
         if (isSurpriseQuestion) {
             nextQuestion.isSurpriseQuestion = true;
             nextQuestion.surpriseMinPoints = surpriseMinPoints;
@@ -739,6 +741,9 @@ export default function PackCreator({ pack, setView, user, setError }) {
                     questions: c.questions.map(q => {
                         if (q.id !== qId) return q;
 
+                        if (field === 'isTextAnswerQuestion') {
+                            return { ...q, isTextAnswerQuestion: Boolean(value), ...(value ? { isSurpriseQuestion: false } : {}) };
+                        }
                         if (field === 'isSurpriseQuestion') {
                             const isSurpriseQuestion = Boolean(value);
                             const surpriseMinPoints = getSurpriseMinPoints(q);
@@ -749,6 +754,7 @@ export default function PackCreator({ pack, setView, user, setError }) {
                             return {
                                 ...q,
                                 isSurpriseQuestion,
+                                ...(isSurpriseQuestion ? { isTextAnswerQuestion: false } : {}),
                                 surpriseMinPoints,
                                 surpriseMaxPoints,
                                 surpriseDisplayPoints: isSurpriseQuestion

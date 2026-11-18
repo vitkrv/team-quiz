@@ -3,7 +3,7 @@ import QuestionMedia from './QuestionMedia';
 // Display only: room actions and synchronized gameplay state stay with the caller.
 export default function QuestionPresenter({
     question: activeQ, categoryName: activeCatName, isHost = false,
-    isAnswerRevealed = false, t, questionMediaProps = {}
+    isAnswerRevealed = false, hideQuestionContent = false, t, questionMediaProps = {}
 }) {
     const isSurpriseQuestion = Boolean(activeQ.isSurpriseQuestion);
     const hasQuestionText = Boolean(activeQ.text?.trim());
@@ -27,7 +27,7 @@ export default function QuestionPresenter({
                 </div>
             )}
 
-            {shouldShowQuestionContext && (
+            {shouldShowQuestionContext && (isHost || !hideQuestionContent) && (
                 <div className={`mt-8 flex w-full min-h-0 flex-col items-center md:mt-10 ${isHost ? 'gap-4 md:gap-5' : 'gap-4 md:gap-6'}`}>
                     {isSurpriseQuestion && <p className="theme-custom-only theme-surprise-heading font-black">{t('surpriseQuestion')}</p>}
                     {hasQuestionText && (
