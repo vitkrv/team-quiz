@@ -1,3 +1,4 @@
+import HostHint from '../../components/HostHint';
 import useDeadlineClock from '../../hooks/useDeadlineClock';
 import PlayerScoreDialog from '../../components/PlayerScoreDialog';
 import { HistoryMessage } from '../../components/historyMessage';
@@ -534,6 +535,7 @@ function CategoryPreviewView({ room, roomRef, isHost, t }) {
                     aria-live="polite"
                 >
                     {category?.name || t('categoryFallback')}
+                    {isHost && <HostHint value={category?.hostHint} t={t} variant="category" />}
                 </div>
                 {isHost && (
                     <button

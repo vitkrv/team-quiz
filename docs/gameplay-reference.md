@@ -472,3 +472,25 @@ Pending browser checklist: English/Ukrainian; desktop/mobile; host, contestant, 
 Musical Matcha uses dark green surfaces, soft rose accents, matcha highlights, musical-note ordinary backgrounds, musical surprise emoji, and a cycling pool of 13 creatures on the hidden table. Its Ukrainian Buzz label is “Тиць” and table title is “Приховані створіння”. This is presentation-only; scoring, turn behavior, timers, and room theme locking are unchanged. See the [completed Musical Matcha theme brief](pack-theme-music.md).
 
 The four additional themes provide 14 contestant avatars each, balanced reuse, localized English/Ukrainian headings, palette-matched effects, wheel colors, and hidden-table symbols. Cosmic Voyage uses cyan/lavender space styling; Movie Premiere uses burgundy/champagne cinema styling; Winter Lodge uses frosty blue, festive red, snowy white, and warm gold Christmas/New Year styling; Neon Arcade uses indigo/pink/turquoise arcade styling. See the completed theme briefs: [Cosmic Voyage](pack-theme-cosmic.md), [Movie Premiere](pack-theme-cinema.md), [Winter Lodge](pack-theme-winter.md), [Neon Arcade](pack-theme-arcade.md). Each ordinary-question background uses one emoji type that is excluded from that theme’s contestant avatar pool; surprise backgrounds may mix emoji. Gameplay and room-theme locking are unchanged.
+
+
+## Optional host hints
+
+Categories and questions support an optional **Hint for Host** of up to 200
+characters (using the editor's JavaScript string length). Both Form and Table
+editors provide a text field and character counter. Empty or whitespace-only
+hints show nothing; meaningful line breaks are preserved.
+
+During each round's category introductions, the host sees the category hint
+beneath its name as centered italic text in the title's theme color, with a smaller
+matching hint heading and no background or border. During an active question, the host sees its hint immediately
+before the Answer section, before and after reveal, for Buzz, Surprise, and Text
+Answers. Contestants, spectators, and player-style pack previews never render
+hints. This is UI-only visibility: hints remain in shared pack data, like answers.
+Hints are frozen at game start, so later source edits do not affect an active game.
+Existing packs without hints remain compatible; no migration is required.
+
+Pending browser checks: create/edit/clear hints in Form and Table, switch modes,
+reorder, save/reload, and check the 200-character limit. Verify category transitions
+in multiple rounds and all question modes before/after answer reveal as host,
+contestant, and spectator, in English/Ukrainian at desktop/mobile widths.

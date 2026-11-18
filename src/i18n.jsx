@@ -7,6 +7,10 @@ export const LANGUAGES = [
 
 const translations = {
     en: {
+        hostHint: 'Hint for Host',
+        hostHintOptional: 'Hint for Host (optional)',
+        hostHintCount: '{count} / {max} characters',
+        invalidHostHint: 'Host hints must be text of no more than 200 characters.',
         textAnswerOption: 'Text answers for all players',
         textAnswerBadge: 'Text Answer',
         textAnswerOptionHint: 'Replace Buzz with a 1–40 character answer. The host reveals and judges each player.',
@@ -708,6 +712,10 @@ const translations = {
         historyViewHostRpsVs: 'and'
     },
     uk: {
+        hostHint: 'Підказка для ведучого',
+        hostHintOptional: 'Підказка для ведучого (необов’язково)',
+        hostHintCount: '{count} / {max} символів',
+        invalidHostHint: 'Підказки для ведучого мають бути текстом до 200 символів.',
         textAnswerOption: 'Текстові відповіді для всіх гравців',
         textAnswerBadge: 'Текстова відповідь',
         textAnswerOptionHint: 'Замість кнопки — відповідь із 1–40 символів. Ведучий показує й оцінює кожного гравця.',

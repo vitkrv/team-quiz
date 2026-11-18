@@ -8,8 +8,8 @@ import worker from '../imagekit-auth-worker/worker.js';
 export async function verifyPackRounds({ actions, check, denied, hostDb, playerDb, spectatorDb, seedDb, ref, roomRef, event, t, client }) {
     const actor = { id: 'host', name: 'host' };
     const pack = { ownerId: 'host', name: 'Three rounds', isPublic: false, rounds: [0, 1, 2].map((index) => ({
-        id: `round-${index}`, categories: [{ id: `category-${index}`, name: 'Same category name', questions: [
-            { id: `round-question-${index}`, text: 'Question', answer: 'Answer', points: 100 }
+        id: `round-${index}`, categories: [{ id: `category-${index}`, name: 'Same category name', hostHint: 'Introduce this category\nRead slowly', questions: [
+            { id: `round-question-${index}`, text: 'Question', answer: 'Answer', hostHint: 'Accept either spelling', points: 100 }
         ] }]
     })) };
     const read = async (target) => (await getDocFromServer(target)).data();
@@ -81,7 +81,12 @@ export async function verifyPackRounds({ actions, check, denied, hostDb, playerD
         const start = await read(game.host);
         assert.equal(start.roundCount, 3);
         assert.equal(Object.keys(start.questionStates).length, 3);
-        await updateDoc(ref(hostDb, 'packs', game.packId), { rounds: [pack.rounds[0]] });
+        await updateDoc(ref(hostDb, 'packs', game.packId), {
+            rounds: [{ ...pack.rounds[0], categories: pack.rounds[0].categories.map((category) => ({
+                ...category, hostHint: 'Changed category hint',
+                questions: category.questions.map((question) => ({ ...question, hostHint: 'Changed question hint' }))
+            })) }]
+        });
         assert.deepEqual((await read(ref(hostDb, 'gamePackVersions', start.packVersionId))).content.rounds, pack.rounds);
         await updateDoc(game.host, { status: 'playing' });
         assert.equal(await actions.handlePickQuestion(game.host, 'round-question-1', 'host', event('question_picked')), false);

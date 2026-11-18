@@ -1,3 +1,4 @@
+import HostHint from './HostHint';
 import QuestionMedia from './QuestionMedia';
 
 // Display only: room actions and synchronized gameplay state stay with the caller.
@@ -55,6 +56,8 @@ export default function QuestionPresenter({
                     )}
                 </div>
             )}
+
+            {isHost && <HostHint value={activeQ.hostHint} t={t} />}
 
             {(isHost || isAnswerRevealed) && (
                 <div className={`${isAnswerFocused ? 'flex w-full max-w-5xl flex-col items-center justify-center gap-4 py-4 md:gap-6 md:py-6' : `${shouldShowQuestionContext ? 'mt-4 md:mt-6' : 'mt-8 md:mt-10'} ${isHost ? 'max-w-2xl rounded-xl border border-slate-700 theme-border bg-slate-800 theme-surface p-4 md:p-5' : 'max-w-4xl p-2 md:p-4'} w-full`}`}>

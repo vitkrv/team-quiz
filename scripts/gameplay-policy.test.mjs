@@ -1,3 +1,4 @@
+import { stripPendingCategories } from '../src/utils/packSerialization.js';
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { getTransitionBlockReason as block, projectAnswerScore } from '../src/utils/gameTransitionPolicy.js';
@@ -187,4 +188,42 @@ test('concurrent diagnostics correlate retries and no-ops without claiming write
     const firstEntries = diagnostics.read().filter((entry) => entry.operation === 1);
     assert.deepEqual(firstEntries.map((entry) => entry.phase), ['started', 'transaction_retried', 'skipped', 'completed']);
     assert.ok(firstEntries.every((entry) => entry.action === 'answer_correct'));
+});
+
+
+test('host hints: optional strings, length limits and legacy/round pack validation', () => {
+    for (const target of ['category', 'question']) {
+        for (const rounds of [false, true]) {
+            for (const [value, valid] of [[undefined, true], ['', true], ['   ', true], ['Read slowly\nAccept synonyms', true], ['x'.repeat(200), true], ['😀'.repeat(100), true], ['x'.repeat(201), false], ['😀'.repeat(101), false], [null, false], [7, false], [{}, false]]) {
+                const question = { id: 'q' };
+                const category = { id: 'c', questions: [question] };
+                if (value !== undefined) (target === 'category' ? category : question).hostHint = value;
+                const pack = rounds ? { rounds: [{ id: 'r', categories: [category] }] } : { categories: [category] };
+                assert.equal(validatePackRounds(pack)?.key ?? null, valid ? null : 'invalidHostHint', target + ': ' + String(value));
+            }
+        }
+    }
+});
+
+
+test('question hints survive editor serialization, repeated saves and JSON reload', () => {
+    for (const mode of [{}, { isSurpriseQuestion: true }, { isTextAnswerQuestion: true }]) {
+        for (const hint of ['', '   ', 'Accept synonyms\nRead slowly', 'x'.repeat(200)]) {
+            const categories = [{ id: 'c', hostHint: 'Category note', questions: [{
+                id: 'q', points: 100, text: 'Question', answer: 'Answer', hostHint: hint, ...mode,
+                questionMedia: { url: 'image.png', previewUrl: 'blob:preview', pendingFile: {}, previousMedia: {} }
+            }] }];
+            const saved = stripPendingCategories(categories);
+            const reloaded = JSON.parse(JSON.stringify(stripPendingCategories(saved)));
+            assert.equal(reloaded[0].questions[0].hostHint, hint);
+            assert.equal(reloaded[0].hostHint, 'Category note');
+            assert.deepEqual(reloaded[0].questions[0].questionMedia, { url: 'image.png' });
+            reloaded[0].questions[0].hostHint = '';
+            assert.equal(stripPendingCategories(reloaded)[0].questions[0].hostHint, '');
+        }
+    }
+    const legacy = stripPendingCategories([{ id: 'c', questions: [{ id: 'q', text: '', answer: '', points: 100 }] }]);
+    assert.equal(Object.hasOwn(legacy[0].questions[0], 'hostHint'), false);
+    const invalid = stripPendingCategories([{ id: 'c', questions: [{ id: 'q', hostHint: 'x'.repeat(201) }] }]);
+    assert.equal(validatePackRounds({ categories: invalid }).key, 'invalidHostHint');
 });

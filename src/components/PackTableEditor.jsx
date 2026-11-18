@@ -1,3 +1,4 @@
+import HostHintField from './HostHintField';
 import { ArrowLeft, ArrowRight, Plus, Trash2 } from 'lucide-react';
 import HoldToConfirmButton from './HoldToConfirmButton';
 import QuestionEditDialog from './QuestionEditDialog';
@@ -6,7 +7,7 @@ const controlClass = 'flex min-h-11 min-w-11 items-center justify-center rounded
 
 export default function PackTableEditor({
     categories, t, disabled, selection,
-    onSelect, onClose, onCategoryName, onCategoryMove, onCategoryRemove,
+    onSelect, onClose, onCategoryName, onCategoryHint, onCategoryMove, onCategoryRemove,
     onCategoryAdd, onQuestionAdd, renderQuestion,
     getDisplayPoints, isQuestionReady, setCategoryElement
 }) {
@@ -21,6 +22,7 @@ export default function PackTableEditor({
                     onChange={(event) => onCategoryName(category.id, event.target.value)}
                     className="min-h-11 w-full rounded-lg border border-slate-600 bg-slate-900 p-2 font-bold focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-400/50 disabled:opacity-50" />
             </label>
+            <HostHintField value={category.hostHint} onChange={(value) => onCategoryHint(category.id, value)} disabled={disabled} t={t} />
             <div className="flex flex-wrap gap-2">
                 <button type="button" disabled={disabled || index === 0} onClick={() => onCategoryMove(category.id, -1)}
                     aria-label={t('editorMoveCategoryEarlier')} className={controlClass}><ArrowLeft size={18} /></button>

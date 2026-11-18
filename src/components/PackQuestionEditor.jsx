@@ -1,3 +1,4 @@
+import HostHintField from './HostHintField';
 import { useId, useState } from 'react';
 import { ArrowDown, ArrowUp, HelpCircle, PartyPopper, Trash2, X } from 'lucide-react';
 import PackMediaAttachment from './PackMediaAttachment';
@@ -75,6 +76,9 @@ export default function PackQuestionEditor({
                     placeholder={t('answerPlaceholder')} className={inputClass + ' resize-y text-green-300'} />
             </label>
             {!compact && mediaPanel(MEDIA_SLOTS.ANSWER, t('answerMediaAlt'))}
+            </div>
+            <div className={dialogLayout ? 'min-w-0 md:col-span-2' : 'min-w-0'}>
+                <HostHintField value={q.hostHint} onChange={(value) => onUpdate('hostHint', value)} disabled={disabled} t={t} />
             </div>
             </div>
             {compact && <button type="button" disabled={disabled} aria-expanded={expanded} aria-controls={id + '-details'}

@@ -1,3 +1,5 @@
+import { SURPRISE_DEFAULT_MIN_POINTS, SURPRISE_DEFAULT_MAX_POINTS, POINT_STEP, normalizePoints, getSurpriseMinPoints, getSurpriseMaxPoints, getSurpriseDisplayPoints, cleanMediaForSave, stripPendingCategories } from '../utils/packSerialization';
+import HostHintField from '../components/HostHintField';
 import PackThemePicker from '../components/PackThemePicker';
 import PackThemeScope from '../components/PackThemeScope';
 import { normalizeThemeId, getPackTheme, themeTranslator } from '../utils/packTheme';
@@ -24,26 +26,6 @@ import { generateId } from '../utils/ids';
 import { getFirestoreErrorMessage } from '../utils/errors';
 import { pruneMediaStops, readMediaDuration } from '../utils/mediaStops';
 
-const SURPRISE_DEFAULT_MIN_POINTS = 100;
-const SURPRISE_DEFAULT_MAX_POINTS = 500;
-const POINT_STEP = 100;
-
-const normalizePoints = (value, fallback = POINT_STEP) => {
-    const parsedValue = Number.parseInt(value, 10);
-    if (Number.isNaN(parsedValue)) return fallback;
-
-    return Math.max(POINT_STEP, Math.round(parsedValue / POINT_STEP) * POINT_STEP);
-};
-
-const getSurpriseMinPoints = (question) => normalizePoints(question.surpriseMinPoints, SURPRISE_DEFAULT_MIN_POINTS);
-const getSurpriseMaxPoints = (question) => Math.max(
-    getSurpriseMinPoints(question),
-    normalizePoints(question.surpriseMaxPoints ?? question.points, SURPRISE_DEFAULT_MAX_POINTS)
-);
-const getSurpriseDisplayPoints = (question) => normalizePoints(
-    question.surpriseDisplayPoints,
-    getSurpriseMaxPoints(question)
-);
 const getQuestionPointsForSummary = (question) => (
     question.isSurpriseQuestion ? getSurpriseMaxPoints(question) : (Number(question.points) || 0)
 );
@@ -94,15 +76,6 @@ const preventTextSelection = (event) => {
     event.preventDefault();
 };
 
-const cleanMediaForSave = (media) => {
-    if (!media) return null;
-    const savedMedia = { ...media };
-    delete savedMedia.previewUrl;
-    delete savedMedia.pendingFile;
-    delete savedMedia.previousMedia;
-    return savedMedia;
-};
-
 const cleanPrizeForSave = (prize) => {
     const hiddenMedia = cleanMediaForSave(prize?.hiddenMedia);
     const revealedMedia = cleanMediaForSave(prize?.revealedMedia);
@@ -113,49 +86,6 @@ const cleanPrizeForSave = (prize) => {
         ...(revealedMedia ? { revealedMedia } : {})
     };
 };
-
-const normalizeQuestionText = (text = '') => text.replace(/\r\n?/g, '\n');
-
-const stripPendingCategories = (categories) => categories.map((category) => ({
-    ...category,
-    questions: category.questions.map((question) => {
-        const isSurpriseQuestion = Boolean(question.isSurpriseQuestion);
-        const surpriseMinPoints = getSurpriseMinPoints(question);
-        const surpriseMaxPoints = getSurpriseMaxPoints(question);
-        const nextQuestion = {
-            id: question.id,
-            points: isSurpriseQuestion ? surpriseMaxPoints : normalizePoints(question.points),
-            text: normalizeQuestionText(question.text),
-            answer: question.answer
-        };
-
-        if (question.isTextAnswerQuestion) nextQuestion.isTextAnswerQuestion = true;
-
-        if (isSurpriseQuestion) {
-            nextQuestion.isSurpriseQuestion = true;
-            nextQuestion.surpriseMinPoints = surpriseMinPoints;
-            nextQuestion.surpriseMaxPoints = surpriseMaxPoints;
-            nextQuestion.surpriseDisplayPoints = getSurpriseDisplayPoints(question);
-        }
-
-        const questionMedia = cleanMediaForSave(question.questionMedia);
-        const answerMedia = cleanMediaForSave(question.answerMedia);
-
-        if (questionMedia) {
-            nextQuestion.questionMedia = questionMedia;
-        } else {
-            delete nextQuestion.questionMedia;
-        }
-
-        if (answerMedia) {
-            nextQuestion.answerMedia = answerMedia;
-        } else {
-            delete nextQuestion.answerMedia;
-        }
-
-        return nextQuestion;
-    })
-}));
 
 const hasEffectiveMedia = (question, field) => Boolean(question[field]);
 
@@ -636,6 +566,11 @@ export default function PackCreator({ pack, setView, user, setError }) {
             console.error("Media delete error:", err);
             setError(err.messageKey ? t(err.messageKey) : err.message);
         }
+    };
+
+    const updateCategoryHint = (catId, hostHint) => {
+        if (editorLocked) return;
+        setCategories((current) => current.map((category) => category.id === catId ? { ...category, hostHint } : category));
     };
 
     const updateCategoryName = (catId, name) => {
@@ -1498,7 +1433,7 @@ export default function PackCreator({ pack, setView, user, setError }) {
                 <div id="round-editor" role="tabpanel" aria-labelledby={activeRoundId + '-tab'} className="space-y-6">
                 {activeEditorMode === 'table' ? <PackTableEditor categories={visibleCategories} t={t} disabled={editorLocked}
                     selection={selection?.roundId === activeRoundId ? selection : null}
-                    onSelect={selectQuestion} onClose={closeQuestion} onCategoryName={updateCategoryName}
+                    onSelect={selectQuestion} onClose={closeQuestion} onCategoryName={updateCategoryName} onCategoryHint={updateCategoryHint}
                     onCategoryMove={moveCategory} onCategoryRemove={removeCategory}
                     onCategoryAdd={addCategory} onQuestionAdd={addQuestion} renderQuestion={renderQuestion}
                     getDisplayPoints={(question) => question.isSurpriseQuestion ? getSurpriseDisplayPoints(question) : question.points}
@@ -1561,6 +1496,9 @@ export default function PackCreator({ pack, setView, user, setError }) {
                                     onChange={(e) => updateCategoryName(cat.id, e.target.value)}
                                     className="w-full bg-slate-900 theme-room-background border border-slate-600 rounded-lg p-2 text-white theme-text font-bold outline-none"
                                 />
+                                <div className="mt-3">
+                                    <HostHintField value={cat.hostHint} onChange={(value) => updateCategoryHint(cat.id, value)} disabled={editorLocked} t={t} />
+                                </div>
                             </div>
                             {visibleCategories.length > 1 && !editorLocked && <HoldToConfirmButton
                                 ariaLabel={t('removeCategory')}

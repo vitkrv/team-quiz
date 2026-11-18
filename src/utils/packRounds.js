@@ -1,4 +1,7 @@
 export const MAX_PACK_ROUNDS = 3;
+export const MAX_HOST_HINT_LENGTH = 200;
+const validHostHint = (item) => !Object.hasOwn(item, 'hostHint')
+    || (typeof item.hostHint === 'string' && item.hostHint.length <= MAX_HOST_HINT_LENGTH);
 export const getRoundPointStep = (roundIndex = 0) => 100 * (2 ** Math.max(0, roundIndex));
 
 // Legacy documents are interpreted without rewriting saved packs or active games.
@@ -33,12 +36,14 @@ export function validatePackRounds(pack) {
                 return { roundIndex, key: 'invalidPackRounds' };
             }
             categoryIds.add(category.id);
+            if (!validHostHint(category)) return { roundIndex, key: 'invalidHostHint' };
             for (const question of category.questions) {
                 if (question?.isTextAnswerQuestion && question?.isSurpriseQuestion) return { roundIndex, key: 'invalidQuestionMode' };
                 if (!question || typeof question.id !== 'string' || !question.id || questionIds.has(question.id)) {
                     return { roundIndex, key: 'invalidPackRounds' };
                 }
                 questionIds.add(question.id);
+                if (!validHostHint(question)) return { roundIndex, key: 'invalidHostHint' };
             }
         }
     }
