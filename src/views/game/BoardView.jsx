@@ -1,6 +1,6 @@
 import { getRoundCategories } from '../../utils/packRounds';
-import { useCallback, useEffect, useState } from 'react';
-import { Shuffle, X } from 'lucide-react';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { Loader2, Shuffle, X } from 'lucide-react';
 import {
     SURPRISE_PLAYER_DRAW_MS,
     SURPRISE_PLAYER_DRAW_RESULT_HOLD_MS,
@@ -44,7 +44,7 @@ const findQuestionContext = (categories, questionId) => {
     return { category: null, question: null };
 };
 
-function SurprisePlayerModal({ players, question, onPick, onClose, t }) {
+function SurprisePlayerModal({ players, question, onPick, onClose, isPending, error, t }) {
     const playerEntries = getSurprisePlayerEntries(players);
 
     return (
@@ -52,28 +52,30 @@ function SurprisePlayerModal({ players, question, onPick, onClose, t }) {
             <div className="w-full max-w-md rounded-xl border border-yellow-500/50 bg-slate-900 theme-room-background shadow-2xl">
                 <div className="flex items-center justify-between border-b border-slate-800 theme-border p-5">
                     <h2 className="text-xl font-bold text-white theme-text">{t('selectSurprisePlayer')}</h2>
-                    <button onClick={onClose} className="text-slate-500 hover:text-white">
+                    <button onClick={onClose} disabled={isPending} className="text-slate-500 hover:text-white disabled:opacity-50">
                         <X size={22} />
                     </button>
                 </div>
                 <div className="space-y-3 p-5">
+                    {error && <p role="alert" className="text-sm text-red-400">{error}</p>}
                     <div className="rounded-lg border border-yellow-500/30 bg-yellow-950/20 p-3 text-sm font-bold text-yellow-200">
                         {t('surpriseMaxPoints', { points: question.points })}
                     </div>
                     <button
                         type="button"
                         onClick={() => onPick(null)}
-                        disabled={playerEntries.length === 0}
+                        disabled={isPending || playerEntries.length === 0}
                         className="flex w-full items-center justify-center gap-2 rounded-lg border border-yellow-500/50 bg-yellow-500 theme-primary px-4 py-3 font-black text-slate-950 transition-colors hover:bg-yellow-300 disabled:cursor-not-allowed disabled:border-slate-700 disabled:bg-slate-800 disabled:text-slate-500"
                     >
-                        <Shuffle size={18} />
+                        {isPending ? <Loader2 size={18} className="animate-spin" /> : <Shuffle size={18} />}
                         {t('surpriseRandomPlayer')}
                     </button>
                     {playerEntries.map(([playerId, player]) => (
                         <button
                             key={playerId}
                             onClick={() => onPick(playerId)}
-                            className="flex w-full items-center gap-3 rounded-lg border border-slate-800 theme-border bg-slate-950 theme-surface p-4 text-left font-bold text-slate-100 hover:border-yellow-500/60 hover:bg-slate-800"
+                            disabled={isPending}
+                            className="flex w-full items-center gap-3 rounded-lg border border-slate-800 theme-border bg-slate-950 theme-surface p-4 text-left font-bold text-slate-100 hover:border-yellow-500/60 hover:bg-slate-800 disabled:cursor-wait disabled:opacity-50"
                         >
                             <span className="text-2xl">{player.avatar}</span>
                             <span className="truncate">{player.name}</span>
@@ -88,6 +90,10 @@ function SurprisePlayerModal({ players, question, onPick, onClose, t }) {
 export default function BoardView({ room, roomRef, user, isHost, isSpectator = false, serverNow = Date.now }) {
     const { t } = useLanguage();
     const [pendingSurpriseQuestion, setPendingSurpriseQuestion] = useState(null);
+    const [pendingQuestionId, setPendingQuestionId] = useState(null);
+    const [selectionError, setSelectionError] = useState(null);
+    const selectionPendingRef = useRef(false);
+    const isSelectionPending = pendingQuestionId !== null;
     const [isTieBreakerSetupOpen, setIsTieBreakerSetupOpen] = useState(false);
     const isMyTurn = room.currentTurn === user.uid;
     const categories = getRoundCategories(room.pack, room.currentRoundIndex || 0);
@@ -167,17 +173,31 @@ export default function BoardView({ room, roomRef, user, isHost, isSpectator = f
             points: q.points
         }
     }), [t, user.uid]);
-    const pickQuestion = async (cat, q) => {
+    const runQuestionSelection = async (q, select) => {
+        if (selectionPendingRef.current || surprisePlayerDraw) return;
+        selectionPendingRef.current = true;
+        setPendingQuestionId(q.id);
+        setSelectionError(null);
+        try {
+            const selected = await select();
+            if (selected) setPendingSurpriseQuestion(null);
+            else setSelectionError(t('questionSelectionFailed'));
+        } catch {
+            setSelectionError(t('questionSelectionFailed'));
+        } finally {
+            selectionPendingRef.current = false;
+            setPendingQuestionId(null);
+        }
+    };
+
+    const pickQuestion = (cat, q) => runQuestionSelection(q, () => {
         const pickerName = room.players[user.uid]?.name || actorName;
+        return handlePickQuestion(roomRef, q.id, user.uid, createQuestionPickedHistory(cat, q, pickerName), {}, serverNow);
+    });
 
-        await handlePickQuestion(roomRef, q.id, user.uid, createQuestionPickedHistory(cat, q, pickerName), {}, serverNow);
-        setPendingSurpriseQuestion(null);
-    };
-
-    const beginSurpriseDraw = async (q, requestedPlayerId = null) => {
-        await beginSurprisePlayerDraw(roomRef, q.id, user.uid, requestedPlayerId, serverNow);
-        setPendingSurpriseQuestion(null);
-    };
+    const beginSurpriseDraw = (q, requestedPlayerId = null) => runQuestionSelection(q, () => (
+        beginSurprisePlayerDraw(roomRef, q.id, user.uid, requestedPlayerId, serverNow)
+    ));
 
     const pulseQuestion = async (q) => {
         if (!isMyTurn) return;
@@ -242,8 +262,10 @@ export default function BoardView({ room, roomRef, user, isHost, isSpectator = f
                 <SurprisePlayerModal
                     players={room.players}
                     question={pendingSurpriseQuestion.q}
+                    isPending={isSelectionPending}
+                    error={selectionError}
                     t={t}
-                    onClose={() => setPendingSurpriseQuestion(null)}
+                    onClose={() => { if (!selectionPendingRef.current) setPendingSurpriseQuestion(null); }}
                     onPick={(playerId) => beginSurpriseDraw(pendingSurpriseQuestion.q, playerId)}
                 />
             )}
@@ -254,6 +276,7 @@ export default function BoardView({ room, roomRef, user, isHost, isSpectator = f
                     </h2>
                     {isHost && (
                         <HoldToConfirmButton
+                            disabled={isSelectionPending || Boolean(surprisePlayerDraw)}
                             onConfirm={handleHostEndGame}
                             title={t('holdToConfirmAction', { action: t('endGameEarly') })}
                             className="w-full rounded border border-red-500/30 bg-red-600/20 px-4 py-2 text-sm font-bold text-red-400 transition-colors hover:text-white sm:w-auto"
@@ -264,6 +287,8 @@ export default function BoardView({ room, roomRef, user, isHost, isSpectator = f
                 </div>
             )}
 
+            {selectionError && !pendingSurpriseQuestion && <p role="alert" className="mb-3 text-sm text-red-400">{selectionError}</p>}
+            {isSelectionPending && <p role="status" className="sr-only">{t('questionSelectionPending')}</p>}
             {allDone ? (
                 <div className="flex flex-1 flex-col items-center justify-center text-center">
                     <h2 className="mb-6 text-2xl font-bold text-white theme-text md:text-4xl">
@@ -299,7 +324,7 @@ export default function BoardView({ room, roomRef, user, isHost, isSpectator = f
                                     {(cat.questions || []).map((q) => {
                                         const state = room.questionStates[q.id];
                                         const isAvailable = state === 'available';
-                                        const canClickAvailableQuestion = isAvailable && !isSpectator && !surprisePlayerDraw;
+                                        const canClickAvailableQuestion = isAvailable && !isSpectator && !surprisePlayerDraw && !isSelectionPending;
                                         const shouldShowAvailableQuestion = isAvailable && (canClickAvailableQuestion || isSpectator);
                                         const pulseId = room.questionPulse?.questionId === q.id ? room.questionPulse.id : 'idle';
                                         const isPulsed = pulseId !== 'idle';
@@ -308,8 +333,9 @@ export default function BoardView({ room, roomRef, user, isHost, isSpectator = f
                                             <button
                                                 key={`${q.id}:${pulseId}`}
                                                 disabled={!isAvailable || (!isSpectator && !canClickAvailableQuestion)}
+                                                aria-busy={pendingQuestionId === q.id}
                                                 onClick={() => {
-                                                    if (!isAvailable || isSpectator) return;
+                                                    if (!canClickAvailableQuestion || selectionPendingRef.current) return;
 
                                                     if (!isHost) {
                                                         pulseQuestion(q);
@@ -317,6 +343,7 @@ export default function BoardView({ room, roomRef, user, isHost, isSpectator = f
                                                     }
 
                                                     if (q.isSurpriseQuestion && isHost) {
+                                                        setSelectionError(null);
                                                         setPendingSurpriseQuestion({ cat, q });
                                                         return;
                                                     }
@@ -333,6 +360,7 @@ export default function BoardView({ room, roomRef, user, isHost, isSpectator = f
                                                     }
                                                 `}
                                             >
+                                                {pendingQuestionId === q.id && <Loader2 aria-hidden="true" className="mr-2 h-5 w-5 animate-spin md:h-7 md:w-7" />}
                                                 {isAvailable && getBoardPoints(q)}
                                             </button>
                                         );

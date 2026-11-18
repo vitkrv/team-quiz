@@ -52,6 +52,11 @@ The board displays categories and question values. Used questions remain consume
 
 The contestant identified by `currentTurn` can click an available tile to pulse it as a suggestion. This does not open the question. Only the host opens questions, and the host is not technically restricted to the suggested tile.
 
+While the host's question selection is saving, the selected tile shows a loading
+indicator and all question tiles and the board's early-finish control are disabled.
+Surprise contestant selection also blocks repeat submissions while saving. A failed
+selection shows an inline error and restores the controls so the host can retry.
+
 Selection turns follow these rules:
 
 | Event | Next selection turn |
