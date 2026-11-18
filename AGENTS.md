@@ -103,7 +103,7 @@ After making changes, report lint/build and testing-script results, and provide 
 
 In every summary of work that changes files under `imagekit-auth-worker/`, explicitly highlight those changes, including `imagekit-auth-worker/worker.js` when it is changed. This is a reporting reminder; it adds no verification or deployment restrictions.
 
-There is currently no automated test script in `package.json`. Clock scheduling has deterministic non-browser checks: `node scripts/verify-server-clock.mjs` (no Emulator required). For changes to game storage/actions/rules, run the isolated Emulator checks in `scripts/verify-game-storage.mjs` when prerequisites are available; otherwise report the blocker and provide the user with the commands. Setup and commands are in `docs/game-storage-validation.md`. This entry point includes storage, recap, buzzer, and wheel checks; do not run those modules separately.
+Run `npm run test:gameplay` for deterministic gameplay policy and diagnostics tests (Node's built-in test runner; no Emulator or browser). See `docs/gameplay-development.md` for policy boundaries and opt-in local traces. Clock scheduling has deterministic non-browser checks: `node scripts/verify-server-clock.mjs` (no Emulator required). For changes to game storage/actions/rules, run the isolated Emulator checks with `npm run test:storage` (the existing `scripts/verify-game-storage.mjs` entry point) when prerequisites are available; otherwise report the blocker and provide the user with the commands. Setup and commands are in `docs/game-storage-validation.md`. This entry point includes storage, recap, buzzer, and wheel checks; do not run those modules separately.
 
 Client performance/recovery checks run with `node scripts/verify-client-performance.mjs` without a browser or Emulator. They cover deadline hooks, grouped subscription recovery/data identity, preload queue limits, incremental cache behavior, upload settlement, and Worker error responses. See `docs/performance-validation.md` for the pending browser handoff and index/Worker release requirements.
 
@@ -249,6 +249,6 @@ New rooms also use immutable `buzzerPolicyVersion: 1`. Keep race lifecycle write
 
 ## Known Gaps
 
-- No general unit/e2e test suite is configured. A focused Firestore Emulator integration harness covers game history and frozen-pack storage.
+- Node's built-in test runner covers gameplay transition policy and diagnostics (`npm run test:gameplay`); no browser E2E suite is configured. A focused Firestore Emulator integration harness covers gameplay, game history and frozen-pack storage (`npm run test:storage`).
 - Firebase, ImageKit, and Google sign-in flows require configured external services for full manual verification.
 - Abandoned-game snapshot cleanup, external media retention, and automatic host migration are not implemented.

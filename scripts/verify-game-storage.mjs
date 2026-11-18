@@ -88,6 +88,20 @@ try {
         return id;
     };
     const id = await newRoom();
+    await check('transaction diagnostics preserve callback results and errors without writing', async () => {
+        const target = roomRef(hostDb, id);
+        const before = (await getDocFromServer(target)).data();
+        const phases = [];
+        const result = await actions.runRoomTransaction(target, (_transaction, current) => {
+            assert.deepEqual(current, before);
+            return 'observed';
+        }, (phase) => phases.push(phase));
+        assert.equal(result, 'observed');
+        assert.deepEqual(phases, ['transaction_started']);
+        const failure = new Error('test callback failure');
+        await assert.rejects(actions.runRoomTransaction(target, () => { throw failure; }), (error) => error === failure);
+        assert.deepEqual((await getDocFromServer(target)).data(), before);
+    });
     const hostRoom = roomRef(hostDb, id);
     await check('room recovery: read-only transaction returns confirmed room state without changing it', async () => {
         const before = await getDocFromServer(hostRoom);

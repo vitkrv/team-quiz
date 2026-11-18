@@ -61,6 +61,12 @@ Use Node.js 20 or newer (required by Firebase 12). The frontend uses the modular
 
 ## Scripts
 
+- `npm run test:gameplay` runs deterministic gameplay policy and local diagnostics tests with Node's built-in runner.
+- `npm run test:storage` runs the existing integration harness against a dedicated local Firestore Emulator; set `FIRESTORE_EMULATOR_HOST` first.
+
+See [changing and diagnosing gameplay](docs/gameplay-development.md) for policy
+boundaries, regression coverage and opt-in local transaction traces.
+
 - `npm run dev` starts the Vite dev server.
 - `npm run build` creates a production-mode Vite build in `dist` for Firebase Hosting.
 - `npm run preview` previews the production build.
@@ -72,7 +78,7 @@ handoff are documented in [performance validation](docs/performance-validation.m
 
 ## Verification and deployment
 
-For code changes, run `npm run lint` and `npm run build`, then manually check the affected host, player, and spectator flows. There is no general unit/e2e test script. Storage, game-action, and Firestore-rule changes also have a focused [Firestore Emulator validation harness](docs/game-storage-validation.md), using a dedicated local emulator and the `demo-game-storage` project.
+For code changes, run `npm run lint` and `npm run build`, plus `npm run test:gameplay` for gameplay policy/diagnostics changes. Manually check the affected host, player, and spectator flows when browser testing is authorized. No browser E2E suite is configured. Storage, game-action, and Firestore-rule changes also have a focused [Firestore Emulator validation harness](docs/game-storage-validation.md), using a dedicated local emulator and the `demo-game-storage` project.
 
 For documentation-only edits, verify source accuracy, relative links, and `git diff --check`.
 

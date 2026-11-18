@@ -8,6 +8,8 @@
     "build": "vite build --mode production",
     "lint": "eslint . --ext js,jsx --report-unused-disable-directives --max-warnings 0",
     "preview": "vite preview",
+    "test:gameplay": "node --test scripts/gameplay-policy.test.mjs",
+    "test:storage": "node scripts/verify-game-storage.mjs",
     "version:patch": "npm version patch",
     "version:minor": "npm version minor",
     "version:major": "npm version major"
