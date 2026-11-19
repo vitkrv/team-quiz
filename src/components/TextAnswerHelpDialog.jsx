@@ -21,7 +21,7 @@ export default function TextAnswerHelpDialog({ t, onClose }) {
             <button ref={closeRef} type="button" onClick={onClose} aria-label={t('surpriseHelpClose')} className="rounded-lg p-2 focus-visible:ring-2 focus-visible:ring-blue-400"><X size={20} /></button>
         </header>
         <div className="space-y-4 p-5 text-sm leading-relaxed">
-            {['textAnswerHelpInput', 'textAnswerHelpClose', 'textAnswerHelpReview', 'textAnswerHelpScoring', 'textAnswerHelpSurprise'].map((key) => <p key={key}>{t(key)}</p>)}
+            {['textAnswerHelpInput', 'textAnswerHelpClose', 'textAnswerHelpReview', 'textAnswerOrderHint', 'textAnswerHelpScoring', 'textAnswerHelpSurprise'].map((key) => <p key={key}>{t(key)}</p>)}
         </div>
     </dialog>;
 }

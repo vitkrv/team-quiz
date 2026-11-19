@@ -593,3 +593,29 @@ Pending browser checklist: English/Ukrainian; desktop/mobile; host, contestant, 
 Musical Matcha uses dark green surfaces, soft rose accents, matcha highlights, musical-note ordinary backgrounds, musical surprise emoji, and a cycling pool of 13 creatures on the hidden table. Its Ukrainian Buzz label is “Тиць” and table title is “Приховані створіння”. This is presentation-only; scoring, turn behavior, timers, and room theme locking are unchanged. See the [completed Musical Matcha theme brief](pack-theme-music.md).
 
 Theme validation covers Halloween, Musical Matcha, Cosmic Voyage, Movie Premiere, Winter Lodge, and Neon Arcade: balanced/rejoining avatars, concurrent joins, pack persistence, immutable room themes, source edits, retained results after finish, and legacy fallback.
+
+## Text-answer presentation order
+
+The storage harness checks host-only ordering before reveal, immutable presented
+rows, roster integrity, stale actions, concurrent reorder/judgment, and persisted
+order in standard/competitive and legacy/new-format rooms. Deploy validated rules
+before the frontend when authorized; reload host clients. No migration, index,
+or Worker release is required.
+
+Pending browser checklist: English/Ukrainian, desktop/mobile, host/contestant/
+spectator; move the first and last pending rows, reveal then reorder the remainder,
+judge through completion, refresh, and verify keyboard focus follows the moved
+player. Check boundary controls, saving/error feedback, and unchanged current
+answer and points while reordering. Browser verification requires an explicit request.
+
+Agent verification (2026-11-19, answer ordering): lint, production build, all 25
+gameplay tests, and Git whitespace checks passed (exit 0). Vite retains its
+large-chunk warning. Two full storage runs against the dedicated demo-game-storage
+Emulator on 127.0.0.1:8098 passed all four new ordering scenario groups, then
+failed (exit 1) in the existing 20-player simultaneous-submission test with
+FAILED_PRECONDITION: stored version does not match required base version
+(first text-player-02, then text-player-06). The full suite remains unverified;
+permission-denied logs in negative cases were expected. Browser checks remain
+pending. This Windows JVM required a process-local JAVA_TOOL_OPTIONS override
+`-Djdk.net.unixdomain.tmpdir=C:/_Git/team-quiz/.firebase/no-unix-sockets`
+(an absent path) to fall back to TCP loopback during Emulator startup.

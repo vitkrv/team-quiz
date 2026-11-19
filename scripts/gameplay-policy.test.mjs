@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { getTransitionBlockReason as block, projectAnswerScore } from '../src/utils/gameTransitionPolicy.js';
 import { createGameplayDiagnostics } from '../src/utils/gameplayDiagnostics.js';
-import { createTextAnswerRound, normalizeTextAnswer, projectTextAnswerScore, textAnswerBlockReason, validTextPoints } from '../src/utils/textAnswerPolicy.js';
+import { moveTextAnswer, createTextAnswerRound, normalizeTextAnswer, projectTextAnswerScore, textAnswerBlockReason, validTextPoints } from '../src/utils/textAnswerPolicy.js';
 import { getRoundPointStep, validatePackRounds } from '../src/utils/packRounds.js';
 
 test('text answers: trim, Unicode limits, multiline rejection and point validation', () => {
@@ -226,4 +226,22 @@ test('question hints survive editor serialization, repeated saves and JSON reloa
     assert.equal(Object.hasOwn(legacy[0].questions[0], 'hostHint'), false);
     const invalid = stripPendingCategories([{ id: 'c', questions: [{ id: 'q', hostHint: 'x'.repeat(201) }] }]);
     assert.equal(validatePackRounds({ categories: invalid }).key, 'invalidHostHint');
+});
+
+test('text answers: reorder only unpresented answers against the expected queue', () => {
+    const round = { phase: 'reviewing', playerIds: ['a', 'b', 'c', 'd'], reviewIndex: 0, answerVisible: false };
+    const move = (id, direction, expected = round.playerIds) => moveTextAnswer(round, id, direction, expected);
+    assert.deepEqual(move('b', -1), ['b', 'a', 'c', 'd']);
+    for (const [id, direction] of [['a', -1], ['d', 1], ['missing', 1], ['b', 0]]) assert.equal(move(id, direction), null);
+    assert.equal(move('b', -1, ['b', 'a', 'c', 'd']), null);
+    round.answerVisible = true;
+    assert.equal(move('b', -1), null);
+    assert.equal(move('a', 1), null);
+    assert.deepEqual(move('c', -1), ['a', 'c', 'b', 'd']);
+    round.reviewIndex = 2;
+    assert.equal(move('d', -1), null);
+    round.phase = 'complete';
+    assert.equal(move('d', -1), null);
+    round.phase = 'answering';
+    assert.equal(move('d', -1), null);
 });

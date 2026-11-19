@@ -149,14 +149,46 @@ service cloud.firestore {
     function validTextAnswerHost(appId, gameId, before, after) {
       let previous = before.textAnswerRound;
       let next = after.textAnswerRound;
-      return next.answers == previous.answers
+      return validTextAnswerReorder(before, after) || (next.answers == previous.answers
         && next.diff(previous).affectedKeys().hasOnly(['phase', 'reviewIndex', 'answerVisible', 'scoreDeltas'])
         && (after.diff(before).affectedKeys().hasOnly(['textAnswerRound'])
           && next.get('scoreDeltas', {}) == previous.get('scoreDeltas', {})
           && ((previous.phase == 'answering' && next.phase == 'reviewing' && next.reviewIndex == 0 && !next.answerVisible)
             || (previous.phase == 'reviewing' && !previous.answerVisible && next.answerVisible
               && next.phase == 'reviewing' && next.reviewIndex == previous.reviewIndex))
-          || (previous.phase == 'reviewing' && previous.answerVisible && validTextAnswerJudgment(appId, gameId, before, after)));
+          || (previous.phase == 'reviewing' && previous.answerVisible && validTextAnswerJudgment(appId, gameId, before, after))));
+    }
+
+    // Rules have no loops: guard every possible locked position in the 20-player roster.
+    function validTextAnswerReorder(before, after) {
+      let previous = before.textAnswerRound;
+      let next = after.textAnswerRound;
+      let locked = previous.reviewIndex + (previous.answerVisible ? 1 : 0);
+      return previous.phase == 'reviewing'
+        && after.diff(before).affectedKeys().hasOnly(['textAnswerRound'])
+        && next.diff(previous).affectedKeys().hasOnly(['playerIds'])
+        && next.playerIds is list && next.playerIds.size() == previous.playerIds.size()
+        && next.playerIds.toSet() == previous.playerIds.toSet()
+        && (locked <= 0 || next.playerIds[0] == previous.playerIds[0])
+        && (locked <= 1 || next.playerIds[1] == previous.playerIds[1])
+        && (locked <= 2 || next.playerIds[2] == previous.playerIds[2])
+        && (locked <= 3 || next.playerIds[3] == previous.playerIds[3])
+        && (locked <= 4 || next.playerIds[4] == previous.playerIds[4])
+        && (locked <= 5 || next.playerIds[5] == previous.playerIds[5])
+        && (locked <= 6 || next.playerIds[6] == previous.playerIds[6])
+        && (locked <= 7 || next.playerIds[7] == previous.playerIds[7])
+        && (locked <= 8 || next.playerIds[8] == previous.playerIds[8])
+        && (locked <= 9 || next.playerIds[9] == previous.playerIds[9])
+        && (locked <= 10 || next.playerIds[10] == previous.playerIds[10])
+        && (locked <= 11 || next.playerIds[11] == previous.playerIds[11])
+        && (locked <= 12 || next.playerIds[12] == previous.playerIds[12])
+        && (locked <= 13 || next.playerIds[13] == previous.playerIds[13])
+        && (locked <= 14 || next.playerIds[14] == previous.playerIds[14])
+        && (locked <= 15 || next.playerIds[15] == previous.playerIds[15])
+        && (locked <= 16 || next.playerIds[16] == previous.playerIds[16])
+        && (locked <= 17 || next.playerIds[17] == previous.playerIds[17])
+        && (locked <= 18 || next.playerIds[18] == previous.playerIds[18])
+        && (locked <= 19 || next.playerIds[19] == previous.playerIds[19]);
     }
 
     function validTextAnswerJudgment(appId, gameId, before, after) {

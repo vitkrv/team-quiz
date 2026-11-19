@@ -1,6 +1,6 @@
 import { createHistoryItem } from './gameActions';
 import { runRoomTransaction, updateRoomInTransaction } from './gameStorage';
-import { normalizeTextAnswer, projectTextAnswerScore, textAnswerBlockReason } from '../utils/textAnswerPolicy';
+import { moveTextAnswer, normalizeTextAnswer, projectTextAnswerScore, textAnswerBlockReason } from '../utils/textAnswerPolicy';
 import { FieldPath } from 'firebase/firestore';
 
 export async function submitTextAnswer(roomRef, sessionId, actorId, value) {
@@ -22,19 +22,31 @@ export async function closeTextAnswering(roomRef, sessionId, actorId) {
     });
 }
 
-export async function revealTextAnswer(roomRef, sessionId, actorId, reviewIndex) {
+export async function reorderTextAnswer(roomRef, sessionId, actorId, reviewIndex, playerId, direction, expectedOrder) {
+    return runRoomTransaction(roomRef, async (transaction, room) => {
+        if (textAnswerBlockReason(room, sessionId, actorId, 'reorder', reviewIndex)) return 'stale';
+        const order = moveTextAnswer(room.textAnswerRound, playerId, direction, expectedOrder);
+        if (!order) return 'stale';
+        transaction.update(roomRef, { 'textAnswerRound.playerIds': order });
+        return 'reordered';
+    });
+}
+
+export async function revealTextAnswer(roomRef, sessionId, actorId, reviewIndex, expectedPlayerId) {
     return runRoomTransaction(roomRef, async (transaction, room) => {
         if (textAnswerBlockReason(room, sessionId, actorId, 'reveal', reviewIndex)) return 'stale';
+        if (expectedPlayerId !== undefined && room.textAnswerRound.playerIds[reviewIndex] !== expectedPlayerId) return 'stale';
         transaction.update(roomRef, { textAnswerRound: { ...room.textAnswerRound, answerVisible: true } });
         return 'revealed';
     });
 }
 
-export async function judgeTextAnswer(roomRef, sessionId, actor, reviewIndex, decision, amount, t) {
+export async function judgeTextAnswer(roomRef, sessionId, actor, reviewIndex, decision, amount, t, expectedPlayerId) {
     return runRoomTransaction(roomRef, async (transaction, room) => {
         if (textAnswerBlockReason(room, sessionId, actor.id, 'judge', reviewIndex)) return 'stale';
         const round = room.textAnswerRound;
         const playerId = round.playerIds[reviewIndex];
+        if (expectedPlayerId !== undefined && playerId !== expectedPlayerId) return 'stale';
         const score = projectTextAnswerScore(room, playerId, decision, decision === 'skip' ? 0 : amount);
         if (!score) throw new Error('Invalid points');
         const type = { accept: 'text_answer_accepted', deny: 'text_answer_denied', skip: 'text_answer_skipped' }[decision];

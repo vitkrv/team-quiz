@@ -24,8 +24,22 @@ export function textAnswerBlockReason(room, sessionId, actorId, action, reviewIn
     if (actorId !== room.hostId) return 'host_required';
     if (action === 'close') return round.phase === 'answering' ? null : 'stale';
     if (round.phase !== 'reviewing' || round.reviewIndex !== reviewIndex) return 'stale';
+    if (action === 'reorder') return null;
     if (action === 'reveal') return round.answerVisible ? 'stale' : null;
     return round.answerVisible ? null : 'answer_hidden';
+}
+
+export function moveTextAnswer(round, playerId, direction, expectedOrder) {
+    if (round.phase !== 'reviewing' || ![-1, 1].includes(direction)
+        || !Array.isArray(expectedOrder) || expectedOrder.length !== round.playerIds.length
+        || expectedOrder.some((uid, index) => uid !== round.playerIds[index])) return null;
+    const index = round.playerIds.indexOf(playerId);
+    const target = index + direction;
+    const firstMovable = round.reviewIndex + (round.answerVisible ? 1 : 0);
+    if (index < firstMovable || target < firstMovable || target >= round.playerIds.length) return null;
+    const order = [...round.playerIds];
+    [order[index], order[target]] = [order[target], order[index]];
+    return order;
 }
 
 export function projectTextAnswerScore(room, playerId, decision, amount) {

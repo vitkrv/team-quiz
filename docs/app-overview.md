@@ -16,6 +16,14 @@ The app supplies the shared board, buzzer, optional all-player text answers, sco
 
 ### Text answers for all players
 
+During frozen answer review, the host can use up/down arrows in the overview to
+reorder unpresented answers. Before the first reveal all rows can move; afterward
+the visible answer and judged rows stay fixed. Position numbers and Presenting/Up
+next labels show the queue. Arrange the next answer before judging the current
+one, because judgment immediately reveals the next answer. Each move is saved
+for this question and survives refresh; new questions use the default order.
+
+
 Authors can enable this option on an individual question in either editor mode.
 It replaces Buzz and is mutually exclusive with Surprise. Contestants send
 1–40 Unicode code points, with surrounding whitespace trimmed and no line breaks;

@@ -205,7 +205,9 @@ Enable **Text answers for all players** on a single question in either pack edit
 mode. Buzz remains the default; Text Answers and Surprise cannot be combined.
 Contestants explicitly send or replace a 1–40 character answer. The host closes
 answering with a two-second hold, then clicks **Reveal answers** once for the first
-answer. Each judgment automatically shows the next player's answer, with customizable
+answer. The host can use up/down arrows in the answer overview to reorder
+unpresented answers; the current visible answer and judged rows stay fixed.
+Each judgment automatically shows the next player's answer, with customizable
 points reset for each player. The official answer appears after all judgments. See the
 [gameplay reference](docs/gameplay-reference.md#text-answers-for-all-players).
 

@@ -40,6 +40,43 @@ export async function verifyTextAnswers({ actions, check, denied, hostDb, player
         buzzUnlockAt: null, buzzAttempts: {}, incorrectBuzzedIds: [],
         history: [event('board_resumed', 'host', { questionId })] });
 
+    for (const legacy of [false, true]) for (const competitive of [false, true]) await check('text answers: persisted ordering, locks, races and authorization ' + legacy + '/' + competitive, async () => {
+        const game = await make(competitive, 4, legacy);
+        const move = (index, uid, direction, order) => actions.reorderTextAnswer(game.host, game.round.id, 'host', index, uid, direction, order);
+        const original = game.ids;
+        const swapped = [original[1], original[0], ...original.slice(2)];
+        assert.equal(await move(0, original[1], -1, original), 'stale');
+        await actions.closeTextAnswering(game.host, game.round.id, 'host');
+        await denied(updateDoc(game.player, { 'textAnswerRound.playerIds': swapped }));
+        await denied(updateDoc(game.spectator, { 'textAnswerRound.playerIds': swapped }));
+        await denied(updateDoc(game.host, { 'textAnswerRound.playerIds': original.slice(1) }));
+        await denied(updateDoc(game.host, { 'textAnswerRound.playerIds': [original[0], original[0], ...original.slice(2)] }));
+        await denied(updateDoc(game.host, { 'textAnswerRound.playerIds': swapped, 'textAnswerRound.answerVisible': true }));
+        const moves = await Promise.all([move(0, original[1], -1, original), move(0, original[1], -1, original)]);
+        assert.deepEqual(moves.sort(), ['reordered', 'stale']);
+        assert.deepEqual((await read(game.host)).textAnswerRound.playerIds, swapped);
+        assert.equal(await actions.revealTextAnswer(game.host, game.round.id, 'host', 0, original[0]), 'stale');
+        assert.equal(await actions.revealTextAnswer(game.host, game.round.id, 'host', 0, swapped[0]), 'revealed');
+        await denied(updateDoc(game.host, { 'textAnswerRound.playerIds': original }));
+        assert.equal(await move(0, swapped[1], -1, swapped), 'stale');
+        assert.equal(await actions.judgeTextAnswer(game.host, game.round.id, actor, 0, 'accept', 17, t, original[0]), 'stale');
+        const results = await Promise.all([move(0, swapped[2], -1, swapped), actions.judgeTextAnswer(game.host, game.round.id, actor, 0, 'accept', 17, t, swapped[0])]);
+        assert.ok(['reordered', 'stale'].includes(results[0]));
+        assert.equal(results[1], 'judged');
+        let current = await read(game.host);
+        assert.equal(current.players[swapped[0]].score, 117);
+        assert.equal(current.textAnswerRound.answerVisible, true);
+        const order = current.textAnswerRound.playerIds;
+        await denied(updateDoc(game.host, { 'textAnswerRound.playerIds': [order[0], order[2], order[1], order[3]] }));
+        await denied(updateDoc(game.host, { 'textAnswerRound.playerIds': [order[1], order[0], ...order.slice(2)] }));
+        for (let index = 1; index < order.length; index++) assert.equal(await judge(game, index, 'deny', 5), 'judged');
+        current = await read(game.host);
+        assert.deepEqual(current.textAnswerRound.playerIds, order);
+        assert.equal(current.answerRevealed, true);
+        for (const uid of order.slice(1)) assert.equal(current.players[uid].score, competitive ? 95 : 100);
+        assert.equal(await move(4, order[3], -1, order), 'stale');
+    });
+
     await check('text answers: frozen flag, bounded roster, no buzzer, valid replacements and Unicode limits', async () => {
         const game = await make();
         const room = await read(game.host);

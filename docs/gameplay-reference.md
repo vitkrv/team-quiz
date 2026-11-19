@@ -127,6 +127,14 @@ Example: on a 300-point ordinary question, Alice answers incorrectly and Bob ans
 
 ### Text answers for all players
 
+During frozen answer review, the host can use up/down arrows in the overview to
+reorder unpresented answers. Before the first reveal all rows can move; afterward
+the visible answer and judged rows stay fixed. Position numbers and Presenting/Up
+next labels show the queue. Arrange the next answer before judging the current
+one, because judgment immediately reveals the next answer. Each move is saved
+for this question and survives refresh; new questions use the default order.
+
+
 Enabling `isTextAnswerQuestion` replaces Buzz for that question only. At opening,
 the game captures a fixed roster of contestants, ordered by player ID. Host and
 spectators cannot submit; disconnected contestants remain in the roster. There is
