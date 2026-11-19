@@ -102,6 +102,7 @@ export async function verifyTextAnswers({ actions, check, denied, hostDb, player
         }
         const complete = await read(game.host);
         assert.equal(complete.answerRevealed, true);
+        assert.deepEqual(complete.textAnswerRound.scoreDeltas, Object.fromEntries(game.ids.map((uid) => [uid, 1])));
         assert.ok(game.ids.every((uid) => complete.players[uid].score === 101));
         const summary = await read(doc(game.host, 'recap', 'summary'));
         assert.ok(game.ids.every((uid) => summary.players[uid].correct === 1));
@@ -112,6 +113,8 @@ export async function verifyTextAnswers({ actions, check, denied, hostDb, player
         await actions.submitTextAnswer(game.player, game.round.id, 'player', 'Visible after reveal');
         await actions.closeTextAnswering(game.host, game.round.id, 'host');
         assert.equal(await judge(game, 0, 'accept', 123), 'stale');
+        await denied(updateDoc(game.host, { 'textAnswerRound.answerVisible': true, 'textAnswerRound.scoreDeltas': { player: 999 } }));
+        await denied(updateDoc(game.player, { 'textAnswerRound.scoreDeltas': { player: 999 } }));
         await denied(updateDoc(game.player, { 'textAnswerRound.answerVisible': true }));
         assert.equal(await reveal(game, 0), 'revealed');
         for (const amount of ['', -1, 1.5, Number.MAX_SAFE_INTEGER + 1]) await assert.rejects(judge(game, 0, 'accept', amount));
@@ -132,6 +135,11 @@ export async function verifyTextAnswers({ actions, check, denied, hostDb, player
         assert.equal(room.currentTurn, game.turn); assert.equal(room.textAnswerRound.phase, 'complete');
         assert.equal(room.players[game.ids[1]].score, competitive ? -37 : 100);
         assert.equal(room.players[game.ids[2]].score, 100);
+        const expectedDeltas = { [game.ids[0]]: first - 100, [game.ids[1]]: competitive ? -137 : 0, [game.ids[2]]: 0 };
+        assert.deepEqual(room.textAnswerRound.scoreDeltas, expectedDeltas);
+        assert.deepEqual((await read(game.player)).textAnswerRound.scoreDeltas, expectedDeltas);
+        assert.deepEqual((await read(game.spectator)).textAnswerRound.scoreDeltas, expectedDeltas);
+        await denied(updateDoc(game.host, { 'textAnswerRound.scoreDeltas.player': 999 }));
         const events = (await getDocs(collection(game.host, 'history'))).docs.map((snapshot) => snapshot.data()).filter((e) => e.type.startsWith('text_answer_'));
         assert.equal(events.length, 3); assert.ok(events.every((e) => !JSON.stringify(e).includes('Visible after reveal')));
         const recap = await read(doc(game.host, 'recap', 'summary'));

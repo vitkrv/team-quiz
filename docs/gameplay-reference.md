@@ -156,6 +156,25 @@ as Answering ends, including before the initial Reveal answers click, and remain
 hidden throughout review. The host keeps the question text/media and controls.
 The answer-review section is centered in the play area for contestants and
 spectators; the host sees it first, above the question text and media.
+Immediately below that section, only the host sees a table of all rostered
+contestants' avatars, names, and frozen answers in review order. The table appears
+as soon as review starts, before the initial Reveal answers click, and retains
+already judged and missing answers until Continue/Finish. It uses the existing
+room snapshot without additional Firestore reads, queries, or listeners. This is
+UI-only visibility; submitted answers remain shared room data.
+Each judgment also saves its points delta in the shared text-answer round,
+atomically with scoring and history. The host-only overview combines avatars and
+names in the Player column and shows signed deltas in a Points change column:
+positive green, negative red, zero gray; unjudged or unavailable deltas show a dash.
+After the first judgment, contestants and spectators see centered, wrapping tags
+below the current answer containing each assessed player's avatar, name, and
+points change. Tags accumulate after each judgment and remain alongside the
+official answer until Continue/Finish, using the same colors
+and dash for unavailable deltas. The host keeps the existing table without a list.
+The host's table remains visible after the final judgment until Continue/Finish.
+Results survive refresh and are not rewritten
+by later manual score edits or reversals. Existing rounds without saved deltas
+show only judgments recorded by the updated client; no values are inferred.
 Empty answers show translated,
 semi-transparent italic “Nothing” and are judged normally. Accept adds the selected
 amount; Deny costs zero in standard mode or subtracts the amount in competitive mode.

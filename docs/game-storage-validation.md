@@ -20,6 +20,14 @@ For release, validate the checked-in Firestore rules, deploy them before the new
 frontend only when authorized, and reload older clients before playing text-enabled
 packs. No migration, index or ImageKit Worker release is required.
 
+The host's text-answer points column uses optional `textAnswerRound.scoreDeltas`
+with each judgment, using the existing room listener without additional reads.
+Deploy its updated rules before the frontend when authorized. Older clients
+may finish rounds without deltas; after a delta is recorded, subsequent judgments
+must preserve it and record their own. Reload host clients for consistent results.
+Storage checks cover positive/negative/zero deltas, participant and spectator
+reads, refresh persistence, and rejection of forged results.
+
 Browser acceptance uses the actual editor/game components with isolated local
 Emulator identities: host, at least two contestants and a spectator; English and
 Ukrainian; desktop and mobile. Check both editor modes and modal focus, text/media

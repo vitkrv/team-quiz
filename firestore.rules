@@ -150,8 +150,9 @@ service cloud.firestore {
       let previous = before.textAnswerRound;
       let next = after.textAnswerRound;
       return next.answers == previous.answers
-        && next.diff(previous).affectedKeys().hasOnly(['phase', 'reviewIndex', 'answerVisible'])
+        && next.diff(previous).affectedKeys().hasOnly(['phase', 'reviewIndex', 'answerVisible', 'scoreDeltas'])
         && (after.diff(before).affectedKeys().hasOnly(['textAnswerRound'])
+          && next.get('scoreDeltas', {}) == previous.get('scoreDeltas', {})
           && ((previous.phase == 'answering' && next.phase == 'reviewing' && next.reviewIndex == 0 && !next.answerVisible)
             || (previous.phase == 'reviewing' && !previous.answerVisible && next.answerVisible
               && next.phase == 'reviewing' && next.reviewIndex == previous.reviewIndex))
@@ -177,6 +178,12 @@ service cloud.firestore {
         && d.questionId == before.activeQuestionId && d.playerId == uid && d.reviewIndex == previous.reviewIndex
         && d.amount is int && d.amount >= 0 && d.amount <= 9007199254740991
         && d.points == delta && d.delta == delta && d.previousScore == before.players[uid].score
+        && (next.keys().hasAny(['scoreDeltas'])
+          ? next.scoreDeltas is map
+            && next.scoreDeltas.diff(previous.get('scoreDeltas', {})).affectedKeys().hasOnly([uid])
+            && next.scoreDeltas.keys().toSet() == previous.get('scoreDeltas', {}).keys().toSet().union([uid].toSet())
+            && next.scoreDeltas[uid] == delta
+          : !previous.keys().hasAny(['scoreDeltas']))
         && d.nextScore == d.previousScore + delta && d.nextScore >= -9007199254740991 && d.nextScore <= 9007199254740991
         && after.players[uid].score == d.nextScore && after.players.diff(before.players).affectedKeys().hasOnly([uid])
         && after.players[uid].diff(before.players[uid]).affectedKeys().hasOnly(['score'])

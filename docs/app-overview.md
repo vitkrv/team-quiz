@@ -28,6 +28,19 @@ automatically shows the next player's answer. Once Answering ends,
 contestants and spectators see no question text or question media; the host keeps
 both for reference. The answer-review section is centered in the play area for
 contestants and spectators and appears above question content for the host.
+During review, the host also sees a table immediately below the current-player
+answer section with every contestant's avatar, name, and frozen answer in review
+order. It appears before the initial Reveal answers click, includes missing and
+already judged answers, and remains until Continue/Finish. It uses existing
+room data without additional Firestore reads; contestants and spectators do not
+see this overview.
+The table combines avatar and name in the Player column and shows each judged
+answer's points change in a separate column: green for positive, red for negative,
+and gray for zero. Unjudged or unavailable deltas display a dash. Results survive
+refresh. Starting with the first judgment, contestants and spectators see compact,
+wrapping tags below the current answer with each assessed player's avatar, name,
+and points change. Tags accumulate during review and remain alongside the official
+answer until Continue/Finish. The host keeps the same table.
 The host accepts/denies with adjustable points; competitive
 mode also offers neutral Skip. Blank answers display muted italic
 “Nothing” and receive the same controls. Every next answer resets to the question

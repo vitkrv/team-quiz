@@ -36,7 +36,25 @@ export default function TextAnswerQuestion({ room, roomRef, user, question, isHo
         { id: user.uid, name: room.players[user.uid]?.name || t('hostLabel') }, round.reviewIndex, decision, points, t));
     const buttonClass = 'min-h-11 rounded-xl px-4 py-3 font-bold focus-visible:ring-2 focus-visible:ring-blue-300 disabled:opacity-50';
     const feedback = <>{pending && <p role="status">{t('textAnswerPending')}</p>}{error && <p role="alert" className="text-red-300">{t(error)}</p>}</>;
-    if (round.phase === 'complete') return null;
+    if (round.phase === 'complete' && controls) return null;
+    const assessedPlayerIds = round.playerIds.slice(0, round.reviewIndex);
+    const pointsTags = !isHost && assessedPlayerIds.length > 0 && <section aria-label={t('textAnswerPointsDiff')} className="mt-4 w-full max-w-xl">
+        <h3 className="sr-only">{t('textAnswerPointsDiff')}</h3>
+        <ul className="flex flex-wrap justify-center gap-3">
+            {assessedPlayerIds.map((uid) => {
+                const delta = round.scoreDeltas?.[uid];
+                const hasDelta = Number.isSafeInteger(delta);
+                return <li key={uid} className="flex max-w-full items-center gap-2 rounded-full border border-slate-600 bg-slate-900/80 px-4 py-2 text-sm">
+                    <span aria-hidden="true" className="shrink-0 text-xl">{room.players[uid]?.avatar}</span>
+                    <span className="min-w-0 break-words text-left font-semibold">{room.players[uid]?.name || t('playerFallback')}</span>
+                    <span className={`shrink-0 font-bold tabular-nums ${hasDelta && delta > 0 ? 'text-green-400' : hasDelta && delta < 0 ? 'text-red-400' : 'text-gray-400'}`}>
+                        {hasDelta ? `${delta > 0 ? '+' : ''}${delta}` : '—'}
+                    </span>
+                </li>;
+            })}
+        </ul>
+    </section>;
+    if (round.phase === 'complete' && !isHost) return pointsTags;
     if (controls) return <section aria-label={t('textAnswerHostPanel')} className="flex w-full flex-col gap-3">
         {round.phase === 'answering' ? <>
             <p className="font-bold" role="status">{t('textAnswerCount', { count: submittedPlayerIds.length, total: round.playerIds.length })}</p>
@@ -68,14 +86,48 @@ export default function TextAnswerQuestion({ room, roomRef, user, question, isHo
         </>}
         {feedback}
     </section>;
-    if (round.phase === 'reviewing') return <section aria-label={t('textAnswerReview')} className={`${isHost ? 'mt-8 md:mt-10' : ''} w-full max-w-xl space-y-3 rounded-xl border border-slate-600 bg-slate-900/80 p-5`}>
-        <p className="text-sm text-slate-400">{t('textAnswerProgress', { current: round.reviewIndex + 1, total: round.playerIds.length })}</p>
-        <h3 className="break-words text-xl font-bold">{playerName}</h3>
-        {round.answerVisible ? round.answers[currentId]
-            ? <p className="break-words text-2xl font-bold">{round.answers[currentId]}</p>
-            : <p className="text-2xl italic opacity-50">{t('textAnswerNothing')}</p>
-            : <p className="text-slate-400" role="status">{t('textAnswerWaitingReveal')}</p>}
-    </section>;
+    if (round.phase === 'reviewing' || round.phase === 'complete') return <div className={`${isHost ? 'mt-8 md:mt-10' : ''} w-full max-w-xl space-y-4`}>
+        {round.phase === 'reviewing' && <section aria-label={t('textAnswerReview')} className="space-y-3 rounded-xl border border-slate-600 bg-slate-900/80 p-5">
+            <p className="text-sm text-slate-400">{t('textAnswerProgress', { current: round.reviewIndex + 1, total: round.playerIds.length })}</p>
+            <h3 className="break-words text-xl font-bold">{playerName}</h3>
+            {round.answerVisible ? round.answers[currentId]
+                ? <p className="break-words text-2xl font-bold">{round.answers[currentId]}</p>
+                : <p className="text-2xl italic opacity-50">{t('textAnswerNothing')}</p>
+                : <p className="text-slate-400" role="status">{t('textAnswerWaitingReveal')}</p>}
+        </section>}
+        {pointsTags}
+        {isHost && <section aria-label={t('textAnswerOverview')} className="rounded-xl border border-slate-600 bg-slate-900/80 p-3 sm:p-5">
+            {/* Frozen review answers are already available in the room snapshot. */}
+            <table className="w-full table-fixed text-left text-sm">
+                <caption className="mb-3 text-left text-lg font-bold">{t('textAnswerOverview')}</caption>
+                <thead className="text-slate-300">
+                    <tr className="border-b border-slate-600">
+                        <th scope="col" className="w-1/3 break-words px-2 py-2">{t('textAnswerPlayer')}</th>
+                        <th scope="col" className="break-words px-2 py-2">{t('textAnswerAnswer')}</th>
+                        <th scope="col" className="w-1/4 break-words px-2 py-2 text-right">{t('textAnswerPointsDiff')}</th>
+                    </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-700">
+                    {round.playerIds.map((uid, index) => {
+                        const delta = round.scoreDeltas?.[uid];
+                        const judged = index < round.reviewIndex && Number.isSafeInteger(delta);
+                        return <tr key={uid} className="align-middle">
+                            <th scope="row" className="px-2 py-3 align-middle font-semibold">
+                                <div className="flex items-center gap-2">
+                                    <span aria-hidden="true" className="shrink-0 text-2xl">{room.players[uid]?.avatar}</span>
+                                    <span className="min-w-0 break-words">{room.players[uid]?.name || t('playerFallback')}</span>
+                                </div>
+                            </th>
+                            <td className="break-words px-2 py-3">{round.answers[uid] || <span className="italic opacity-50">{t('textAnswerNothing')}</span>}</td>
+                            <td className={`break-words px-2 py-3 text-right font-bold tabular-nums ${judged && delta > 0 ? 'text-green-400' : judged && delta < 0 ? 'text-red-400' : 'text-gray-400'}`}>
+                                {judged ? `${delta > 0 ? '+' : ''}${delta}` : '—'}
+                            </td>
+                        </tr>;
+                    })}
+                </tbody>
+            </table>
+        </section>}
+    </div>;
     if (isHost) return null;
     if (isSpectator || !round.playerIds.includes(user.uid)) return <p className="mt-6 text-slate-400" role="status">{t('textAnswerWaiting')}</p>;
     const valid = normalizeTextAnswer(draft) !== null;

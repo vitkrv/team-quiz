@@ -42,6 +42,7 @@ export async function judgeTextAnswer(roomRef, sessionId, actor, reviewIndex, de
         const playerName = room.players[playerId].name;
         const update = {
             textAnswerRound: { ...round, phase: complete ? 'complete' : 'reviewing',
+                scoreDeltas: { ...round.scoreDeltas, [playerId]: score.delta },
                 reviewIndex: reviewIndex + 1, answerVisible: !complete },
             [`players.${playerId}.score`]: score.nextScore,
             history: [createHistoryItem({ id: `text_${sessionId}_${reviewIndex}`, type,
