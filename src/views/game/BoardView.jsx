@@ -360,8 +360,9 @@ export default function BoardView({ room, roomRef, user, isHost, isSpectator = f
                                                     }
                                                 `}
                                             >
-                                                {pendingQuestionId === q.id && <Loader2 aria-hidden="true" className="mr-2 h-5 w-5 animate-spin md:h-7 md:w-7" />}
-                                                {isAvailable && getBoardPoints(q)}
+                                                {pendingQuestionId === q.id
+                                                    ? <Loader2 aria-hidden="true" className="h-5 w-5 animate-spin md:h-7 md:w-7" />
+                                                    : isAvailable && getBoardPoints(q)}
                                             </button>
                                         );
                                     })}
