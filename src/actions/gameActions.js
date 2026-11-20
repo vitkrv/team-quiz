@@ -330,7 +330,7 @@ export const handlePickQuestion = async (roomRef, qId, actorId, historyItem, ext
         const categories = getRoundCategories(pack, room.currentRoundIndex || 0);
         const categoryIndex = categories.findIndex((category) => category.questions.some((q) => q.id === qId));
         const questionIndex = categories[categoryIndex].questions.findIndex((q) => q.id === qId);
-        update.textAnswerRound = question.isTextAnswerQuestion ? createTextAnswerRound(room, qId, generateId(), categoryIndex, questionIndex) : null;
+        update.textAnswerRound = question.isTextAnswerQuestion ? createTextAnswerRound(room, qId, generateId(), categoryIndex, questionIndex, question.assessAllAtOnce === true) : null;
         if (question.isTextAnswerQuestion) { update.buzzUnlockAt = null; update.buzzerRoundId = null; }
 
         if (historyItem) {

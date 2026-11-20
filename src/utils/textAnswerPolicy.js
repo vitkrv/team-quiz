@@ -8,11 +8,24 @@ export function normalizeTextAnswer(value) {
 
 export const validTextPoints = (value) => /^\d+$/.test(String(value)) && Number.isSafeInteger(Number(value));
 
-export function createTextAnswerRound(room, questionId, id, categoryIndex = 0, questionIndex = 0) {
+export const validSignedTextPoints = (value) => /^-?\d+$/.test(String(value)) && Number.isSafeInteger(Number(value));
+export const textAssessmentDecision = (delta) => delta > 0 ? 'accept' : delta < 0 ? 'deny' : 'skip';
+export const textAssessmentShortcut = (correct, points, competitive) => correct ? points : competitive ? -points : 0;
+
+export function bulkTextAnswerBlockReason(room, sessionId, actorId, revision) {
+    const round = room?.textAnswerRound;
+    return !room || room.status !== 'playing' || room.answerRevealed || !round?.assessAllAtOnce
+        || round.id !== sessionId || round.questionId !== room.activeQuestionId || round.phase !== 'reviewing'
+        || round.assessmentRevision !== revision || actorId !== room.hostId ? 'stale' : null;
+}
+
+export function createTextAnswerRound(room, questionId, id, categoryIndex = 0, questionIndex = 0, assessAllAtOnce = false) {
     const playerIds = Object.keys(room.players).filter((uid) => uid !== room.hostId && !room.players[uid].isHost).sort();
     if (!playerIds.length || playerIds.length > 20) throw new Error('Invalid text answer roster');
     return { version: 1, id, questionId, categoryIndex, questionIndex, phase: 'answering', playerIds,
-        answers: Object.fromEntries(playerIds.map((uid) => [uid, ''])), reviewIndex: 0, answerVisible: false };
+        answers: Object.fromEntries(playerIds.map((uid) => [uid, ''])), reviewIndex: 0, answerVisible: false,
+        ...(assessAllAtOnce ? { assessAllAtOnce: true, assessmentRevision: 0, showAnswers: true,
+            draftPoints: Object.fromEntries(playerIds.map((uid) => [uid, 0])) } : {}) };
 }
 
 export function textAnswerBlockReason(room, sessionId, actorId, action, reviewIndex) {
@@ -23,6 +36,7 @@ export function textAnswerBlockReason(room, sessionId, actorId, action, reviewIn
         && actorId !== room.hostId && room.players[actorId]?.isHost === false ? null : 'ineligible';
     if (actorId !== room.hostId) return 'host_required';
     if (action === 'close') return round.phase === 'answering' ? null : 'stale';
+    if (round.assessAllAtOnce) return 'stale';
     if (round.phase !== 'reviewing' || round.reviewIndex !== reviewIndex) return 'stale';
     if (action === 'reorder') return null;
     if (action === 'reveal') return round.answerVisible ? 'stale' : null;

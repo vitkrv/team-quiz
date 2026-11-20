@@ -96,6 +96,13 @@ export default function PackQuestionEditor({
                             className="flex min-h-11 min-w-11 items-center justify-center rounded-lg text-slate-400 hover:bg-slate-800 focus-visible:ring-2 focus-visible:ring-blue-400"><HelpCircle size={19} /></button>
                     </div>
                     <p className="text-xs text-slate-400">{t('textAnswerOptionHint')}</p>
+                    {q.isTextAnswerQuestion && <>
+                        <label className="flex min-h-11 items-center gap-2 text-sm font-bold text-blue-300">
+                            <input type="checkbox" checked={Boolean(q.assessAllAtOnce)} disabled={disabled} className="h-5 w-5 shrink-0 accent-blue-400"
+                                onChange={(event) => onUpdate('assessAllAtOnce', event.target.checked)} />{t('textAnswerAssessAll')}
+                        </label>
+                        <p className="text-xs text-slate-400">{t('textAnswerBulkHint')}{!q.assessAllAtOnce && <> {t('textAnswerSequentialHint')}</>}</p>
+                    </>}
                 </div>
                 <div className="flex flex-wrap items-center gap-1">
                 <label className="flex min-h-11 min-w-0 max-w-full items-center gap-2 text-sm font-bold text-yellow-300">

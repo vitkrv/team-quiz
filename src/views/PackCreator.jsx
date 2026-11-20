@@ -677,7 +677,7 @@ export default function PackCreator({ pack, setView, user, setError }) {
                         if (q.id !== qId) return q;
 
                         if (field === 'isTextAnswerQuestion') {
-                            return { ...q, isTextAnswerQuestion: Boolean(value), ...(value ? { isSurpriseQuestion: false } : {}) };
+                            return { ...q, isTextAnswerQuestion: Boolean(value), ...(value ? { isSurpriseQuestion: false } : { assessAllAtOnce: false }) };
                         }
                         if (field === 'isSurpriseQuestion') {
                             const isSurpriseQuestion = Boolean(value);
@@ -689,7 +689,7 @@ export default function PackCreator({ pack, setView, user, setError }) {
                             return {
                                 ...q,
                                 isSurpriseQuestion,
-                                ...(isSurpriseQuestion ? { isTextAnswerQuestion: false } : {}),
+                                ...(isSurpriseQuestion ? { isTextAnswerQuestion: false, assessAllAtOnce: false } : {}),
                                 surpriseMinPoints,
                                 surpriseMaxPoints,
                                 surpriseDisplayPoints: isSurpriseQuestion

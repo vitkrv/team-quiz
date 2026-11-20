@@ -34,6 +34,11 @@ export function compareHistoryEvents(a, b) {
             || (b.recordedAt?.nanoseconds || 0) - (a.recordedAt?.nanoseconds || 0)
         : (b.timestamp || 0) - (a.timestamp || 0);
     if (time) return time;
+    if (a.type?.startsWith('text_answer_') && b.type?.startsWith('text_answer_')
+        && a.details?.sessionId && a.details.sessionId === b.details?.sessionId
+        && Number.isSafeInteger(a.details.batchIndex) && Number.isSafeInteger(b.details.batchIndex)) {
+        return b.details.batchIndex - a.details.batchIndex;
+    }
     if (a.details?.saveOperationId && a.details.saveOperationId === b.details?.saveOperationId) {
         return b.details.batchIndex - a.details.batchIndex;
     }

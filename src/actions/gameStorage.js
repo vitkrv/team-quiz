@@ -34,7 +34,8 @@ export async function updateRoomInTransaction(transaction, roomRef, room, update
     if (Object.keys(fields).length) transaction.update(roomRef, fields);
 }
 
-// Rules may reject a stale score before the SDK retries a conflicted transaction.
+// Rules or the Emulator may reject a stale score/version before the SDK retries
+// a conflicted transaction. Retry only after proving the room changed.
 // Retry only when a server read proves that the room changed since our last read.
 export async function runRoomTransaction(roomRef, action, trace) {
     if (!trace) return gameplayDiagnostics.trace((record) => runRoomTransaction(roomRef, action, record));
@@ -49,10 +50,10 @@ export async function runRoomTransaction(roomRef, action, trace) {
                 return action(transaction, room);
             });
         } catch (error) {
-            if (error.code !== 'permission-denied' || attempt >= 2 || readState === undefined) throw error;
+            if (!['permission-denied', 'failed-precondition'].includes(error.code) || attempt >= 2 || readState === undefined) throw error;
             const current = (await getDocFromServer(roomRef)).data();
             if (JSON.stringify(current) === readState) throw error;
-            trace('permission_retry', 'room_changed');
+            trace(error.code === 'permission-denied' ? 'permission_retry' : 'version_retry', 'room_changed');
         }
     }
 }

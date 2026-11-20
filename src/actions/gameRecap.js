@@ -70,6 +70,7 @@ export async function prepareRecap(transaction, roomRef, room, update, readPack)
                 c.points += delta; p.categories[category.id] = c;
             }
             scores.push({ id: event.id, sequence: summary.sequence, playerId, questionId: manual ? null : question?.id || null,
+                ...(room.textAnswerRound?.assessAllAtOnce && event.type.startsWith('text_answer_') ? { batchIndex: d.batchIndex } : {}),
                 categoryId: manual ? null : category?.id || null, categoryName: manual ? '' : category?.name || '',
                 source: event.type, before, after, delta });
         }

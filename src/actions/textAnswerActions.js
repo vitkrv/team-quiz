@@ -1,7 +1,59 @@
 import { createHistoryItem } from './gameActions';
-import { runRoomTransaction, updateRoomInTransaction } from './gameStorage';
-import { moveTextAnswer, normalizeTextAnswer, projectTextAnswerScore, textAnswerBlockReason } from '../utils/textAnswerPolicy';
+import { appendHistory, runRoomTransaction, updateRoomInTransaction } from './gameStorage';
+import { bulkTextAnswerBlockReason, textAssessmentDecision, validSignedTextPoints, moveTextAnswer, normalizeTextAnswer, projectTextAnswerScore, textAnswerBlockReason } from '../utils/textAnswerPolicy';
 import { FieldPath } from 'firebase/firestore';
+
+export async function saveTextAnswerVisibility(roomRef, sessionId, actorId, revision, showAnswers) {
+    if (typeof showAnswers !== 'boolean') throw new Error('Invalid answer visibility');
+    return runRoomTransaction(roomRef, async (transaction, room) => {
+        if (bulkTextAnswerBlockReason(room, sessionId, actorId, revision)) return 'stale';
+        transaction.update(roomRef, { 'textAnswerRound.showAnswers': showAnswers,
+            'textAnswerRound.assessmentRevision': revision + 1 });
+        return 'saved';
+    });
+}
+
+export async function saveTextAssessment(roomRef, sessionId, actorId, revision, playerId, amount) {
+    if (!validSignedTextPoints(amount)) throw new Error('Invalid points');
+    return runRoomTransaction(roomRef, async (transaction, room) => {
+        if (bulkTextAnswerBlockReason(room, sessionId, actorId, revision)
+            || !room.textAnswerRound.playerIds.includes(playerId)) return 'stale';
+        transaction.update(roomRef, { textAnswerRound: { ...room.textAnswerRound,
+            draftPoints: { ...room.textAnswerRound.draftPoints, [playerId]: Number(amount) || 0 },
+            assessmentPlayerId: playerId, assessmentRevision: revision + 1 } });
+        return 'saved';
+    });
+}
+
+export async function revealTextAssessments(roomRef, sessionId, actor, revision, t) {
+    return runRoomTransaction(roomRef, async (transaction, room) => {
+        if (bulkTextAnswerBlockReason(room, sessionId, actor.id, revision)) return 'stale';
+        const round = room.textAnswerRound;
+        const update = { textAnswerRound: { ...round, phase: 'complete', reviewIndex: round.playerIds.length,
+            scoreDeltas: { ...round.draftPoints } }, answerRevealed: true,
+            [`questionStates.${round.questionId}`]: 'done', mediaPlayback: null, history: [] };
+        round.playerIds.forEach((playerId, index) => {
+            const delta = round.draftPoints[playerId];
+            const previousScore = room.players[playerId]?.score;
+            const nextScore = previousScore + delta;
+            if (!validSignedTextPoints(delta) || !Number.isSafeInteger(previousScore) || !Number.isSafeInteger(nextScore)) throw new Error('Invalid points');
+            const decision = textAssessmentDecision(delta);
+            const type = { accept: 'text_answer_accepted', deny: 'text_answer_denied', skip: 'text_answer_skipped' }[decision];
+            const playerName = room.players[playerId].name;
+            update[`players.${playerId}.score`] = nextScore;
+            update.history.push(createHistoryItem({ id: `text_${sessionId}_${index}`, type, actorId: actor.id, actorName: actor.name,
+                message: t('historyTextAnswer', { playerName, points: delta }), details: { sessionId, playerId, playerName,
+                    questionId: round.questionId, reviewIndex: index, batchIndex: index, amount: Math.abs(delta),
+                    points: delta, delta, previousScore, nextScore } }));
+        });
+        await updateRoomInTransaction(transaction, roomRef, room, update);
+        // Legacy rooms retain embedded history; these bounded proof records let
+        // rules validate groups of five without exceeding expression limits.
+        if (room.dataVersion !== 2) appendHistory(transaction, roomRef,
+            update.history.filter((_, index) => index % 5 === 4 || index === round.playerIds.length - 1));
+        return 'revealed';
+    });
+}
 
 export async function submitTextAnswer(roomRef, sessionId, actorId, value) {
     const answer = normalizeTextAnswer(value);

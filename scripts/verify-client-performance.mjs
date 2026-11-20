@@ -1,6 +1,8 @@
 // Deterministic checks only: no browser, production network, or new test tooling.
 import assert from 'node:assert/strict';
 import { build } from 'esbuild';
+import * as jsxRuntime from 'react/jsx-runtime';
+import { renderToStaticMarkup } from 'react-dom/server';
 import { createPreloadQueue } from '../src/utils/preloadQueue.js';
 import { createIncrementalCache } from '../src/utils/incrementalCache.js';
 import { requestMediaJson, uploadMediaForm } from '../src/utils/mediaTransport.js';
@@ -133,13 +135,106 @@ function hookHarness() {
     };
 }
 async function bundleHook(path, fakes) {
-    const bundled = await build({ entryPoints: [path], bundle: true, write: false, platform: 'node', format: 'esm',
+    const bundled = await build({ entryPoints: [path], bundle: true, write: false, platform: 'node', format: 'esm', jsx: 'automatic',
         plugins: [{ name: 'hook-fakes', setup(builder) {
             builder.onResolve({ filter: /.*/ }, ({ path }) => Object.hasOwn(fakes, path) ? { path, namespace: 'fake' } : undefined);
             builder.onLoad({ filter: /.*/, namespace: 'fake' }, ({ path }) => ({ contents: fakes[path] }));
         } }] });
     return import(`data:text/javascript;base64,${Buffer.from(bundled.outputFiles[0].text).toString('base64')}`);
 }
+await check('bulk assessments: flush before reveal, invalid drafts, delayed snapshots, stale edits and retry', async () => {
+    const h = hookHarness(), calls = [];
+    let revision = 0, fail = false;
+    const gate = deferred();
+    const room = { players: { host: { name: 'Host' } }, textAnswerRound: { id: 'bulk', assessmentRevision: 0, draftPoints: { a: 0, b: 0 } } };
+    globalThis.__bulkAssessmentTest = { react: h.react,
+        save: async (_ref, _id, _actor, expected, uid, amount) => {
+            calls.push(['save', expected, uid, amount]);
+            if (fail) throw Error('offline');
+            if (expected !== revision) return 'stale';
+            if (calls.length === 1) await gate.promise;
+            revision++; return 'saved';
+        },
+        visibility: async (_ref, _id, _actor, expected, show) => {
+            calls.push(['visibility', expected, show]);
+            if (fail) throw Error('offline');
+            if (expected !== revision) return 'stale';
+            revision++; return 'saved';
+        },
+        reveal: async (_ref, _id, _actor, expected) => { calls.push(['reveal', expected]); return expected === revision ? 'revealed' : 'stale'; }
+    };
+    try {
+        const { default: useTextAssessments } = await bundleHook('src/hooks/useTextAssessments.js', {
+            react: 'export const { useRef, useState } = globalThis.__bulkAssessmentTest.react;',
+            '../actions/textAnswerActions': 'export const { save: saveTextAssessment, visibility: saveTextAnswerVisibility, reveal: revealTextAssessments } = globalThis.__bulkAssessmentTest;'
+        });
+        const render = () => h.render(() => useTextAssessments(room, {}, { uid: 'host' }, (key) => key));
+        const initialRound = room.textAnswerRound;
+        room.textAnswerRound = null;
+        assert.equal(render().pending, false);
+        assert.equal(render().value('a'), '0');
+        room.textAnswerRound = initialRound;
+        let ui = render(); ui.edit('a', '123');
+        ui = render(); const saving = ui.persist(true);
+        assert.equal(render().pending, true);
+        await render().persist(true); assert.equal(calls.length, 1);
+        gate.resolve(); await saving;
+        assert.deepEqual(calls, [['save', 0, 'a', '123'], ['reveal', 1]]);
+        assert.equal(render().value('a'), '123'); // Listener has not caught up.
+        room.textAnswerRound = { ...room.textAnswerRound, assessmentRevision: 1, draftPoints: { a: 123, b: 0 } };
+        ui = render(); ui.edit('b', '-'); ui = render();
+        assert.equal(ui.invalid, true); await ui.persist(true); assert.equal(calls.length, 2);
+        ui.edit('b', '-77'); fail = true; await render().persist();
+        assert.equal(render().error, 'textAnswerFailed'); assert.equal(render().value('b'), '-77');
+        fail = false; await render().persist(); assert.equal(revision, 2);
+        room.textAnswerRound = { ...room.textAnswerRound, assessmentRevision: 2, draftPoints: { a: 123, b: -77 } };
+        ui = render(); ui.edit('a', '456');
+        // Another host changes the snapshot while this host has a dirty input.
+        revision = 3; room.textAnswerRound = { ...room.textAnswerRound, assessmentRevision: 3, draftPoints: { a: 999, b: -77 } };
+        await render().persist(true);
+        assert.equal(render().error, 'textAnswerBulkStale'); assert.equal(render().value('a'), '999');
+        assert.equal(calls.at(-1)[0], 'save');
+        room.textAnswerRound = { id: 'next', assessmentRevision: 0, draftPoints: { a: 0 } };
+        assert.equal(render().value('a'), '0'); assert.equal(render().error, '');
+        revision = 0;
+        assert.equal(render().showAnswers, true);
+        await render().setShowAnswers(false);
+        assert.equal(render().showAnswers, false); // Delayed snapshot retains saved toggle.
+        room.textAnswerRound = { ...room.textAnswerRound, assessmentRevision: 1, showAnswers: false };
+        assert.equal(render().showAnswers, false);
+        fail = true; await render().setShowAnswers(true);
+        assert.equal(render().error, 'textAnswerFailed');
+        assert.equal(render().showAnswers, true);
+        fail = false; await render().persist(true);
+        assert.deepEqual(calls.slice(-2), [['visibility', 1, true], ['reveal', 2]]);
+        room.textAnswerRound = { id: 'third', assessmentRevision: 0, draftPoints: {} };
+        assert.equal(render().showAnswers, true);
+    } finally { h.dispose(); delete globalThis.__bulkAssessmentTest; }
+});
+await check('bulk results: participant answer visibility, host access and review placeholder', async () => {
+    globalThis.__bulkJsx = jsxRuntime;
+    try {
+        const { default: Review } = await bundleHook('src/components/BulkTextAnswerReview.jsx', {
+            'react/jsx-runtime': 'export const { jsx, jsxs, Fragment } = globalThis.__bulkJsx;',
+            'lucide-react': 'export const Check = () => null, Minus = Check, Plus = Check, X = Check;'
+        });
+        const room = { players: { a: { name: 'Alice' } }, textAnswerRound: {
+            phase: 'complete', playerIds: ['a'], answers: { a: 'Unique submitted text' }, scoreDeltas: { a: 300 }, showAnswers: false
+        } };
+        const render = (isHost) => renderToStaticMarkup(jsxRuntime.jsx(Review, { room, question: {}, isHost,
+            assessment: {}, t: (key) => key }));
+        assert.ok(!render(false).includes('Unique submitted text'));
+        assert.ok(render(false).includes('Alice')); assert.ok(render(false).includes('+300'));
+        assert.ok(render(true).includes('Unique submitted text'));
+        room.textAnswerRound.showAnswers = true;
+        assert.ok(render(false).includes('Unique submitted text'));
+        delete room.textAnswerRound.showAnswers;
+        assert.ok(render(false).includes('Unique submitted text')); // Older bulk rounds default to visible.
+        room.textAnswerRound.phase = 'reviewing';
+        assert.ok(render(false).includes('textAnswerBulkWaiting'));
+        assert.ok(!render(false).includes('Unique submitted text'));
+    } finally { delete globalThis.__bulkJsx; }
+});
 await check('deadline clock: no periodic renders, exact transitions, calibration and resume, cleanup', async () => {
     const h = hookHarness(); globalThis.__performanceTest = h;
     try {

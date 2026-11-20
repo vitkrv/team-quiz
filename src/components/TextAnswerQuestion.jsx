@@ -4,8 +4,14 @@ import { closeTextAnswering, reorderTextAnswer, judgeTextAnswer, revealTextAnswe
 import { normalizeTextAnswer, validTextPoints } from '../utils/textAnswerPolicy';
 import { getRoundPointStep } from '../utils/packRounds';
 import HoldToConfirmButton from './HoldToConfirmButton';
+import BulkTextAnswerReview from './BulkTextAnswerReview';
 
-export default function TextAnswerQuestion({ room, roomRef, user, question, isHost, isSpectator, t, controls = false, sharedBusy, sharedPending = false, onPendingChange }) {
+export default function TextAnswerQuestion(props) {
+    return props.room.textAnswerRound.assessAllAtOnce && props.room.textAnswerRound.phase !== 'answering'
+        ? <BulkTextAnswerReview {...props} /> : <SequentialTextAnswerQuestion {...props} />;
+}
+
+function SequentialTextAnswerQuestion({ room, roomRef, user, question, isHost, isSpectator, t, controls = false, sharedBusy, sharedPending = false, onPendingChange }) {
     const round = room.textAnswerRound;
     const saved = round.answers[user.uid] || '';
     const [draft, setDraft] = useState(saved);

@@ -44,6 +44,7 @@ export const stripPendingCategories = (categories) => categories.map((category) 
 
         if (Object.hasOwn(question, 'hostHint')) nextQuestion.hostHint = question.hostHint;
         if (question.isTextAnswerQuestion) nextQuestion.isTextAnswerQuestion = true;
+        if (question.isTextAnswerQuestion && question.assessAllAtOnce) nextQuestion.assessAllAtOnce = true;
 
         if (isSurpriseQuestion) {
             nextQuestion.isSurpriseQuestion = true;

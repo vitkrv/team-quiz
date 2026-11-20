@@ -37,6 +37,46 @@ judgments, final reveal/Continue, refresh/reconnect, plus ordinary Buzz and Surp
 Report browser observations separately from deterministic/Emulator results;
 production sign-in, external media and physical-device behavior require separate checks.
 
+### Bulk assessment verification
+
+Agent verification on 2026-11-20: lint, production build, 26 gameplay tests,
+10 client-performance checks, all **124 storage scenario groups**, and the Git
+whitespace check passed with exit code 0. Storage used a dedicated Emulator at
+`127.0.0.1:8098` with project `demo-game-storage`. Expected permission-denied
+messages came from negative cases; the final run had no failed assertions.
+The build retains its existing large-chunk warning. No browser checks or
+deployments were performed.
+
+The existing storage entry point also covers bulk draft persistence, signed scores
+in both competitive settings, frozen answers, host-only edits, revision conflicts,
+duplicate/concurrent reveals, overflow, legacy rooms, all-zero results, and atomic
+history/recap for 20 contestants. The client-performance script checks draft/reveal
+coordination without a browser. Answer visibility checks cover its enabled default,
+refresh persistence, host-only updates, stale revisions, locking after reveal, and
+legacy rooms. Non-browser rendering checks verify hidden participant answers,
+host access, the waiting placeholder, and the visible fallback for older rounds.
+
+Bulk completion uses up to four existing history events as atomic validation
+proofs, each checking at most five players. This keeps all 20 score and profile
+checks within Firestore expression/access limits. Legacy bulk rooms retain their
+embedded history and additionally write those bounded host-only proof records;
+existing sequential legacy rooms do not change. No new collection type or index
+is introduced.
+
+Pending browser checklist (requires explicit authorization):
+
+- In English and Ukrainian, enable/disable the option in Form and Table editors;
+  save/reload, switch layouts, and confirm sequential assessment remains default.
+- As host, review missing and submitted answers; use signed inputs and every
+  shortcut, refresh after saves, and reveal directly from a focused input.
+- As contestant and spectator, confirm only the waiting message appears during
+  review, standings remain unchanged, and reveal shows answers and colored deltas.
+- Toggle the checkbox below the review table: it starts checked for each question;
+  refresh preserves the setting. With it unchecked, contestants and spectators see
+  names and points only after reveal while the host still sees all answers.
+- Check desktop/mobile layout, keyboard labels/focus, validation and save errors,
+  simultaneous host tabs, Continue, round transitions, and normal sequential mode.
+
 ### Agent verification — 2026-11-18
 
 Agent-run checks all exited with code **0**: lint, production build, 22 gameplay

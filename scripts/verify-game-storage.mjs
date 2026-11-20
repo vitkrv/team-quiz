@@ -89,6 +89,27 @@ try {
         return id;
     };
     const id = await newRoom();
+    await check('transaction version conflicts retry only changed rooms and remain bounded', async () => {
+        const target = roomRef(hostDb, id), seed = roomRef(seedDb, id);
+        const failure = Object.assign(new Error('version conflict'), { code: 'failed-precondition' });
+        let attempts = 0;
+        await assert.rejects(actions.runRoomTransaction(target, () => { attempts++; throw failure; }), (error) => error === failure);
+        assert.equal(attempts, 1);
+        const phases = [];
+        attempts = 0;
+        try {
+            assert.equal(await actions.runRoomTransaction(target, async (_transaction, current) => {
+                if (attempts++ === 0) { await updateDoc(seed, { testRetry: 1 }); throw failure; }
+                return current.testRetry;
+            }, (phase) => phases.push(phase)), 1);
+            assert.ok(phases.includes('version_retry'));
+            attempts = 0;
+            await assert.rejects(actions.runRoomTransaction(target, async () => {
+                await updateDoc(seed, { testRetry: ++attempts + 1 }); throw failure;
+            }), (error) => error === failure);
+            assert.equal(attempts, 3);
+        } finally { await updateDoc(seed, { testRetry: deleteField() }); }
+    });
     await check('transaction diagnostics preserve callback results and errors without writing', async () => {
         const target = roomRef(hostDb, id);
         const before = (await getDocFromServer(target)).data();

@@ -5,6 +5,32 @@ import { getTransitionBlockReason as block, projectAnswerScore } from '../src/ut
 import { createGameplayDiagnostics } from '../src/utils/gameplayDiagnostics.js';
 import { moveTextAnswer, createTextAnswerRound, normalizeTextAnswer, projectTextAnswerScore, textAnswerBlockReason, validTextPoints } from '../src/utils/textAnswerPolicy.js';
 import { getRoundPointStep, validatePackRounds } from '../src/utils/packRounds.js';
+import { bulkTextAnswerBlockReason, textAssessmentDecision, textAssessmentShortcut, validSignedTextPoints } from '../src/utils/textAnswerPolicy.js';
+import { compareHistoryEvents } from '../src/utils/scoreHistory.js';
+
+test('bulk text assessments: signed values, shortcuts, sign-based decisions and guards', () => {
+    for (const value of [-123, 0, '007', '-42', Number.MAX_SAFE_INTEGER, Number.MIN_SAFE_INTEGER]) assert.equal(validSignedTextPoints(value), true);
+    for (const value of ['', '-', '1e3', 1.5, Infinity, Number.MAX_SAFE_INTEGER + 1]) assert.equal(validSignedTextPoints(value), false);
+    assert.deepEqual([-1, 0, 1].map(textAssessmentDecision), ['deny', 'skip', 'accept']);
+    const events = [2, 11, 0].map((batchIndex) => ({ id: `text_s_${batchIndex}`, type: 'text_answer_accepted', timestamp: 1, details: { sessionId: 's', batchIndex } }));
+    assert.deepEqual(events.sort(compareHistoryEvents).map((e) => e.details.batchIndex), [11, 2, 0]);
+    assert.deepEqual([textAssessmentShortcut(true, 300, false), textAssessmentShortcut(false, 300, false), textAssessmentShortcut(false, 300, true)], [300, 0, -300]);
+    const categories = [{ id: 'c', questions: [{ id: 'q', text: 'Q', answer: 'A', points: 100, isTextAnswerQuestion: true, assessAllAtOnce: true }] }];
+    assert.equal(stripPendingCategories(JSON.parse(JSON.stringify(stripPendingCategories(categories))))[0].questions[0].assessAllAtOnce, true);
+    categories[0].questions[0].isTextAnswerQuestion = false;
+    assert.equal(stripPendingCategories(categories)[0].questions[0].assessAllAtOnce, undefined);
+    const current = room({ players: { host: { isHost: true, score: 0 }, alice: { isHost: false, score: 100 } } });
+    assert.equal(createTextAnswerRound(current, 'q', 's').assessAllAtOnce, undefined);
+    current.textAnswerRound = createTextAnswerRound(current, 'q', 's', 0, 0, true);
+    assert.deepEqual(current.textAnswerRound.draftPoints, { alice: 0 });
+    assert.equal(bulkTextAnswerBlockReason(current, 's', 'host', 0), 'stale');
+    current.textAnswerRound.phase = 'reviewing';
+    assert.equal(bulkTextAnswerBlockReason(current, 's', 'host', 0), null);
+    for (const [session, actor, revision] of [['old', 'host', 0], ['s', 'alice', 0], ['s', 'host', 1]]) assert.equal(bulkTextAnswerBlockReason(current, session, actor, revision), 'stale');
+    assert.equal(textAnswerBlockReason(current, 's', 'host', 'reveal', 0), 'stale');
+    current.textAnswerRound.phase = 'complete';
+    assert.equal(bulkTextAnswerBlockReason(current, 's', 'host', 0), 'stale');
+});
 
 test('text answers: trim, Unicode limits, multiline rejection and point validation', () => {
     assert.equal(normalizeTextAnswer('  Kyiv  '), 'Kyiv');

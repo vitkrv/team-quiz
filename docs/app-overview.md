@@ -58,6 +58,42 @@ Accept/Deny update correctness, streaks, category totals and score history; Skip
 is neutral. Submitted text is shared room data hidden by the UI, not confidential
 against inspection, and is cleared on Continue/Finish without being saved in history.
 
+
+### Assess all at once
+
+Text-answer questions can optionally enable **Assess all at once** in either pack
+editor layout. It is off by default; existing packs and rooms retain sequential
+assessment. Disabling Text Answer (including selecting Surprise) clears the option.
+The saved choice is frozen with the pack and captured when the question opens.
+
+Submission and closing controls are unchanged. During bulk review the host sees
+all frozen answers in roster order, with no reorder controls. Every points input
+starts at zero and accepts signed safe integers. Minus/plus use the current round's
+100/200/400 increment. Check sets the question value; Cross sets zero in standard
+mode and the negative question value in competitive mode. Custom negative values
+are allowed in either mode. Positive values are green, negative red, and zero gray.
+
+Valid edits save on blur or shortcut clicks and survive refresh. Scores do not
+change during review. Contestants and spectators see only a waiting message in
+the review area; draft concealment is UI-only, like existing shared answers.
+**Reveal results** flushes valid unsaved edits, then atomically applies all deltas,
+records history/recap, and reveals the official answer. Everyone sees the same
+Player / Answer / Points change table instead of points tags. A host checkbox below
+the review table, enabled by default for each question, controls whether submitted
+answers appear in participant/spectator results. When unchecked, they see names
+and points only; the host keeps all answers. The choice saves during review,
+survives refresh, and locks on reveal. Missing submissions
+show “Nothing”; untouched zero rows may be revealed. Selection turn stays unchanged.
+
+The final value determines statistics: positive means correct, negative means
+incorrect, and zero is neutral (including standard-mode Cross). Check/Cross do not
+store a separate correctness judgment. Revision/session guards reject stale edits
+and duplicate reveals. No submitted text is retained in history or recap.
+
+Release updated Firestore rules before the frontend when deployment is authorized;
+reload older clients before playing bulk-assessment questions. No migration, index,
+or ImageKit Worker release is needed.
+
 Despite the repository name `team-quiz`, the current game stores and ranks individual player entries. It has no separate team roster or team-scoring model.
 
 ## Roles

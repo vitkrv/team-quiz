@@ -1,3 +1,4 @@
+import useTextAssessments from '../../hooks/useTextAssessments';
 import AnswerTimer from '../../components/AnswerTimer';
 import TextAnswerQuestion from '../../components/TextAnswerQuestion';
 import { getPackTheme } from '../../utils/packTheme';
@@ -285,6 +286,7 @@ export default function ActiveQuestionView({ room, roomCode, roomRef, user, isHo
     const [mediaStopReached, setMediaStopReached] = useState(null);
     const [mediaActionBusy, setMediaActionBusy] = useState(false);
     const textActionBusy = useRef(false);
+    const textAssessment = useTextAssessments(room, roomRef, user, t);
     const [textActionPending, setTextActionPending] = useState(false);
     const [hostMediaState, setHostMediaState] = useState({});
     const hostMediaController = useRef(null);
@@ -886,7 +888,7 @@ export default function ActiveQuestionView({ room, roomCode, roomRef, user, isHo
 
             <div className={`active-question-enter-content ${isHost ? 'host-question-layout' : ''} relative z-10 flex min-h-0 w-full flex-1 flex-col items-center ${isAnswerFocused || (!isHost && isTextAnswerQuestion && textRound?.phase === 'reviewing') ? 'justify-center' : 'justify-start'} ${isEntranceContentVisible ? 'active-question-enter-content--visible' : ''}`}>
             <div className={isHost ? 'host-question-content' : 'contents'}>
-            {isHost && isTextAnswerQuestion && textRound && <TextAnswerQuestion sharedBusy={textActionBusy} sharedPending={textActionPending} onPendingChange={setTextActionPending} key={`${textRound.id}:${user.uid}`} room={room} roomRef={roomRef} user={user}
+            {isHost && isTextAnswerQuestion && textRound && <TextAnswerQuestion assessment={textAssessment} sharedBusy={textActionBusy} sharedPending={textActionPending} onPendingChange={setTextActionPending} key={`${textRound.id}:${user.uid}`} room={room} roomRef={roomRef} user={user}
                 question={activeQ} isHost={isHost} isSpectator={isSpectator} t={t} />}
             <QuestionPresenter
                 question={activeQ}
@@ -919,7 +921,7 @@ export default function ActiveQuestionView({ room, roomCode, roomRef, user, isHo
                 }}
             />
 
-            {!isHost && isTextAnswerQuestion && textRound && <TextAnswerQuestion sharedBusy={textActionBusy} sharedPending={textActionPending} onPendingChange={setTextActionPending} key={`${textRound.id}:${user.uid}`} room={room} roomRef={roomRef} user={user}
+            {!isHost && isTextAnswerQuestion && textRound && <TextAnswerQuestion assessment={textAssessment} sharedBusy={textActionBusy} sharedPending={textActionPending} onPendingChange={setTextActionPending} key={`${textRound.id}:${user.uid}`} room={room} roomRef={roomRef} user={user}
                 question={activeQ} isHost={isHost} isSpectator={isSpectator} t={t} />}
 
             {isAnswerRevealed && (
@@ -1084,7 +1086,7 @@ export default function ActiveQuestionView({ room, roomCode, roomRef, user, isHo
             {isHost && (
                 <aside className="host-question-controls" aria-label={t('hostQuestionControls')}>
                     <h2 className="text-xs font-bold uppercase tracking-widest text-slate-400 theme-muted">{t('hostQuestionControls')}</h2>
-                    {isTextAnswerQuestion && textRound && <TextAnswerQuestion sharedBusy={textActionBusy} sharedPending={textActionPending} onPendingChange={setTextActionPending} key={`${textRound.id}:controls`} controls room={room} roomRef={roomRef} user={user}
+                    {isTextAnswerQuestion && textRound && <TextAnswerQuestion assessment={textAssessment} sharedBusy={textActionBusy} sharedPending={textActionPending} onPendingChange={setTextActionPending} key={`${textRound.id}:controls`} controls room={room} roomRef={roomRef} user={user}
                         question={activeQ} isHost={isHost} isSpectator={isSpectator} t={t} />}
                     {!isTextAnswerQuestion && !isAnswerRevealed && (isSurpriseQuestion || hasBuzzed) && (
                         <div className="flex min-w-0 flex-col items-center gap-2">

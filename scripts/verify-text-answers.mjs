@@ -40,6 +40,171 @@ export async function verifyTextAnswers({ actions, check, denied, hostDb, player
         buzzUnlockAt: null, buzzAttempts: {}, incorrectBuzzedIds: [],
         history: [event('board_resumed', 'host', { questionId })] });
 
+    const makeBulk = async (count = 3, legacy = false, competitive = false) => {
+        const source = structuredClone(pack);
+        source.rounds[0].categories[0].questions[0].assessAllAtOnce = true;
+        return make(competitive, count, legacy, source);
+    };
+    const saveBulk = (game, revision, uid, points) => stage(`bulk save ${revision}`, () => actions.saveTextAssessment(game.host, game.round.id, 'host', revision, uid, points));
+    const revealBulk = (game, revision) => stage(`bulk reveal ${revision}`, () => actions.revealTextAssessments(game.host, game.round.id, actor, revision, t));
+    for (const legacy of [false, true]) await check(`bulk text: answer visibility defaults, persistence, authorization and reveal ${legacy}`, async () => {
+        const game = await makeBulk(3, legacy);
+        const saveVisibility = (revision, show) => actions.saveTextAnswerVisibility(game.host, game.round.id, 'host', revision, show);
+        assert.equal(game.round.showAnswers, true);
+        assert.equal(await saveVisibility(0, false), 'stale');
+        await actions.submitTextAnswer(game.player, game.round.id, 'player', 'Hidden answer');
+        await actions.closeTextAnswering(game.host, game.round.id, 'host');
+        const before = await read(game.host);
+        assert.equal(await saveVisibility(0, false), 'saved');
+        const saved = await read(game.host);
+        assert.equal(saved.textAnswerRound.showAnswers, false);
+        assert.deepEqual(saved.players, before.players);
+        assert.deepEqual(saved.textAnswerRound.answers, before.textAnswerRound.answers);
+        assert.deepEqual(saved.textAnswerRound.draftPoints, before.textAnswerRound.draftPoints);
+        for (const target of [game.player, game.spectator]) await denied(updateDoc(target, {
+            'textAnswerRound.showAnswers': true, 'textAnswerRound.assessmentRevision': 2
+        }));
+        await denied(updateDoc(game.host, { 'textAnswerRound.showAnswers': 'false', 'textAnswerRound.assessmentRevision': 2 }));
+        assert.equal(await saveVisibility(0, true), 'stale');
+        assert.equal(await revealBulk(game, 0), 'stale');
+        assert.equal(await saveVisibility(1, true), 'saved');
+        assert.equal(await saveVisibility(2, false), 'saved');
+        assert.equal(await revealBulk(game, 3), 'revealed');
+        const result = await read(game.spectator);
+        assert.equal(result.textAnswerRound.showAnswers, false);
+        assert.deepEqual(result.players, before.players);
+        assert.equal(await saveVisibility(3, true), 'stale');
+        await denied(updateDoc(game.host, { 'textAnswerRound.showAnswers': true, 'textAnswerRound.assessmentRevision': 4 }));
+    });
+
+    for (const legacy of [false, true]) for (const competitive of [false, true]) await check(`bulk text: atomic signed scoring, neutral zeros, history and compatibility ${legacy}/${competitive}`, async () => {
+        const game = await makeBulk(3, legacy, competitive);
+        assert.equal(game.round.assessAllAtOnce, true);
+        assert.deepEqual(game.round.draftPoints, Object.fromEntries(game.ids.map((uid) => [uid, 0])));
+        assert.equal(await saveBulk(game, 0, 'player', 10), 'stale');
+        await actions.submitTextAnswer(game.player, game.round.id, 'player', 'bulk private answer');
+        await actions.closeTextAnswering(game.host, game.round.id, 'host');
+        const before = await read(game.host);
+        assert.equal(await saveBulk(game, 0, game.ids[0], 123), 'saved');
+        assert.equal(await saveBulk(game, 1, game.ids[1], -234), 'saved');
+        assert.equal(await reveal(game, 0), 'stale');
+        assert.equal(await judge(game, 0, 'accept', 1), 'stale');
+        assert.equal(await actions.reorderTextAnswer(game.host, game.round.id, 'host', 0, game.ids[1], -1, game.ids), 'stale');
+        const draft = await read(game.host);
+        assert.deepEqual(draft.players, before.players);
+        assert.equal(draft.answerRevealed, false);
+        assert.deepEqual(draft.textAnswerRound.answers, before.textAnswerRound.answers);
+        assert.equal(draft.textAnswerRound.draftPoints[game.ids[1]], -234);
+        const results = await Promise.all([revealBulk(game, 2), revealBulk(game, 2)]);
+        assert.deepEqual(results.sort(), ['revealed', 'stale']);
+        const after = await read(game.host);
+        assert.deepEqual(game.ids.map((uid) => after.players[uid].score), [223, -134, 100]);
+        assert.equal(after.currentTurn, game.turn);
+        assert.equal(after.answerRevealed, true);
+        assert.equal(after.textAnswerRound.phase, 'complete');
+        assert.deepEqual(after.textAnswerRound.scoreDeltas, draft.textAnswerRound.draftPoints);
+        assert.deepEqual((await read(game.spectator)).textAnswerRound.scoreDeltas, draft.textAnswerRound.draftPoints);
+        assert.equal(await saveBulk(game, 2, 'player', 999), 'stale');
+        const history = legacy ? after.history : (await getDocs(collection(game.host, 'history'))).docs.map((d) => d.data());
+        const events = history.filter((e) => e.type.startsWith('text_answer_'));
+        assert.equal(events.length, 3);
+        assert.ok(events.every((e) => !JSON.stringify(e).includes('bulk private answer')));
+        if (!legacy) {
+            const recap = await read(doc(game.host, 'recap', 'summary'));
+            assert.equal(recap.players[game.ids[0]].correct, 1);
+            assert.equal(recap.players[game.ids[1]].incorrect, 1);
+            assert.equal(recap.players[game.ids[2]].correct + recap.players[game.ids[2]].incorrect, 0);
+            const scores = await getDocs(collection(game.host, 'recapScores'));
+            assert.equal(scores.size, 2);
+            await stage('bulk score reversal', () => actions.savePlayerScore(game.host, { playerId: game.ids[0], actor, manualDelta: 0,
+                sourceEventIds: [events.find((e) => e.details.playerId === game.ids[0]).id], operationId: `bulk-reverse-${competitive}` }));
+            assert.equal((await read(game.host)).players[game.ids[0]].score, 100);
+        }
+        await resume(game);
+        assert.equal((await read(game.host)).textAnswerRound, null);
+    });
+
+    await check('bulk text: permissions, frozen answers, revision conflicts and overflow', async () => {
+        const game = await makeBulk();
+        await actions.closeTextAnswering(game.host, game.round.id, 'host');
+        for (const target of [game.player, game.spectator]) await denied(updateDoc(target, {
+            'textAnswerRound.draftPoints.player': 10, 'textAnswerRound.assessmentRevision': 1, 'textAnswerRound.assessmentPlayerId': 'player' }));
+        for (const update of [
+            { 'textAnswerRound.assessAllAtOnce': false }, { 'textAnswerRound.answers.player': 'changed' },
+            { 'textAnswerRound.draftPoints.player': 10 },
+            { 'textAnswerRound.draftPoints.player': 0.5, 'textAnswerRound.assessmentRevision': 1, 'textAnswerRound.assessmentPlayerId': 'player' },
+            { 'textAnswerRound.draftPoints.host': 10, 'textAnswerRound.assessmentRevision': 1, 'textAnswerRound.assessmentPlayerId': 'host' },
+            { 'textAnswerRound.draftPoints.player': 10, 'textAnswerRound.assessmentRevision': 1, 'textAnswerRound.assessmentPlayerId': 'player', 'players.player.score': 110 }
+        ]) await denied(updateDoc(game.host, update));
+        const saves = await Promise.all([saveBulk(game, 0, 'player', 10), saveBulk(game, 0, 'player', 20)]);
+        assert.deepEqual(saves.sort(), ['saved', 'stale']);
+        assert.equal(await revealBulk(game, 0), 'stale');
+        assert.equal(await saveBulk(game, 1, 'player', Number.MAX_SAFE_INTEGER), 'saved');
+        await assert.rejects(revealBulk(game, 2), /Invalid points/);
+        assert.equal((await read(game.host)).players.player.score, 100);
+        assert.equal(await saveBulk(game, 2, 'player', -1), 'saved');
+        const racing = await Promise.all([saveBulk(game, 3, 'player', 5), revealBulk(game, 3)]);
+        assert.equal(racing.filter((result) => result === 'stale').length, 1);
+        if (racing[0] === 'saved') assert.equal(await revealBulk(game, 4), 'revealed');
+        assert.equal((await read(game.host)).players.player.score, racing[0] === 'saved' ? 105 : 99);
+    });
+
+    for (const zero of [false, true]) await check(`bulk text: twenty-player atomic reveal, all zero=${zero}`, async () => {
+        const game = await makeBulk(20);
+        await actions.closeTextAnswering(game.host, game.round.id, 'host');
+        const summaryBefore = await read(doc(game.host, 'recap', 'summary'));
+        let revision = 0;
+        if (!zero) for (const [index, uid] of game.ids.entries()) {
+            assert.equal(await saveBulk(game, revision++, uid, index % 2 ? -101 : 202), 'saved');
+        }
+        assert.equal(await revealBulk(game, revision), 'revealed');
+        const room = await read(game.host);
+        game.ids.forEach((uid, index) => assert.equal(room.players[uid].score, zero ? 100 : index % 2 ? -1 : 302));
+        const summary = await read(doc(game.host, 'recap', 'summary'));
+        if (zero) assert.deepEqual(summary, summaryBefore);
+        else game.ids.forEach((uid, index) => assert.equal(summary.players[uid][index % 2 ? 'incorrect' : 'correct'], 1));
+        assert.equal((await getDocs(collection(game.host, 'recapScores'))).size, zero ? 0 : 20);
+        const events = (await getDocs(collection(game.host, 'history'))).docs.filter((d) => d.id.startsWith(`text_${game.round.id}_`));
+        assert.equal(events.length, 20);
+        assert.equal(await revealBulk(game, revision), 'stale');
+    });
+
+    await check('bulk text: grouped proofs reject missing records, forged scores and profile changes', async () => {
+        const game = await makeBulk(20);
+        await actions.closeTextAnswering(game.host, game.round.id, 'host');
+        const before = await read(game.host), round = before.textAnswerRound;
+        const completion = { textAnswerRound: { ...round, phase: 'complete', reviewIndex: 20, scoreDeltas: round.draftPoints },
+            answerRevealed: true, 'questionStates.text-question-0': 'done', mediaPlayback: null };
+        await denied(updateDoc(game.host, completion));
+        for (const [index, field, value] of [[0, 'score', 101], [17, 'score', 101], [7, 'name', 'forged']]) {
+            const batch = writeBatch(hostDb);
+            batch.update(game.host, { ...completion, [`players.${game.ids[index]}.${field}`]: value });
+            round.playerIds.forEach((uid, i) => {
+                const id = `text_${round.id}_${i}`;
+                batch.set(doc(game.host, 'history', id), { ...event('text_answer_skipped', 'host', {
+                    sessionId: round.id, playerId: uid, playerName: uid, questionId: round.questionId, reviewIndex: i,
+                    batchIndex: i, amount: 0, points: 0, delta: 0, previousScore: 100, nextScore: 100, isScoreChange: false
+                }), id, recordedAt: serverTimestamp() });
+            });
+            await denied(batch.commit());
+            assert.deepEqual((await read(game.host)).players, before.players);
+        }
+        assert.equal(await revealBulk(game, 0), 'revealed');
+    });
+
+    await check('bulk text: twenty-player legacy room retains embedded history and bounded proofs', async () => {
+        const game = await makeBulk(20, true);
+        await actions.closeTextAnswering(game.host, game.round.id, 'host');
+        for (const [index, uid] of game.ids.entries()) await saveBulk(game, index, uid, index % 2 ? -100 : 200);
+        assert.equal(await revealBulk(game, 20), 'revealed');
+        const after = await read(game.host);
+        assert.equal(after.history.filter((e) => e.type.startsWith('text_answer_')).length, 20);
+        game.ids.forEach((uid, i) => assert.equal(after.players[uid].score, i % 2 ? 0 : 300));
+        assert.equal((await getDocs(collection(game.host, 'history'))).docs.filter((d) => d.id.startsWith(`text_${game.round.id}_`)).length, 4);
+        await resume(game);
+        assert.equal((await read(game.host)).textAnswerRound, null);
+    });
+
     for (const legacy of [false, true]) for (const competitive of [false, true]) await check('text answers: persisted ordering, locks, races and authorization ' + legacy + '/' + competitive, async () => {
         const game = await make(competitive, 4, legacy);
         const move = (index, uid, direction, order) => actions.reorderTextAnswer(game.host, game.round.id, 'host', index, uid, direction, order);

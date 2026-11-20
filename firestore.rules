@@ -119,7 +119,12 @@ service cloud.firestore {
         && after.status == 'playing' && !after.answerRevealed && after.buzzerRoundId == null
         && after.activeQuestionId == question.id && before.questionStates[question.id] == 'available'
         && question.get('isTextAnswerQuestion', false) && !question.get('isSurpriseQuestion', false)
-        && round.keys().hasOnly(['version', 'id', 'questionId', 'categoryIndex', 'questionIndex', 'phase', 'playerIds', 'answers', 'reviewIndex', 'answerVisible'])
+        && round.keys().hasOnly(['version', 'id', 'questionId', 'categoryIndex', 'questionIndex', 'phase', 'playerIds', 'answers', 'reviewIndex', 'answerVisible', 'assessAllAtOnce', 'assessmentRevision', 'draftPoints', 'showAnswers'])
+        && round.get('showAnswers', true) == true
+        && round.get('assessAllAtOnce', false) == question.get('assessAllAtOnce', false)
+        && (round.get('assessAllAtOnce', false) ? (round.assessmentRevision == 0
+          && round.draftPoints.keys().toSet() == round.playerIds.toSet() && round.draftPoints.values().toSet() == [0].toSet())
+          : !round.keys().hasAny(['assessmentRevision', 'draftPoints']))
         && round.version == 1 && round.id is string && round.id.matches('^[A-Za-z0-9_-]{1,100}$')
         && round.questionId == question.id && round.phase == 'answering' && round.reviewIndex == 0 && !round.answerVisible
         && round.playerIds is list && round.playerIds.size() > 0 && round.playerIds.size() <= 20
@@ -128,6 +133,109 @@ service cloud.firestore {
         && round.answers is map && round.answers.keys().toSet() == round.playerIds.toSet()
         && round.answers.values().toSet() == [''].toSet()
         && after.players == before.players && after.currentTurn == before.currentTurn;
+    }
+
+
+    function validBulkDraft(previous, next) {
+      let uid = next.assessmentPlayerId;
+      let amount = next.draftPoints[uid];
+      return uid in previous.playerIds && next.draftPoints.keys() == previous.draftPoints.keys()
+        && next.draftPoints.diff(previous.draftPoints).affectedKeys().hasOnly([uid])
+        && amount is int && amount >= -9007199254740991 && amount <= 9007199254740991;
+    }
+
+    function validBulkPlayerScore(old, next, delta) {
+      let score = next.score;
+      return next.diff(old).affectedKeys().hasOnly(['score'])
+        && score >= -9007199254740991 && score <= 9007199254740991
+        && score == old.score + delta;
+    }
+
+    function validBulkTextHost(appId, gameId, before, after) {
+      let previous = before.textAnswerRound;
+      let next = after.textAnswerRound;
+      return next.answers == previous.answers && next.playerIds == previous.playerIds
+        && (after.diff(before).affectedKeys().hasOnly(['textAnswerRound'])
+          && (previous.phase == 'answering' && next.phase == 'reviewing'
+              && next.diff(previous).affectedKeys().hasOnly(['phase'])
+            || previous.phase == 'reviewing' && next.phase == 'reviewing'
+              && next.diff(previous).affectedKeys().hasOnly(['showAnswers', 'assessmentRevision'])
+              && next.showAnswers is bool && next.assessmentRevision == previous.assessmentRevision + 1
+            || previous.phase == 'reviewing' && next.phase == 'reviewing'
+              && next.diff(previous).affectedKeys().hasOnly(['draftPoints', 'assessmentRevision', 'assessmentPlayerId'])
+              && next.assessmentRevision == previous.assessmentRevision + 1
+              && validBulkDraft(previous, next))
+          || previous.phase == 'reviewing' && next.phase == 'complete'
+            && validBulkTextCompletion(appId, gameId, before, after));
+    }
+
+    function validBulkTextCompletion(appId, gameId, before, after) {
+      let previous = before.textAnswerRound;
+      let next = after.textAnswerRound;
+      let count = previous.playerIds.size();
+      return next.diff(previous).affectedKeys().hasOnly(['phase', 'reviewIndex', 'scoreDeltas'])
+        && next.reviewIndex == previous.playerIds.size() && next.scoreDeltas == previous.draftPoints
+        && after.players.keys() == before.players.keys() && after.players[before.hostId] == before.players[before.hostId]
+        && after.currentTurn == before.currentTurn && after.answerRevealed
+        && after.questionStates[before.activeQuestionId] == 'done'
+        && after.questionStates.diff(before.questionStates).affectedKeys().hasOnly([before.activeQuestionId])
+        && after.mediaPlayback == null
+        && after.diff(before).affectedKeys().hasOnly(['textAnswerRound', 'players', 'answerRevealed', 'questionStates', 'mediaPlayback', 'history'])
+        && bulkProofExists(appId, gameId, previous.id, count - 1)
+        && (count <= 5 || bulkProofExists(appId, gameId, previous.id, 4))
+        && (count <= 10 || bulkProofExists(appId, gameId, previous.id, 9))
+        && (count <= 15 || bulkProofExists(appId, gameId, previous.id, 14))
+        && (before.get('recapVersion', 0) != 1 || previous.draftPoints.values().toSet() == [0].toSet()
+          || validBulkRecapCommit(appId, gameId, previous.id));
+    }
+
+    // Up to four history records validate groups of at most five contestants.
+    // Reading one proof per group avoids both the expression and document-access limits.
+    function bulkProofExists(appId, gameId, sessionId, index) {
+      let id = 'text_' + sessionId + '_' + string(index);
+      let proof = getAfter(/databases/$(database)/documents/artifacts/$(appId)/public/data/rooms/$(gameId)/history/$(id)).data;
+      return proof.id == id && proof.actorId == request.auth.uid && proof.recordedAt == request.time;
+    }
+
+    function validBulkScoreGroup(before, after, offset) {
+      let ids = before.textAnswerRound.playerIds;
+      let count = ids.size();
+      let players = before.players;
+      let updated = after.players;
+      let deltas = before.textAnswerRound.draftPoints;
+      return (count <= offset + 0 || validBulkPlayerScore(players[ids[offset + 0]], updated[ids[offset + 0]], deltas[ids[offset + 0]]))
+        && (count <= offset + 1 || validBulkPlayerScore(players[ids[offset + 1]], updated[ids[offset + 1]], deltas[ids[offset + 1]]))
+        && (count <= offset + 2 || validBulkPlayerScore(players[ids[offset + 2]], updated[ids[offset + 2]], deltas[ids[offset + 2]]))
+        && (count <= offset + 3 || validBulkPlayerScore(players[ids[offset + 3]], updated[ids[offset + 3]], deltas[ids[offset + 3]]))
+        && (count <= offset + 4 || validBulkPlayerScore(players[ids[offset + 4]], updated[ids[offset + 4]], deltas[ids[offset + 4]]));
+    }
+
+    function validBulkRecapCommit(appId, gameId, sessionId) {
+      let path = /databases/$(database)/documents/artifacts/$(appId)/public/data/rooms/$(gameId)/recap/summary;
+      let summary = getAfter(path).data;
+      return summary.sequence > get(path).data.sequence
+        && summary.lastEventId.matches('^text_' + sessionId + '_[0-9]+$');
+    }
+
+    function validBulkTextEvent(before, after, event) {
+      let previous = before.textAnswerRound;
+      let next = after.textAnswerRound;
+      let d = event.details;
+      let uid = d.playerId;
+      let delta = previous.draftPoints[uid];
+      return request.auth.uid == before.hostId && previous.phase == 'reviewing' && next.phase == 'complete'
+        && next.id == previous.id && d.sessionId == previous.id && d.questionId == previous.questionId
+        && d.reviewIndex is int && d.reviewIndex >= 0 && d.reviewIndex < previous.playerIds.size()
+        && uid == previous.playerIds[d.reviewIndex] && d.batchIndex == d.reviewIndex
+        && event.id == 'text_' + previous.id + '_' + string(d.reviewIndex)
+        && event.type == (delta > 0 ? 'text_answer_accepted' : delta < 0 ? 'text_answer_denied' : 'text_answer_skipped')
+        && d.points == delta && d.delta == delta && d.amount == (delta < 0 ? -delta : delta)
+        && d.previousScore == before.players[uid].score && d.nextScore == after.players[uid].score
+        && d.nextScore == d.previousScore + delta
+        && (d.reviewIndex in [4, 9, 14, previous.playerIds.size() - 1]
+          ? validBulkScoreGroup(before, after, d.reviewIndex < 5 ? 0 : d.reviewIndex < 10 ? 5 : d.reviewIndex < 15 ? 10 : 15) : true)
+        && d.keys().hasOnly(['sessionId', 'playerId', 'playerName', 'questionId', 'reviewIndex', 'amount',
+          'points', 'previousScore', 'nextScore', 'delta', 'operationId', 'categoryId', 'isScoreChange', 'batchIndex']);
     }
 
     function validTextAnswerSubmission(before, after) {
@@ -149,7 +257,8 @@ service cloud.firestore {
     function validTextAnswerHost(appId, gameId, before, after) {
       let previous = before.textAnswerRound;
       let next = after.textAnswerRound;
-      return validTextAnswerReorder(before, after) || (next.answers == previous.answers
+      return previous.get('assessAllAtOnce', false) ? validBulkTextHost(appId, gameId, before, after)
+        : validTextAnswerReorder(before, after) || (next.answers == previous.answers
         && next.diff(previous).affectedKeys().hasOnly(['phase', 'reviewIndex', 'answerVisible', 'scoreDeltas'])
         && (after.diff(before).affectedKeys().hasOnly(['textAnswerRound'])
           && next.get('scoreDeltas', {}) == previous.get('scoreDeltas', {})
@@ -529,7 +638,9 @@ service cloud.firestore {
       let event = request.resource.data;
       let roomPath = /databases/$(database)/documents/artifacts/$(appId)/public/data/rooms/$(gameId);
       let after = getAfter(roomPath).data;
-      return after.dataVersion == 2
+      return (after.get('dataVersion', 1) == 2 || (isBulkTextRoom(after)
+          && event.type in ['text_answer_accepted', 'text_answer_denied', 'text_answer_skipped']
+          && event.details.reviewIndex in [4, 9, 14, after.textAnswerRound.playerIds.size() - 1]))
         && (event.type in ['text_answer_accepted', 'text_answer_denied', 'text_answer_skipped']
           ? validTextAnswerEvent(get(roomPath).data, after, event)
           : get(roomPath).data.get('textAnswerRound', null) == null
@@ -558,7 +669,8 @@ service cloud.firestore {
     function validTextAnswerEvent(before, after, event) {
       let previous = before.textAnswerRound;
       let next = after.textAnswerRound;
-      return request.auth.uid == before.hostId && previous.phase == 'reviewing' && previous.answerVisible
+      return previous.get('assessAllAtOnce', false) ? validBulkTextEvent(before, after, event)
+        : request.auth.uid == before.hostId && previous.phase == 'reviewing' && previous.answerVisible
         && event.id == 'text_' + previous.id + '_' + string(previous.reviewIndex)
         && event.details.playerId == previous.playerIds[previous.reviewIndex]
         && next.id == previous.id && next.reviewIndex == previous.reviewIndex + 1
@@ -788,8 +900,32 @@ service cloud.firestore {
 
     match /artifacts/{appId}/public/data/rooms/{gameId}/recapScores/{eventId} {
       allow read: if isGoogleUser() || isAdmin(appId);
-      allow create: if isGoogleUser() && validRecapScore(appId, gameId, eventId);
+      allow create: if isGoogleUser() && (request.resource.data.source in ['text_answer_accepted', 'text_answer_denied']
+        && isBulkTextRoom(get(/databases/$(database)/documents/artifacts/$(appId)/public/data/rooms/$(gameId)).data)
+        ? validBulkRecapScore(appId, gameId, eventId) : validRecapScore(appId, gameId, eventId));
       allow update, delete: if false;
+    }
+
+    function isBulkTextRoom(room) {
+      return room.get('textAnswerRound', null) != null && room.textAnswerRound.get('assessAllAtOnce', false);
+    }
+
+    function validBulkRecapScore(appId, gameId, eventId) {
+      let path = /databases/$(database)/documents/artifacts/$(appId)/public/data/rooms/$(gameId);
+      let room = get(path).data;
+      let next = getAfter(path).data;
+      let score = request.resource.data;
+      let round = room.textAnswerRound;
+      return request.auth.uid == room.hostId && room.recapVersion == 1
+        && round.phase == 'reviewing' && next.textAnswerRound.phase == 'complete'
+        && next.textAnswerRound.id == round.id && score.id == eventId
+        && score.batchIndex is int && score.batchIndex >= 0 && score.batchIndex < round.playerIds.size()
+        && score.playerId == round.playerIds[score.batchIndex]
+        && eventId == 'text_' + round.id + '_' + string(score.batchIndex)
+        && score.source == (round.draftPoints[score.playerId] > 0 ? 'text_answer_accepted' : 'text_answer_denied')
+        && score.delta != 0 && score.delta == round.draftPoints[score.playerId]
+        && score.before == room.players[score.playerId].score && score.after == next.players[score.playerId].score
+        && score.delta == score.after - score.before && score.sequence is int;
     }
 
     function validRecapScore(appId, gameId, eventId) {

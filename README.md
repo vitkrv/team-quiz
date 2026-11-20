@@ -215,6 +215,14 @@ Validate the checked-in rules through `npm run test:storage`, then release rules
 before the frontend only when deployment is authorized. Older clients must reload
 before playing text-enabled packs. No migration, index, or Worker release is needed.
 
+For private bulk review, enable **Assess all at once** on a text-answer question.
+The host edits signed points for every answer, then **Reveal results** applies all
+scores together and shows everyone a names/answers/points table. A checkbox below
+the review table defaults on; turn it off to show participants only names and points. Positive points
+count as correct, negative as incorrect, and zero is neutral. Sequential assessment
+remains the default. Saved drafts survive refresh; hidden review is UI-only.
+Updated rules must precede the frontend release, and older clients must reload.
+
 ## Pack rounds
 
 The pack editor offers **Form** and **Table** modes over the same draft. Form is
