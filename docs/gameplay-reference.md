@@ -407,7 +407,7 @@ When all questions across all pack rounds are done and the host has returned to 
 
 Only top-score-tied contestants enter this bracket. The host selects pairs and can advance a contestant with a bye. Match winners advance, losers are eliminated, and the last unpaired contestant in a round can advance automatically. Rounds continue until one champion remains. The host then finishes the game.
 
-Quiz scores remain unchanged. Final standings place the tie-breaker champion first and sort other contestants by score descending. Lower-place ties are not separately resolved; the results UI displays sequential rank numbers.
+Quiz scores remain unchanged. Final standings place the tie-breaker champion first and sort other contestants by score descending. Equal scores use player ID order in the live leaderboard, round standings, and final standings, so unchanged scores do not shuffle when room map entries arrive in a different order. This display order does not resolve a gameplay tie; the results UI displays sequential rank numbers.
 
 ### Early finish and shared result links
 

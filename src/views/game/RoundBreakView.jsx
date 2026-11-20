@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Play } from 'lucide-react';
 import { handleEndGame, createHistoryItem, startNextRound } from '../../actions/gameActions';
-import { getParticipantEntries } from '../../utils/gameResults';
+import { getStandingsEntries } from '../../utils/gameResults';
 import { useLanguage } from '../../useLanguage';
 import HoldToConfirmButton from '../../components/HoldToConfirmButton';
 
@@ -24,7 +24,7 @@ export default function RoundBreakView({ room, roomRef, isHost, actor }) {
         <h1 className="text-3xl font-black text-yellow-400 theme-accent">{t('roundComplete', { round: room.currentRoundIndex + 1 })}</h1>
         <h2 className="font-bold text-slate-300 theme-muted">{t('roundStandings')}</h2>
         <ol className="space-y-2 text-left">
-            {getParticipantEntries(room.players).sort(([, a], [, b]) => (Number(b.score) || 0) - (Number(a.score) || 0))
+            {getStandingsEntries(room.players)
                 .map(([id, player]) => <li key={id} className="flex justify-between gap-4 rounded-xl bg-slate-800 theme-raised p-3">
                     <span className="break-words">{player.name}</span><strong className="shrink-0">{Number(player.score) || 0}</strong>
                 </li>)}

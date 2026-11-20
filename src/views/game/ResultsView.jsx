@@ -1,20 +1,12 @@
 import ResultsRecap from './ResultsRecap';
 import { Trophy } from 'lucide-react';
 import { useLanguage } from '../../useLanguage';
+import { getStandingsEntries } from '../../utils/gameResults';
 
 export default function ResultsView({ room, gameId, leaveRoom }) {
     const { t } = useLanguage();
     const championId = room.tieBreaker?.championId || null;
-    const playerEntries = Object.entries(room.players)
-        .filter(([, player]) => !player.isHost)
-        .sort((a, b) => {
-            if (championId) {
-                if (a[0] === championId) return -1;
-                if (b[0] === championId) return 1;
-            }
-
-            return (b[1].score || 0) - (a[1].score || 0);
-        });
+    const playerEntries = getStandingsEntries(room.players, championId);
     const winnerEntry = championId && room.players[championId] && !room.players[championId].isHost
         ? [championId, room.players[championId]]
         : playerEntries[0];

@@ -2,6 +2,15 @@ export const getParticipantEntries = (players = {}) => (
     Object.entries(players).filter(([, player]) => !player.isHost)
 );
 
+export const getStandingsEntries = (players = {}, championId = null) => (
+    getParticipantEntries(players).sort(([aId, a], [bId, b]) => {
+        const championOrder = Number(bId === championId) - Number(aId === championId);
+        const scoreOrder = (Number(b.score) || 0) - (Number(a.score) || 0);
+        // Snapshot map order can change; immutable IDs keep equal scores stable.
+        return championOrder || scoreOrder || (aId < bId ? -1 : aId > bId ? 1 : 0);
+    })
+);
+
 export const getTopTiedPlayerIds = (players = {}) => {
     const playerEntries = getParticipantEntries(players);
     if (playerEntries.length < 2) return [];

@@ -23,7 +23,7 @@ import { getRoomAnalyticsSummary, trackEvent } from '../../services/analytics';
 import { useLanguage } from '../../useLanguage';
 import { closeHostRps, closePrizeModal, createHistoryItem, openPrizeModal, resolveHostRpsThrow, revealPrizeModal, startHostRps, submitHostRpsChoice } from '../../actions/gameActions';
 import { getMediaKind, getMediaUrl, MEDIA_KINDS } from '../../services/imageStorage';
-import { hasDefinedFinalResults } from '../../utils/gameResults';
+import { getStandingsEntries, hasDefinedFinalResults } from '../../utils/gameResults';
 import ActiveQuestionView from './ActiveQuestionView';
 import BoardView from './BoardView';
 import ResultsView from './ResultsView';
@@ -356,9 +356,7 @@ function LobbyLeaveConfirmModal({ isLeaving, onCancel, onConfirm, t }) {
 function LeaderboardContent({ room, isHost, viewerId, now, onEditScore, t }) {
     return (
         <div className="space-y-1 p-2">
-            {Object.entries(room.players)
-                .filter(([, player]) => !player.isHost)
-                .sort((a, b) => b[1].score - a[1].score)
+            {getStandingsEntries(room.players)
                 .map(([pid, player]) => {
                     const buzzDeltaLabel = getBuzzDeltaLabel(room, pid, now);
                     const playerNameStyle = getPlayerNameStyle(player.name);

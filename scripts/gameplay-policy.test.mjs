@@ -7,6 +7,27 @@ import { moveTextAnswer, createTextAnswerRound, normalizeTextAnswer, projectText
 import { getRoundPointStep, validatePackRounds } from '../src/utils/packRounds.js';
 import { bulkTextAnswerBlockReason, textAssessmentDecision, textAssessmentShortcut, validSignedTextPoints } from '../src/utils/textAnswerPolicy.js';
 import { compareHistoryEvents } from '../src/utils/scoreHistory.js';
+import { getStandingsEntries } from '../src/utils/gameResults.js';
+
+test('standings: equal scores stay stable across reordered snapshots and unrelated updates', () => {
+    const players = {
+        host: { isHost: true, score: 1000 },
+        bob: { name: 'Same', score: 200 },
+        alice: { name: 'Same', score: 200 },
+        charlie: { score: -100 },
+        dana: { score: 0 },
+    };
+    const ids = (roster, champion) => getStandingsEntries(roster, champion).map(([id]) => id);
+    const reordered = Object.fromEntries(Object.entries(players).reverse());
+    reordered.bob = { ...reordered.bob, avatar: 'new', name: 'Changed' };
+    assert.deepEqual(ids(players), ['alice', 'bob', 'dana', 'charlie']);
+    assert.deepEqual(ids(reordered), ids(players));
+    assert.deepEqual(ids(reordered, 'bob'), ['bob', 'alice', 'dana', 'charlie']);
+    assert.deepEqual(ids(reordered, 'host'), ids(players));
+    assert.deepEqual(ids({ ...reordered, bob: { score: 300 } }), ['bob', 'alice', 'dana', 'charlie']);
+    assert.deepEqual(ids({}), []);
+    assert.deepEqual(Object.keys(players), ['host', 'bob', 'alice', 'charlie', 'dana']);
+});
 
 test('bulk text assessments: signed values, shortcuts, sign-based decisions and guards', () => {
     for (const value of [-123, 0, '007', '-42', Number.MAX_SAFE_INTEGER, Number.MIN_SAFE_INTEGER]) assert.equal(validSignedTextPoints(value), true);
