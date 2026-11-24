@@ -7,6 +7,8 @@ import { createPreloadQueue } from '../src/utils/preloadQueue.js';
 import { createIncrementalCache } from '../src/utils/incrementalCache.js';
 import { requestMediaJson, uploadMediaForm } from '../src/utils/mediaTransport.js';
 import worker from '../imagekit-auth-worker/worker.js';
+import { parseMediaLink } from '../src/utils/externalMedia.js';
+import { stripPendingCategories } from '../src/utils/packSerialization.js';
 
 const flush = async () => { for (let i = 0; i < 20; i++) await Promise.resolve(); };
 const deferred = () => { let resolve; const promise = new Promise((done) => { resolve = done; }); return { promise, resolve }; };
@@ -134,14 +136,59 @@ function hookHarness() {
             if (descriptor) Object.defineProperty(globalThis, key, descriptor); else delete globalThis[key]; } }
     };
 }
-async function bundleHook(path, fakes) {
+async function bundleHook(path, fakes, define = {}) {
     const bundled = await build({ entryPoints: [path], bundle: true, write: false, platform: 'node', format: 'esm', jsx: 'automatic',
-        plugins: [{ name: 'hook-fakes', setup(builder) {
+        define, plugins: [{ name: 'hook-fakes', setup(builder) {
             builder.onResolve({ filter: /.*/ }, ({ path }) => Object.hasOwn(fakes, path) ? { path, namespace: 'fake' } : undefined);
             builder.onLoad({ filter: /.*/, namespace: 'fake' }, ({ path }) => ({ contents: fakes[path] }));
         } }] });
     return import(`data:text/javascript;base64,${Buffer.from(bundled.outputFiles[0].text).toString('base64')}`);
 }
+await check('direct media: HTTPS validation, type recognition, fallback and pack serialization', () => {
+    for (const invalid of [null, 'http://host/movie.mp4', '/local/file', 'javascript:alert(1)', 'https:///file', 'https://user:pass@host/file']) {
+        assert.equal(parseMediaLink(invalid), null);
+    }
+    const url = 'https://cdn.example/IMAGE.JpG?sig=A%2fb+C&x=1&x=2#frame';
+    const image = parseMediaLink(url);
+    assert.deepEqual(image, { provider: 'external', kind: 'image', url });
+    assert.equal(parseMediaLink('https://cdn.example/music.WAV?v=1').kind, 'audio');
+    assert.equal(parseMediaLink('https://cdn.example/video.mp4#t=1').kind, 'video');
+    for (const url of ['https://cdn.example/content?id=x.png', 'https://cdn.example/file.ogg']) {
+        assert.equal(parseMediaLink(url).kind, '');
+        assert.equal(parseMediaLink(url, 'audio').kind, 'audio');
+        assert.equal(parseMediaLink(url, 'other').kind, '');
+    }
+    const audio = parseMediaLink('https://cdn.example/content?id=x', 'audio');
+    const [category] = stripPendingCategories([{ questions: [{ questionMedia: image, answerMedia: audio }] }]);
+    assert.deepEqual(category.questions[0].questionMedia, image);
+    assert.deepEqual(category.questions[0].answerMedia, audio);
+});
+
+await check('direct media: preserve signed URLs across variants and delete only managed uploads', async () => {
+    const calls = [];
+    globalThis.__mediaDeleteCalls = calls;
+    try {
+        const { deleteMedia, getMediaUrl } = await bundleHook('src/services/imageStorage.js', {
+            '../firebase': "export const appId = 'test', auth = { currentUser: { getIdToken: async () => 'test-token' } };",
+            '../utils/mediaTransport': 'export const requestMediaJson = async (url, options) => globalThis.__mediaDeleteCalls.push(JSON.parse(options.body)); export function uploadMediaForm() {}',
+            'browser-image-compression': 'export default async file => file;'
+        }, { 'import.meta.env.VITE_IMAGEKIT_AUTH_ENDPOINT': '"https://worker.example"' });
+        const url = 'https://cdn.example/signed.png?a=%2f+b#original';
+        const media = parseMediaLink(url);
+        for (const variant of ['thumbnail', 'host', 'game', 'full']) assert.equal(getMediaUrl(media, variant), url);
+        await deleteMedia(media);
+        await deleteMedia({ ...media, fileId: 'unmanaged' });
+        assert.equal(calls.length, 0);
+        for (const managed of [{ provider: 'imagekit', fileId: 'managed' }, { fileId: 'legacy' }]) {
+            await deleteMedia(managed);
+            assert.deepEqual(calls.at(-1), { action: 'delete', appId: 'test', media: managed });
+        }
+        assert.equal(calls.length, 2);
+    } finally {
+        delete globalThis.__mediaDeleteCalls;
+    }
+});
+
 await check('bulk assessments: flush before reveal, invalid drafts, delayed snapshots, stale edits and retry', async () => {
     const h = hookHarness(), calls = [];
     let revision = 0, fail = false;

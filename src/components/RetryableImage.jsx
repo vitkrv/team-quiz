@@ -7,10 +7,11 @@ export default function RetryableImage({
     alt,
     imageClassName = '',
     fallbackClassName = '',
-    retries = 2
+    retries = 2,
+    preserveUrl = false
 }) {
     const { t } = useLanguage();
-    const { status, url } = useRetryableImage(src, { retries });
+    const { status, url } = useRetryableImage(src, { retries, preserveUrl });
 
     if (status === 'loaded') {
         return <img src={url} alt={alt} className={imageClassName} />;

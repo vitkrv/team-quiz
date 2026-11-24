@@ -28,6 +28,7 @@ export default function MediaLightbox({ media, alt, onClose }) {
                 </button>
                 <RetryableImage
                     src={getMediaUrl(media, 'full')}
+                    preserveUrl={media.provider === 'external'}
                     alt={alt}
                     imageClassName="max-h-[calc(100dvh-3rem)] max-w-[calc(100vw-3rem)] rounded-xl object-contain shadow-2xl"
                     fallbackClassName="h-[60vh] max-h-[calc(100dvh-3rem)] w-[calc(100vw-3rem)] max-w-5xl rounded-xl shadow-2xl"

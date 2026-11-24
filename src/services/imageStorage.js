@@ -1,5 +1,6 @@
 import { requestMediaJson, uploadMediaForm } from '../utils/mediaTransport';
 import { appId, auth } from '../firebase';
+import { isManagedMedia, parseMediaLink } from '../utils/externalMedia';
 
 export const IMAGE_SIZE_LIMIT_BYTES = 10 * 1024 * 1024;
 export const MEDIA_SIZE_LIMIT_BYTES = 100 * 1024 * 1024;
@@ -197,6 +198,7 @@ export const validateMediaFile = (file) => {
 
 export const getMediaUrl = (media, variant = 'full') => {
     if (!media) return '';
+    if (media.provider === 'external') return parseMediaLink(media.url || '')?.url || '';
     if (media.previewUrl) return media.previewUrl;
 
     const url = media.url || media.thumbnailUrl;
@@ -267,8 +269,11 @@ export const uploadMedia = async (file, { packId, questionId, slot, onProgress, 
     };
 };
 
-export const deleteMedia = async (media, { signal } = {}) => {
-    if (!media?.fileId || !imageKitAuthEndpoint || !auth?.currentUser) return;
+export const deleteMedia = async (media, { signal, requireConfigured = false } = {}) => {
+    if (!isManagedMedia(media)) return;
+    if (!requireConfigured && (!imageKitAuthEndpoint || !auth?.currentUser)) return;
+    if (!imageKitAuthEndpoint) throw createStorageError('imageKitAuthEndpointMissing');
+    if (!auth?.currentUser) throw createStorageError('imageKitSignInRequired');
     const idToken = await auth.currentUser.getIdToken();
     await requestMediaJson(imageKitAuthEndpoint, {
         signal,

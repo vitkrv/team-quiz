@@ -107,6 +107,7 @@ export default function QuestionMedia({
                 >
                     <RetryableImage
                         src={url}
+                        preserveUrl={media.provider === 'external'}
                         alt={alt}
                         imageClassName="h-full w-full object-contain"
                         fallbackClassName="h-full w-full"

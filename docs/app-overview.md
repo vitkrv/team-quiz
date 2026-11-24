@@ -132,6 +132,8 @@ games without saved awards are not backfilled.
 
 ## Question packs
 
+In both Form and Table editors, **Attach from link** accepts a direct HTTPS URL for question or answer media. Preview the file, choosing Image, Audio, or Video if the filename does not identify its type, then attach or replace it. This saves the link immediately. Players need access to the URL throughout the game. A frozen pack retains the original link, while the author’s server controls the file it serves. Removing the attachment only removes its reference to that server.
+
 On Create Game, each owned/shared pack tile has **Preview themes**. Its dialog shows
 the pack name, author (or an unknown-author fallback), round/category/question counts,
 and category theme names grouped in saved round order. Older category-only packs

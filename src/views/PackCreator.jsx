@@ -932,6 +932,49 @@ export default function PackCreator({ pack, setView, user, setError }) {
         }
     };
 
+    const attachQuestionMediaLink = async (catId, qId, field, link, duration) => {
+        if (editorLocked || remoteMediaBusyRef.current) return;
+        const source = categoriesRef.current;
+        const question = source.find((category) => category.id === catId)?.questions.find((item) => item.id === qId);
+        if (!question) return;
+        const previous = question[field];
+        const key = `${qId}:${field}`;
+        const media = { ...link };
+        const previousStops = field === MEDIA_SLOTS.QUESTION ? previous?.stopPoints || [] : [];
+        if (field === MEDIA_SLOTS.QUESTION && media.kind !== MEDIA_KINDS.IMAGE) {
+            media.allowParticipantMediaReplay = previous?.allowParticipantMediaReplay !== false;
+            if (previousStops.length) {
+                if (!Number.isFinite(duration) || duration <= 0) {
+                    setMediaErrors((errors) => ({ ...errors, [key]: t('mediaDurationFailed') }));
+                    return;
+                }
+                media.durationSeconds = duration;
+                media.stopPoints = pruneMediaStops(previousStops, duration);
+            }
+        }
+        setMediaBusy(true);
+        setMediaErrors((errors) => ({ ...errors, [key]: '' }));
+        setMediaNotices((notices) => ({ ...notices, [key]: '' }));
+        try {
+            const next = setQuestionMediaInCategories(source, catId, qId, field, media);
+            await ensurePackForMediaAction(next);
+            setCategories(next);
+            const removed = previousStops.length - (media.stopPoints?.length || 0);
+            if (removed) setMediaNotices((notices) => ({ ...notices, [key]: t('mediaStopsRemoved', { count: removed }) }));
+            if (previous?.fileId) {
+                try {
+                    await deleteMedia(previous, { requireConfigured: true });
+                } catch {
+                    setMediaErrors((errors) => ({ ...errors, [key]: t('mediaLinkCleanupFailed') }));
+                }
+            }
+        } catch {
+            setMediaErrors((errors) => ({ ...errors, [key]: t('mediaActionFailed') }));
+        } finally {
+            setMediaBusy(false);
+        }
+    };
+
     const removeQuestionMedia = async (catId, qId, field) => {
         if (editorLocked) return;
         setMediaBusy(true);
@@ -1137,6 +1180,7 @@ export default function PackCreator({ pack, setView, user, setError }) {
             onMove={(direction) => moveQuestion(category.id, question.id, direction)} onRemove={() => removeQuestion(category.id, question.id)}
             onPaste={(event, field) => handleQuestionMediaPaste(event, category.id, question.id, field)}
             onMediaChange={(field, file) => updateQuestionMedia(category.id, question.id, field, file)}
+            onMediaLink={(field, link, duration) => attachQuestionMediaLink(category.id, question.id, field, link, duration)}
             onMediaResolve={(field, resolveFile) => resolveDroppedMedia(resolveFile, (file) => updateQuestionMedia(category.id, question.id, field, file))}
             onMediaRemove={(field) => removeQuestionMedia(category.id, question.id, field)} mediaProgress={mediaProgress} mediaErrors={mediaErrors} mediaNotices={mediaNotices} />
     );

@@ -20,11 +20,11 @@ const loadImageOnce = (url) => new Promise((resolve, reject) => {
     image.src = url;
 });
 
-export const preloadImage = (url, { retries = RETRIES, priority = 1, retry = false } = {}) => {
+export const preloadImage = (url, { retries = RETRIES, priority = 1, retry = false, preserveUrl = false } = {}) => {
     if (!url) return Promise.resolve({ status: 'idle', url: '' });
-    return queue.load(url, async () => {
+    return queue.load(preserveUrl ? `external-image:${url}` : url, async () => {
         for (let attempt = 0; ; attempt++) {
-            const attemptUrl = attempt && !/^(blob:|data:)/.test(url)
+            const attemptUrl = attempt && !preserveUrl && !/^(blob:|data:)/.test(url)
                 ? `${url}${url.includes('?') ? '&' : '?'}cr_image_retry=${Date.now()}_${attempt}` : url;
             try { await loadImageOnce(attemptUrl); return { status: 'loaded', url: attemptUrl, baseUrl: url }; }
             catch (error) { if (attempt >= retries) throw error; }
@@ -33,7 +33,7 @@ export const preloadImage = (url, { retries = RETRIES, priority = 1, retry = fal
 };
 
 export const preloadMediaImage = (media, variant = 'game', options) => getMediaKind(media) === MEDIA_KINDS.IMAGE
-    ? preloadImage(getMediaUrl(media, variant), options) : Promise.resolve({ status: 'idle', url: '' });
+    ? preloadImage(getMediaUrl(media, variant), { ...options, preserveUrl: media.provider === 'external' }) : Promise.resolve({ status: 'idle', url: '' });
 
 export const preloadMedia = (media, variant = 'game', options = {}) => {
     const kind = getMediaKind(media);
@@ -64,7 +64,7 @@ export const preloadMedia = (media, variant = 'game', options = {}) => {
     }), options);
 };
 
-export const useRetryableImage = (url, { retries = RETRIES } = {}) => {
+export const useRetryableImage = (url, { retries = RETRIES, preserveUrl = false } = {}) => {
     const [state, setState] = useState({ status: 'idle', url: '' });
     useEffect(() => {
         let active = true;
@@ -75,7 +75,7 @@ export const useRetryableImage = (url, { retries = RETRIES } = {}) => {
             if (!url) { setState({ status: 'idle', url: '' }); return; }
             loading = true;
             setState({ status: 'loading', url: '' });
-            preloadImage(url, { retries, retry }).then((result) => {
+            preloadImage(url, { retries, retry, preserveUrl }).then((result) => {
                 failed = false;
                 if (active) setState({ status: 'loaded', url: result.url });
             }, () => {
@@ -94,6 +94,6 @@ export const useRetryableImage = (url, { retries = RETRIES } = {}) => {
             window.removeEventListener('focus', recover);
             document.removeEventListener('visibilitychange', recover);
         };
-    }, [retries, url]);
+    }, [retries, url, preserveUrl]);
     return state;
 };

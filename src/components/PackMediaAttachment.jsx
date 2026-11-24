@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { FileAudio, FileVideo, HelpCircle, ImagePlus, RefreshCw, Trash2, Flag } from 'lucide-react';
 import MediaStopPointsDialog from './MediaStopPointsDialog';
 import MediaPlaybackHelpDialog from './MediaPlaybackHelpDialog';
+import MediaLinkAttachment from './MediaLinkAttachment';
 import QuestionMedia from './QuestionMedia';
 import { getMediaKind, MEDIA_KINDS, validateMediaFile } from '../services/imageStorage';
 import { downloadDroppedImage, getDroppedImageUrl } from '../utils/mediaDrop';
@@ -36,6 +37,7 @@ export default function PackMediaAttachment({
     t,
     onChange,
     onResolveFile,
+    onAttachLink,
     onRemove,
     accept = 'image/*,audio/*,video/*',
     allowedKinds = [MEDIA_KINDS.IMAGE, MEDIA_KINDS.AUDIO, MEDIA_KINDS.VIDEO],
@@ -200,6 +202,8 @@ export default function PackMediaAttachment({
                     <EmptyIcon size={16} /> {t('attachMedia')}
                 </button>
             )}
+            {onAttachLink && <MediaLinkAttachment disabled={disabled || fetching} replacing={Boolean(media)}
+                onAttach={onAttachLink} label={label} t={t} />}
             {media && onReplayChange && [MEDIA_KINDS.AUDIO, MEDIA_KINDS.VIDEO].includes(kind) && (
                 <div className="mt-3 flex items-center gap-1">
                     <label className="flex flex-1 items-start gap-2 text-sm text-slate-300">

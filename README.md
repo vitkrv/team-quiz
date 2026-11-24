@@ -57,7 +57,7 @@ Use Node.js 20 or newer (required by Firebase 12). The frontend uses the modular
    npm run dev
    ```
 
-   The ImageKit endpoint is needed for media upload/delete operations; text-only packs do not require it. Restart Vite after changing environment values.
+   The ImageKit endpoint is needed to upload or delete managed files. Authors can also use **Attach from link** for question and answer media hosted on their own HTTPS server. Linked files play directly from that server. Restart Vite after changing environment values.
 
 ## Scripts
 

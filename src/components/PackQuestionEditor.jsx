@@ -12,7 +12,7 @@ export default function PackQuestionEditor({
     category, question, questionIndex, t, disabled, compact = false, formLayout = false, dialogLayout = false,
     roundNumber, pointIncrement, surpriseMin, surpriseMax, surpriseDisplay,
     onUpdate, onValidatePoints, onMove, onRemove, onPaste,
-    onMediaChange, onMediaResolve, onMediaRemove, mediaProgress, mediaErrors, mediaNotices = {}
+    onMediaChange, onMediaLink, onMediaResolve, onMediaRemove, mediaProgress, mediaErrors, mediaNotices = {}
 }) {
     const id = useId();
     const [expanded, setExpanded] = useState(false);
@@ -39,6 +39,7 @@ export default function PackQuestionEditor({
             progress={mediaProgress[`${q.id}:${field}`] || 0} error={mediaErrors[`${q.id}:${field}`]} t={t}
             notice={mediaNotices[`${q.id}:${field}`]}
             onChange={(file) => onMediaChange(field, file)}
+            onAttachLink={(link, duration) => onMediaLink(field, link, duration)}
             onResolveFile={(resolveFile) => onMediaResolve(field, resolveFile)}
             onStopPointsChange={field === MEDIA_SLOTS.QUESTION ? (media) => onUpdate(field, media) : undefined}
             onReplayChange={field === MEDIA_SLOTS.QUESTION ? (allowed) => onUpdate(field, { ...q[field], allowParticipantMediaReplay: allowed }) : undefined}
